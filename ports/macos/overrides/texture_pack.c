@@ -162,6 +162,125 @@ int black_TextureDecodeDds(const uint8_t *data, size_t size, BlackTextureImage *
     return 1;
 }
 
+/* ---- alpha --------------------------------------------------------------- */
+
+/* The 16 alphas of a BC3 (DXT5) alpha block. */
+static void bc3_alpha(const uint8_t *s, uint8_t out[16])
+{
+    unsigned a0 = s[0], a1 = s[1], table[8] = {a0, a1};
+    uint64_t bits = 0;
+    for (int i = 0; i < 6; ++i) bits |= (uint64_t)s[2 + i] << (8 * i);
+    if (a0 > a1) for (int i = 1; i < 7; ++i) table[1 + i] = ((7 - i) * a0 + i * a1) / 7;
+    else {
+        for (int i = 1; i < 5; ++i) table[1 + i] = ((5 - i) * a0 + i * a1) / 5;
+        table[6] = 0; table[7] = 255;
+    }
+    for (int i = 0; i < 16; ++i, bits >>= 3) out[i] = (uint8_t)table[bits & 7];
+}
+
+int black_TextureTopAlpha(unsigned format, unsigned width, unsigned height, const uint8_t *top,
+                          const uint8_t *palette, size_t palette_bytes, unsigned *low, unsigned *high)
+{
+    size_t blocks = (size_t)(width / 4) * (height / 4);
+    uint8_t alpha[16];
+    unsigned lo = 255, hi = 0;
+    switch (format) {
+    case 0x0c: /* DXT1: only the 3-colour mode's index 3 is see-through */
+        hi = 255;
+        for (size_t i = 0; i < blocks && lo; ++i, top += 8) {
+            if ((top[0] | top[1] << 8) > (top[2] | top[3] << 8)) continue;
+            for (uint32_t bits = le32(top + 4), n = 0; n < 16; ++n, bits >>= 2)
+                if ((bits & 3) == 3) lo = 0;
+        }
+        break;
+    case 0x0e: /* DXT3: 4-bit alphas first */
+        for (size_t i = 0; i < blocks; ++i, top += 16)
+            for (int b = 0; b < 16; ++b) {
+                unsigned v = (top[b / 2] >> (4 * (b & 1)) & 15u) * 17;
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
+        break;
+    case 0x0f:
+        for (size_t i = 0; i < blocks; ++i, top += 16) {
+            bc3_alpha(top, alpha);
+            for (int n = 0; n < 16; ++n) {
+                if (alpha[n] < lo) lo = alpha[n];
+                if (alpha[n] > hi) hi = alpha[n];
+            }
+        }
+        break;
+    case 0x0b: {
+        if (!palette || palette_bytes < 4) return 0;
+        size_t entries = palette_bytes / 4 < 256 ? palette_bytes / 4 : 256;
+        for (size_t i = 0; i < (size_t)width * height; ++i) {
+            if (top[i] >= entries) return 0;
+            unsigned v = palette[top[i] * 4 + 3];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+        }
+        break;
+    }
+    default: return 0;
+    }
+    if (hi < lo) return 0;
+    *low = lo; *high = hi;
+    return 1;
+}
+
+unsigned black_TextureAlphaMax(const BlackTextureImage *image)
+{
+    unsigned top = 0;
+    uint8_t alpha[16];
+    const uint8_t *p = image->level[0];
+    size_t size = image->level_size[0];
+    if (!image->levels) return 0;
+    if (image->format == BLACK_TEX_BC3)
+        for (size_t i = 0; i + 16 <= size; i += 16) {
+            bc3_alpha(p + i, alpha);
+            for (int n = 0; n < 16; ++n) if (alpha[n] > top) top = alpha[n];
+        }
+    else if (image->format == BLACK_TEX_BC2)
+        for (size_t i = 0; i + 16 <= size; i += 16)
+            for (int b = 0; b < 8; ++b) {
+                unsigned v = p[i + b] & 15u, w = p[i + b] >> 4;
+                if (v * 17 > top) top = v * 17;
+                if (w * 17 > top) top = w * 17;
+            }
+    else if (image->format == BLACK_TEX_RGBA8)
+        for (size_t i = 3; i < size; i += 4) { if (p[i] > top) top = p[i]; }
+    else top = 255;
+    return top;
+}
+
+static unsigned scaled(unsigned a, unsigned from, unsigned to, unsigned limit)
+{
+    unsigned v = (a * to + from / 2) / from;
+    return v > limit ? limit : v;
+}
+
+void black_TextureScaleAlpha(BlackTextureImage *image, unsigned from, unsigned to)
+{
+    if (!from || from == to) return;
+    for (unsigned level = 0; level < image->levels; ++level) {
+        uint8_t *q = (uint8_t *)image->level[level];
+        size_t n = image->level_size[level];
+        if (image->format == BLACK_TEX_BC3)
+            for (size_t i = 0; i + 16 <= n; i += 16) {
+                unsigned a0 = q[i], a1 = q[i + 1], b0 = scaled(a0, from, to, 255), b1 = scaled(a1, from, to, 255);
+                q[i] = (uint8_t)b0; q[i + 1] = (uint8_t)b1;
+                /* equal ends would switch the block's mode: every texel takes the first */
+                if (a0 > a1 && b0 == b1) memset(q + i + 2, 0, 6);
+            }
+        else if (image->format == BLACK_TEX_BC2)
+            for (size_t i = 0; i + 16 <= n; i += 16)
+                for (int b = 0; b < 8; ++b)
+                    q[i + b] = (uint8_t)(scaled(q[i + b] & 15u, from, to, 15) | scaled(q[i + b] >> 4, from, to, 15) << 4);
+        else if (image->format == BLACK_TEX_RGBA8)
+            for (size_t i = 3; i < n; i += 4) q[i] = (uint8_t)scaled(q[i], from, to, 255);
+    }
+}
+
 /* ImageIO's own bytes when they are already 8-bit RGB(A) without
  * premultiplication, so no colour is changed on the way. */
 static int png_raw(CGImageRef picture, uint8_t *out, size_t width, size_t height)
@@ -440,6 +559,7 @@ static void *loader(void *unused)
         pthread_mutex_unlock(&R.lock);
         BlackTextureImage image;
         int ok = black_TextureLoadFile(black_TexturePackPath(R.pack, file), &image);
+        if (ok) image.alpha_max = black_TextureAlphaMax(&image);
         if (!ok)
             fprintf(stderr, "[TEXPACK] cannot read %s; the game's texture stays\n",
                     black_TexturePackPath(R.pack, file));

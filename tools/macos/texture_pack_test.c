@@ -123,6 +123,64 @@ int main(void)
     at = dds(buf, 8, 8, 1, 0x31545844u, 0, 0, 0, 0);
     if (black_TextureDecodeDds(buf, at + 31, &image)) return 15; /* level 0 needs 32 bytes */
 
+    /* The game's top level: its alpha range; opaque only when no texel can be see-through. */
+    unsigned lo, hi;
+    uint8_t dxt1[8] = {0x00, 0xf8, 0x1f, 0x00, 0, 0, 0, 0}; /* c0 > c1: four colours */
+    if (!black_TextureTopAlpha(0x0c, 4, 4, dxt1, NULL, 0, &lo, &hi) || lo != 255 || hi != 255) return 40;
+    memcpy(dxt1, (uint8_t[]){0x1f, 0x00, 0x00, 0xf8, 0x55, 0x55, 0x55, 0x55}, 8); /* 3 colours, index 1 */
+    if (!black_TextureTopAlpha(0x0c, 4, 4, dxt1, NULL, 0, &lo, &hi) || lo != 255) return 41;
+    dxt1[7] = 0xc0; /* one texel at index 3: transparent */
+    if (!black_TextureTopAlpha(0x0c, 4, 4, dxt1, NULL, 0, &lo, &hi) || lo != 0 || hi != 255) return 42;
+    uint8_t dxt3[16];
+    memset(dxt3, 0xff, 16);
+    if (!black_TextureTopAlpha(0x0e, 4, 4, dxt3, NULL, 0, &lo, &hi) || lo != 255) return 43;
+    memset(dxt3, 0x88, 8); /* every texel 8 * 17 */
+    if (!black_TextureTopAlpha(0x0e, 4, 4, dxt3, NULL, 0, &lo, &hi) || lo != 136 || hi != 136) return 44;
+    uint8_t dxt5[16] = {255, 255};
+    if (!black_TextureTopAlpha(0x0f, 4, 4, dxt5, NULL, 0, &lo, &hi) || lo != 255) return 45;
+    dxt5[1] = 0; dxt5[2] = 1; /* first texel takes a1 = 0 */
+    if (!black_TextureTopAlpha(0x0f, 4, 4, dxt5, NULL, 0, &lo, &hi) || lo != 0 || hi != 255) return 46;
+    uint8_t texels[16] = {0}, palette[8] = {1, 2, 3, 0xff, 4, 5, 6, 0x00};
+    if (!black_TextureTopAlpha(0x0b, 4, 4, texels, palette, 8, &lo, &hi) || lo != 255 ||
+        black_TextureTopAlpha(0x0b, 4, 4, texels, NULL, 0, &lo, &hi))
+        return 47;
+    texels[9] = 1;
+    if (!black_TextureTopAlpha(0x0b, 4, 4, texels, palette, 8, &lo, &hi) || lo != 0 || hi != 255) return 48;
+    texels[9] = 2; /* past the palette: unknown */
+    if (black_TextureTopAlpha(0x0b, 4, 4, texels, palette, 8, &lo, &hi)) return 39;
+
+    /* The pack's alpha is scaled to the game's highest: PS2 128 and 157 reach 255. */
+    at = dds(buf, 4, 4, 1, 0x35545844u, 0, 0, 0, 0);
+    memset(buf + at, 0, 16);
+    buf[at] = 128; /* every texel index 0: a0 = 128 */
+    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 128) return 49;
+    black_TextureScaleAlpha(&image, 128, 255);
+    if (image.level[0][0] != 255 || image.level[0][1] != 0) return 49;
+    black_TextureImageFree(&image);
+    /* every texel index 1 (a1 = 156); both ends opaque once scaled: indices go to the first */
+    memcpy(buf + at, (uint8_t[]){157, 156, 0x49, 0x92, 0x24, 0x49, 0x92, 0x24}, 8);
+    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 156) return 50;
+    black_TextureScaleAlpha(&image, 156, 255);
+    if (image.level[0][0] != 255 || image.level[0][1] != 255 || image.level[0][2] || image.level[0][7]) return 50;
+    black_TextureImageFree(&image);
+    at = dds(buf, 2, 1, 1, 0, 0xffu, 0xff0000u, 0, 0);
+    memcpy(buf + at, (uint8_t[]){9, 9, 9, 100, 9, 9, 9, 64}, 8);
+    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 100) return 52;
+    black_TextureScaleAlpha(&image, 100, 200);
+    if (image.level[0][3] != 200 || image.level[0][7] != 128 || image.level[0][0] != 9) return 52;
+    black_TextureScaleAlpha(&image, 100, 255);
+    if (image.level[0][3] != 255) return 53; /* clamped */
+    black_TextureImageFree(&image);
+    at = dds(buf, 4, 4, 1, 0x32545844u, 0, 0, 0, 0); /* DXT3 */
+    memset(buf + at, 0x88, 8); memset(buf + at + 8, 0, 8);
+    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 136) return 54;
+    black_TextureScaleAlpha(&image, 136, 255);
+    if (image.level[0][0] != 0xff) return 54;
+    black_TextureImageFree(&image);
+    at = dds(buf, 4, 4, 1, 0x31545844u, 0, 0, 0, 0);
+    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 255) return 55;
+    black_TextureImageFree(&image);
+
     /* A pack in PCSX2's layout, names in other case, macOS ._ files and a link. */
     char root[] = "/tmp/black-texture-pack.XXXXXX", path[1024];
     if (!mkdtemp(root)) return 16;

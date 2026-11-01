@@ -111,6 +111,14 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
   showing while files loaded and the pack looked missing. Pack textures are now
   shared and kept up to 1 GB when unused, so a remade texture gets its HD
   replacement at once.
+- Alpha follows the game's own texture. PCSX2 pictures keep the PS2's alpha,
+  on which 128 is opaque, and many of the pack's pictures of opaque surfaces
+  carry alpha the Xbox reads (maximum 128 in 323 mapped files, 156–157 in 323
+  more). Where the game's texture is fully opaque, the replacement's alpha is
+  ignored (texture swizzle); elsewhere it is scaled so its highest value matches
+  the game's. Before this, a grenade crate in the first mission rendered black
+  and the second mission's pine crowns vanished; with the fix, a scripted
+  second-mission capture shows the crowns again, close to the original.
 - Pack files are found by bare name anywhere under
   `~/Library/Application Support/BLACK/Textures/replacement/`, also through a
   folder link to another volume. DDS BC1–BC3/BC7 upload compressed; PNG is

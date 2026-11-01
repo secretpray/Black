@@ -47,7 +47,7 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
         black_trace_replace(content "    NV2A_GL_DGROUP_BEGIN(\"%s\", __func__);\n\n    for (i=0; i<NV2A_MAX_TEXTURES; i++) {"
             "    NV2A_GL_DGROUP_BEGIN(\"%s\", __func__);\n    black_tp_poll(d);\n\n    for (i=0; i<NV2A_MAX_TEXTURES; i++) {")
         black_trace_replace(content "            key_out->binding = generate_texture(state, texture_data, palette_data);\n"
-            "            key_out->binding = generate_texture(state, texture_data, palette_data);\n            if (!surf_to_tex)\n                black_tp_created(key_out->binding, state, texture_data, length);\n")
+            "            key_out->binding = generate_texture(state, texture_data, palette_data);\n            if (!surf_to_tex)\n                black_tp_created(key_out->binding, state, texture_data, length,\n                                 palette_data, is_indexed ? palette_length : 0);\n")
         black_trace_replace(content "        glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);"
             "        if (!black_tp_forget(binding))\n            glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);")
     else()

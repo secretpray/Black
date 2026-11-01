@@ -5,7 +5,10 @@
  * original's place in every binding the map sends to it, at once when it is
  * already on the GPU. The game remakes some textures every frame (a palette
  * that changes, which the key leaves out), so a file is never read twice while
- * its texture is kept. Any miss or failure keeps the game's own texture. */
+ * its texture is kept. The game's own texture decides alpha (texture_pack.h):
+ * where it is opaque the pack's is replaced by one, elsewhere it is scaled to
+ * the game's highest, so a file has an opaque and a see-through GL texture. Any
+ * miss or failure keeps the game's own texture. */
 #include "texture_pack.h"
 
 #define BLACK_TP_GL_BC1 0x83F1  /* COMPRESSED_RGBA_S3TC_DXT1_EXT */
@@ -16,10 +19,10 @@
 /* Pack textures no binding uses are kept up to this much, oldest dropped first. */
 #define BLACK_TP_KEEP_BYTES ((size_t)1024 << 20)
 
-/* A pack file's GL texture, shared by `refs` bindings. */
+/* A pack file's GL texture, shared by `refs` bindings; files[file * 2 + opaque]. */
 typedef struct { GLuint texture; size_t bytes; unsigned refs; bool failed; unsigned long long used; } BlackTpFile;
-/* A binding waiting for its file or holding its texture. */
-typedef struct { TextureBinding *binding; int file; bool pending; } BlackTpSlot;
+/* A binding waiting for its file or holding its texture (files[variant]). */
+typedef struct { TextureBinding *binding; int file, variant; unsigned alpha; bool pending; } BlackTpSlot;
 
 static struct {
     BlackTpSlot *slots;
@@ -87,14 +90,13 @@ static bool black_tp_forget(TextureBinding *binding)
     for (unsigned i = 0; i < black_tp.count; ++i) {
         BlackTpSlot *slot = &black_tp.slots[i];
         if (slot->binding != binding) continue;
-        int file = slot->file;
         bool shared = !slot->pending;
         if (slot->pending) {
-            black_TexturePackRelease(file);
+            black_TexturePackRelease(slot->file);
             black_tp.pending--;
         } else {
-            black_tp.files[file].refs--;
-            black_tp.files[file].used = ++black_tp.clock;
+            black_tp.files[slot->variant].refs--;
+            black_tp.files[slot->variant].used = ++black_tp.clock;
         }
         black_tp_remove(i);
         if (shared) black_tp_trim();
@@ -115,12 +117,31 @@ static GLenum black_tp_gl_format(int format)
     }
 }
 
-/* A new GL texture with every level of `image`, or 0 with `restore` bound
- * again on the active unit. */
-static GLuint black_tp_upload(const BlackTextureImage *image, GLuint restore, size_t *bytes)
+/* A new GL texture with every level of `image`: alpha one when `opaque`,
+ * otherwise scaled to reach `alpha` (0 leaves it). 0 with `restore` bound again
+ * on the active unit when that fails. */
+static GLuint black_tp_upload(const BlackTextureImage *image, bool opaque, unsigned alpha, GLuint restore,
+                              size_t *bytes)
 {
     GLenum format = black_tp_gl_format(image->format);
     if (!format) return 0;
+    BlackTextureImage copy;
+    if (!opaque && alpha && image->alpha_max && abs((int)image->alpha_max - (int)alpha) > 3 &&
+        (image->format == BLACK_TEX_BC2 || image->format == BLACK_TEX_BC3 || image->format == BLACK_TEX_RGBA8)) {
+        /* The decoded file is shared with other requests: scale a copy. */
+        size_t total = 0;
+        for (unsigned level = 0; level < image->levels; ++level) total += image->level_size[level];
+        copy = *image;
+        if ((copy.storage = malloc(total)) != NULL) {
+            memcpy(copy.storage, image->storage, total);
+            for (unsigned level = 0; level < image->levels; ++level)
+                copy.level[level] = (const uint8_t *)copy.storage + (image->level[level] - (const uint8_t *)image->storage);
+            black_TextureScaleAlpha(&copy, image->alpha_max, alpha);
+            GLuint texture = black_tp_upload(&copy, false, 0, restore, bytes);
+            free(copy.storage);
+            return texture;
+        }
+    }
     while (glGetError() != GL_NO_ERROR) {}
     GLint alignment = 4;
     glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
@@ -148,6 +169,7 @@ static GLuint black_tp_upload(const BlackTextureImage *image, GLuint restore, si
     }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels - 1);
+    if (opaque) glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
@@ -184,18 +206,20 @@ static void black_tp_complete(unsigned index)
     int file = slot->file;
     int state = black_TexturePackPoll(file, &image);
     if (!state) return;
-    BlackTpFile *f = &black_tp.files[file];
+    BlackTpFile *f = &black_tp.files[slot->variant];
+    bool opaque = slot->variant & 1;
     if (state > 0 && !f->texture) {
         size_t bytes = 0;
-        GLuint texture = black_tp_upload(image, slot->binding->gl_texture, &bytes);
+        GLuint texture = black_tp_upload(image, opaque, slot->alpha, slot->binding->gl_texture, &bytes);
         if (texture) {
             f->texture = texture;
             f->bytes = bytes;
             black_tp.resident += bytes;
             black_tp.loads++;
             if (black_tp.loads <= BLACK_TP_LOGGED)
-                fprintf(stderr, "[TEXPACK] load %llu: %s %ux%u, %u levels\n", black_tp.loads,
-                        black_TexturePackName(file), image->width, image->height, image->levels);
+                fprintf(stderr, "[TEXPACK] load %llu: %s %ux%u, %u levels, alpha %u -> %s%u\n", black_tp.loads,
+                        black_TexturePackName(file), image->width, image->height, image->levels,
+                        image->alpha_max, opaque ? "opaque " : "", opaque ? 255 : slot->alpha);
         }
     }
     black_TexturePackRelease(file);
@@ -213,7 +237,8 @@ static void black_tp_complete(unsigned index)
 
 /* After generate_texture, on the active unit, for a texture that was not a
  * render target. */
-static void black_tp_created(TextureBinding *binding, TextureShape s, const uint8_t *data, size_t length)
+static void black_tp_created(TextureBinding *binding, TextureShape s, const uint8_t *data, size_t length,
+                             const uint8_t *palette, size_t palette_length)
 {
     if (!black_tp.generation || s.cubemap || s.dimensionality != 2 || s.border ||
         binding->gl_target != GL_TEXTURE_2D)
@@ -223,7 +248,11 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
     black_tp.eligible++;
     int file = black_TexturePackLookup(black_TexturePackKey(data, top), s.width, s.height, s.color_format);
     if (file < 0) { black_tp.misses++; return; }
-    BlackTpFile *f = black_tp_file(file);
+    unsigned low = 0, high = 0;
+    bool known = black_TextureTopAlpha(s.color_format, s.width, s.height, data, palette, palette_length, &low, &high);
+    bool opaque = known && low == 255;
+    int variant = file * 2 + opaque;
+    BlackTpFile *f = black_tp_file(variant);
     if (!f || f->failed) return;
     if (black_tp.count == black_tp.capacity) {
         unsigned grown = black_tp.capacity ? black_tp.capacity * 2 : 256;
@@ -233,11 +262,11 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
         black_tp.capacity = grown;
     }
     if (f->texture) {
-        black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, false};
+        black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, variant, 0, false};
         black_tp_assign(binding, f);
         return;
     }
-    black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, true};
+    black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, variant, known && !opaque ? high : 0, true};
     black_tp.pending++;
     black_TexturePackRequest(file);
     black_tp_complete(black_tp.count - 1);

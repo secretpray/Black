@@ -22,6 +22,7 @@ typedef struct {
     unsigned width, height, levels;
     const uint8_t *level[BLACK_TEX_MAX_LEVELS];
     size_t level_size[BLACK_TEX_MAX_LEVELS];
+    unsigned alpha_max;          /* highest alpha of level 0, set by the loader */
     void *storage;
 } BlackTextureImage;
 
@@ -38,6 +39,19 @@ size_t black_TexturePackTopBytes(unsigned format, unsigned width, unsigned heigh
 uint64_t black_TexturePackKey(const void *top, size_t bytes);
 /* 1 for an entry, 0 for a comment or a malformed line. */
 int black_TexturePackParseMapLine(const char *line, BlackTextureMapEntry *entry);
+
+/* Alpha: PCSX2 packs keep the PS2's, on which 128 is opaque, and PS2 pictures
+ * of opaque surfaces carry alpha the Xbox would read. So the game's own texture
+ * decides: where it is opaque the pack's alpha is not used, elsewhere the pack's
+ * is scaled so its highest value is the game's (128 -> 255 on the PS2 scale).
+ * Lowest and highest alpha of the game's top level (I8 through its A8R8G8B8
+ * palette); 0 when it cannot tell. */
+int black_TextureTopAlpha(unsigned format, unsigned width, unsigned height, const uint8_t *top,
+                          const uint8_t *palette, size_t palette_bytes, unsigned *low, unsigned *high);
+/* Highest alpha of a picture's top level; 255 for BC1 and BC7, which are not read. */
+unsigned black_TextureAlphaMax(const BlackTextureImage *image);
+/* Every level's alpha times to/from, clamped (BC2, BC3 and RGBA8). */
+void black_TextureScaleAlpha(BlackTextureImage *image, unsigned from, unsigned to);
 
 /* DDS: BC1, BC2, BC3, BC7 (also as DX10) and 32-bit RGBA; PNG through ImageIO.
  * 1 on success; black_TextureImageFree releases either. */
