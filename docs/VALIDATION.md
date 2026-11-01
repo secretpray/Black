@@ -69,6 +69,23 @@ revision. An unknown executable shows `MODS OFF` and nothing is written.
   Always Silenced and the BFG were not exercised in combat. The trainer's weapon
   swap and faster game speed were not ported.
 
+## Languages (in development)
+
+Not in the 0.2.0 download. The USA executable picks its string bank
+`Language/Strings/Main%s.bin` from a suffix table indexed by a language word
+that its start-up fixes at US. The build overlay replaces that constant (two
+verified stores at 0x1F8100) with the saved Game Language, offered only when
+the installed game has the bank. The game then loads the bank itself.
+
+- French: the log reported `MainFr.bin (index 4)`, the game opened that file,
+  and the difficulty menu showed French text with accents in the game's font.
+  Only the front end was checked; other languages and in-mission text were not.
+- Menu Language: the menu preview exercised Russian and Spanish pages. Text
+  the game's font cannot draw (Cyrillic) uses a system font at the same
+  capital height. French, German, Spanish and Italian labels follow TGP's
+  translations; their help lines stay English.
+- 102 CTest and 30 Python checks passed, including language persistence.
+
 ## Open work
 
 - Longer combat/death/retry stress, additional missions and a complete playthrough.

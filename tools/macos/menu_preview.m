@@ -113,6 +113,22 @@ int main(int argc, char **argv)
         if (black_SettingsAniso() != 2) return 31;
         key(window, 123, @"\uF702");
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-graphics.png"]);
+        /* General: game language over the disc's banks, then a Russian panel. */
+        key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
+        if (black_SettingsGameLanguage() != BLACK_LANG_FRENCH) return 80;
+        key(window, 123, @"\uF702");
+        if (black_SettingsGameLanguage() != BLACK_LANG_ENGLISH) return 81;
+        key(window, 125, @"\uF701");
+        for (int i = 0; i < 6; ++i) key(window, 124, @"\uF703");
+        if (black_SettingsMenuLanguage() != 6) return 82;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-ru.png"]);
+        key(window, 12, @"q");
+        snapshot(window, [output stringByAppendingPathComponent:@"mods-ru.png"]);
+        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to Menu Language */
+        key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
+        if (black_SettingsMenuLanguage() != 4 || black_SettingsRenderScale() != 2) return 83;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-es.png"]);
+        black_SettingsSetMenuLanguage(0);
         /* Recomp Settings -> Mods (the previous tab wraps): films, then the mods. */
         key(window, 12, @"q");
         key(window, 36, @"\r");

@@ -391,6 +391,7 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_movies.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mods.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_language.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_audio.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_hud.c"
         "${BLACK_MAC_GAME}/src/recomp_manual.c"

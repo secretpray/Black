@@ -23,6 +23,10 @@ static atomic_int anti_aliasing = 2, anisotropic_filtering;
  * presentation pass, with no effect on the game's own frame rate. */
 static atomic_int upscaler = 1;
 static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top left */
+/* game_language: 0 English, 1 French, 2 German, 3 Spanish, 4 Italian (next launch).
+ * menu_language: 0 follows the game, then English, French, German, Spanish,
+ * Italian, Russian. */
+static atomic_int game_language, menu_language;
 static atomic_int stick_deadzone[2] = {-1, -1}; /* -1 keeps BLACK's original 20% */
 static atomic_int stick_cli[2] = {-1, -1}; /* exact legacy CLI counts; UI edits clear */
 static atomic_int trigger_deadzone, vibration = 1, dualsense_hid = 1;
@@ -114,6 +118,14 @@ static void load_settings(void)
             if (sscanf(line, " anti_aliasing = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 2) atomic_store(&anti_aliasing, (int)n);
+            }
+            if (sscanf(line, " game_language = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= 0 && n <= 4) atomic_store(&game_language, (int)n);
+            }
+            if (sscanf(line, " menu_language = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= 0 && n <= 6) atomic_store(&menu_language, (int)n);
             }
             if (sscanf(line, " fps_counter = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -218,7 +230,8 @@ static int save_setting(atomic_int *setting, int value)
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
-                written &= fprintf(file, "fps_counter=%d\n# Mods page: 1 on, 0 off\n", atomic_load(&fps_counter)) > 0;
+                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\n# Mods page: 1 on, 0 off\n",
+                    atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
                     written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
                 int flushed = fflush(file) == 0 && fsync(fd) == 0;
@@ -257,6 +270,14 @@ int black_SettingsSetUpscaler(int mode)
 int black_SettingsFpsCounter(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&fps_counter); }
 int black_SettingsSetFpsCounter(int enabled) { return save_setting(&fps_counter, !!enabled); }
+int black_SettingsGameLanguage(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&game_language); }
+int black_SettingsSetGameLanguage(int language)
+{ return language >= 0 && language <= 4 ? save_setting(&game_language, language) : 0; }
+int black_SettingsMenuLanguage(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&menu_language); }
+int black_SettingsSetMenuLanguage(int language)
+{ return language >= 0 && language <= 6 ? save_setting(&menu_language, language) : 0; }
 int black_SettingsSetAniso(int level)
 { return black_SettingsValidAniso(level) ? save_setting(&anisotropic_filtering, level) : 0; }
 

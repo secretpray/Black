@@ -19,6 +19,12 @@ int black_SettingsSetAniso(int level);
 int black_SettingsValidAniso(int level);
 int black_SettingsUpscaler(void);
 int black_SettingsSetUpscaler(int mode);
+/* Game text from the disc's string banks (next launch), and this panel's own. */
+enum { BLACK_LANG_ENGLISH, BLACK_LANG_FRENCH, BLACK_LANG_GERMAN, BLACK_LANG_SPANISH, BLACK_LANG_ITALIAN, BLACK_GAME_LANGUAGES };
+int black_SettingsGameLanguage(void);
+int black_SettingsSetGameLanguage(int language);
+int black_SettingsMenuLanguage(void);
+int black_SettingsSetMenuLanguage(int language);
 int black_SettingsFpsCounter(void);
 int black_SettingsSetFpsCounter(int enabled);
 int black_SettingsSaveFailed(void);

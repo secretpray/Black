@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Game Language** in Recomp Settings → General: English, French, German,
+  Spanish or Italian game text from your disc's own string banks, applied on
+  the next launch. The European disc has all five; the USA disc has English.
+- **Menu Language** for the settings panel: Auto (follows the game), English,
+  French, German, Spanish, Italian or Russian. Labels are translated in every
+  language, help lines in Russian; the game itself has no Russian text.
+- Quitting no longer clicks in the speakers: game audio fades out over 20 ms
+  and the device closes before the app exits.
+
 ## 0.2.0 — 2026-11-01
 
 - Settings gain a fourth **Mods** page, laid out like TGP's menu: skip intro

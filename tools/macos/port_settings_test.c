@@ -25,6 +25,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "mods")) return !black_SettingsMod(BLACK_MOD_GOD_MODE) || !black_SettingsMod(BLACK_MOD_BFG) ||
             black_SettingsMod(BLACK_MOD_AMMO) || black_SettingsMod(-1) || black_SettingsMod(BLACK_MOD_COUNT) ||
             black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "language")) return black_SettingsGameLanguage() != BLACK_LANG_GERMAN ||
+            black_SettingsMenuLanguage() != 6;
         if (!strcmp(argv[1], "fps")) return !black_SettingsFpsCounter() || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "mods-defaults")) {
             for (int i = 0; i < BLACK_MOD_COUNT; ++i) if (black_SettingsMod(i)) return 1;
@@ -112,6 +114,9 @@ int main(int argc, char **argv)
     if(!black_SettingsResetInput()||child(argv[0],"keyboard",path)||!black_SettingsResetKeyboard()||
         child(argv[0],"keyboard-defaults",path)||child(argv[0],"filtering",path))return 29;
     if (child(argv[0], "mods-defaults", path)) return 30;
+    if (!black_SettingsSetGameLanguage(BLACK_LANG_GERMAN) || !black_SettingsSetMenuLanguage(6) ||
+        black_SettingsSetGameLanguage(5) || black_SettingsSetMenuLanguage(7) || black_SettingsSetGameLanguage(-1) ||
+        child(argv[0], "language", path) || !black_SettingsSetGameLanguage(0) || !black_SettingsSetMenuLanguage(0)) return 34;
     if (!black_SettingsSetFpsCounter(1) || child(argv[0], "fps", path) || !black_SettingsSetFpsCounter(0) ||
         !child(argv[0], "fps", path)) return 33;
     if (!black_SettingsSetMod(BLACK_MOD_GOD_MODE, 1) || !black_SettingsSetMod(BLACK_MOD_BFG, 5) ||

@@ -7,13 +7,15 @@
 #include "controller_axes.h"
 #include "keyboard_mouse.h"
 #include "game_mods.h"
+#include "game_language.h"
+#include "menu_text.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 typedef struct {
-    CGImageRef image[128];
-    float width[128], height[128], left[128], top[128], advance[128];
+    CGImageRef image[256]; /* Latin-1: the game's fonts carry its accented letters */
+    float width[256], height[256], left[256], top[256], advance[256];
     float cap;
 } BlackMenuFont;
 static BlackMenuFont big_font, small_font;
@@ -22,7 +24,7 @@ static float read_float(const uint8_t *p) { float v; memcpy(&v, p, 4); return v;
 
 static void free_font(BlackMenuFont *font)
 {
-    for (int i = 0; i < 128; ++i) if (font->image[i]) CGImageRelease(font->image[i]);
+    for (int i = 0; i < 256; ++i) if (font->image[i]) CGImageRelease(font->image[i]);
     memset(font, 0, sizeof *font);
 }
 
@@ -62,7 +64,7 @@ static void load_font(BlackMenuFont *font, NSString *path)
     /* Scan the glyph pool rather than trusting the file's hash-chain offsets. */
     for (uint32_t at = 0x220; (uint64_t)at + 40 <= texture; at += 40) {
         uint16_t code; memcpy(&code, b + at + 28, 2);
-        if (code >= 128) continue;
+        if (code >= 256) continue;
         float u = read_float(b + at), v = read_float(b + at + 4);
         float w = read_float(b + at + 8), h = read_float(b + at + 12);
         float advance = read_float(b + at + 24);
@@ -92,21 +94,37 @@ static NSColor *color(unsigned rgb, CGFloat alpha)
 static void fill(NSRect r, unsigned rgb, CGFloat opacity) { [color(rgb, opacity) setFill]; NSRectFill(r); }
 static void line(CGFloat x, CGFloat y, CGFloat w, unsigned rgb, CGFloat opacity) { fill(NSMakeRect(x, y, w, 1), rgb, opacity); }
 
+/* Text the game's font cannot draw (Cyrillic, or no game font) uses a system
+ * font sized so its capitals match `size`, the game font's cap height. */
+static int game_glyphs(BlackMenuFont *font, NSString *value)
+{
+    if (!(font->cap > 0)) return 0;
+    for (NSUInteger i = 0; i < value.length; ++i) {
+        unichar c = [value characterAtIndex:i];
+        if (c >= 256 || (!font->image[c] && c != ' ' && !(font->advance[c] > 0))) return 0;
+    }
+    return 1;
+}
+static NSFont *system_font(CGFloat size, int large)
+{
+    NSFont *probe = [NSFont fontWithName:large ? @"Arial-Black" : @"Arial-BoldMT" size:100] ?: [NSFont boldSystemFontOfSize:100];
+    CGFloat points = size * 100 / (probe.capHeight > 0 ? probe.capHeight : 72);
+    return [NSFont fontWithName:probe.fontName size:points] ?: [NSFont boldSystemFontOfSize:points];
+}
 static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
 {
     BlackMenuFont *font = large ? &big_font : &small_font;
-    if (!(font->cap > 0)) {
-        NSFont *fallback = [NSFont fontWithName:large ? @"Arial-Black" : @"Arial-BoldMT" size:size];
-        [value drawAtPoint:NSMakePoint(x, y) withAttributes:@{
-            NSFontAttributeName:fallback ?: [NSFont boldSystemFontOfSize:size],
-            NSForegroundColorAttributeName:color(rgb, 1)}];
+    if (!game_glyphs(font, value)) {
+        NSFont *fallback = system_font(size, large);
+        /* Flipped view: the line box starts at the ascender; put the capitals' top at y. */
+        [value drawAtPoint:NSMakePoint(x, y - (fallback.ascender - fallback.capHeight)) withAttributes:@{
+            NSFontAttributeName:fallback, NSForegroundColorAttributeName:color(rgb, 1)}];
         return;
     }
     CGContextRef ctx = NSGraphicsContext.currentContext.CGContext;
     CGFloat scale = size / font->cap;
     for (NSUInteger i = 0; i < value.length; ++i) {
         unichar c = [value characterAtIndex:i];
-        if (c >= 128) c = '?';
         if (font->image[c]) {
             CGRect r = CGRectMake(x + font->left[c] * scale, y + font->top[c] * scale,
                 font->width[c] * scale, font->height[c] * scale);
@@ -127,12 +145,12 @@ static CGFloat text_width(NSString *value, CGFloat size, int large)
 {
     BlackMenuFont *font = large ? &big_font : &small_font;
     CGFloat advance = 0;
-    if (font->cap > 0) {
+    if (game_glyphs(font, value)) {
         for (NSUInteger i = 0; i < value.length; ++i) {
-            unichar c = [value characterAtIndex:i]; if (c >= 128) c = '?';
+            unichar c = [value characterAtIndex:i];
             advance += (font->advance[c] > 0 ? font->advance[c] : font->cap * .4) * size / font->cap;
         }
-    } else advance = [value sizeWithAttributes:@{NSFontAttributeName:[NSFont boldSystemFontOfSize:size]}].width;
+    } else advance = [value sizeWithAttributes:@{NSFontAttributeName:system_font(size, large)}].width;
     return advance;
 }
 static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGFloat width, unsigned rgb, int large)
@@ -143,8 +161,40 @@ static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGF
 static void centered_text(NSString *value, CGFloat center, CGFloat y, CGFloat size, unsigned rgb)
 { text(value, center - text_width(value, size, 0) / 2, y, size, rgb, 0); }
 
+/* Panel text in the menu language (menu_text.h), keyed by its English in
+ * capitals; untranslated text stays English. Results are capitals, keeping
+ * any format specifiers lower case. */
+static int menu_text_language(void)
+{
+    int menu = black_SettingsMenuLanguage();
+    return menu ? menu - 1 : black_SettingsGameLanguage();
+}
+static NSString *T(NSString *english)
+{
+    static NSDictionary *tables[BLACK_TEXT_COUNT];
+    int language = menu_text_language();
+    if (language <= BLACK_TEXT_EN || language >= BLACK_TEXT_COUNT || !english) return english;
+    if (!tables[language]) {
+        NSMutableDictionary *table = [NSMutableDictionary dictionary];
+        for (size_t i = 0; i < sizeof black_menu_text / sizeof black_menu_text[0]; ++i) {
+            const char *text = black_menu_text[i].text[language - 1];
+            if (!*text) continue;
+            NSMutableString *upper = [[[NSString stringWithUTF8String:text] uppercaseString] mutableCopy];
+            NSRegularExpression *spec = [NSRegularExpression regularExpressionWithPattern:@"%[-+ 0-9.]*[A-Z]" options:0 error:nil];
+            for (NSTextCheckingResult *m in [spec matchesInString:upper options:0 range:NSMakeRange(0, upper.length)]) {
+                NSRange last = NSMakeRange(m.range.location + m.range.length - 1, 1);
+                [upper replaceCharactersInRange:last withString:[[upper substringWithRange:last] lowercaseString]];
+            }
+            table[[NSString stringWithUTF8String:black_menu_text[i].english]] = upper;
+            [upper release];
+        }
+        tables[language] = [table copy];
+    }
+    return tables[language][english] ?: english;
+}
+
 /* TGP's centered settings panel: supported recomp groups and controller page. */
-enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF,
+enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
        ROW_HID, ROW_MEASURE, ROW_RESET,
@@ -155,7 +205,7 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF,
 enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 198 };
 static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER", @"MODS"};
 static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X, ROW_INTROS};
-static const int tab_rows[MENU_TABS] = {6, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
+static const int tab_rows[MENU_TABS] = {8, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
 static int tab_of(int row) { return row >= ROW_INTROS ? 3 : row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
 static int is_binding(int row) { return row >= ROW_BIND_FIRST && row <= ROW_BIND_LAST; }
 static int group_of(int row)
@@ -167,6 +217,7 @@ static int group_of(int row)
     if (row >= ROW_MOUSE_X) return 9;
     if (row <= ROW_FPS) return 0;
     if (row <= ROW_AF) return 1;
+    if (row <= ROW_MENU_LANG) return 2;
     if (row <= ROW_INVERT_X) return 3;
     if (row <= ROW_AIM_ASSIST) return 4;
     if (row <= ROW_TRIGGER_DZ) return 5;
@@ -191,7 +242,7 @@ static CGFloat row_y(int row, int selected)
 }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language",
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
@@ -209,7 +260,16 @@ enum { PANEL = 0x090806, BORDER = 0xb8944d, TEXT = 0xe6e0d6, HIGHLIGHT = 0x4d3b1
 static const int aniso_levels[] = {0, 2, 4, 8, 16};
 static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
 static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
-static int active_hid;
+static int active_hid, launch_language;
+static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO"};
+static NSString *const menu_language_names[] = {@"AUTO", @"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
+static int language_available(int language) { return black_game_language_available(getenv("BLACK_GAME_DIR"), language); }
+static int languages_on_disc(void)
+{
+    int count = 0;
+    for (int i = 0; i < BLACK_GAME_LANGUAGES; ++i) count += language_available(i);
+    return count;
+}
 /* What each mod does, then when it takes effect and what it leaves behind. */
 static NSString *const mod_help[BLACK_MOD_COUNT][2] = {
     {@"REFILLS YOUR HEALTH EVERY GAME STEP. ONE HUGE HIT CAN STILL KILL.", @"LIVE. YOUR CHARACTER ONLY; ENEMIES AND SAVES ARE UNCHANGED."},
@@ -306,6 +366,8 @@ static NSTimeInterval transition, last_draw;
             @"Off or MetalFX spatial. Applied next launch.", @"Camera angle, 45 to 140 degrees. Applied next launch.",
             @"Displays the game's frame rate on screen. Live.",
             @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
+            @"Text of the game itself from your disc's string banks. Applied next launch.",
+            @"Language of this settings panel. Auto follows the game language. Live.",
             @"Horizontal look speed after the game's stick curve. Live.", @"Vertical look speed. Live.",
             @"Horizontal look speed while aiming or scoped. Live.", @"Vertical look speed while aiming or scoped. Live.",
             @"Invert the controller's horizontal look axis. Live. Invert Y is in the game's own options.",
@@ -376,6 +438,8 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
+    [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
+    [rows[ROW_MENU_LANG] setAccessibilityValue:menu_language_names[black_SettingsMenuLanguage()].capitalizedString];
     [rows[ROW_FPS] setAccessibilityValue:black_SettingsFpsCounter() ? @"On" : @"Off"];
     [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
     [rows[ROW_AA] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", aa_name(black_SettingsAntiAliasing())]];
@@ -547,6 +611,26 @@ static NSTimeInterval transition, last_draw;
         if (current == value) return;
         if (selected == ROW_MISSIONS) black_SettingsSetSkipMissionIntros(value);
         else black_SettingsSetSkipIntros(value);
+    } else if (selected == ROW_GAME_LANG) {
+        /* Step over the languages this disc has no string bank for. */
+        int current = black_SettingsGameLanguage(), value = current;
+        for (int step = 0; step < BLACK_GAME_LANGUAGES; ++step) {
+            value += direction;
+            if (value < 0 || value >= BLACK_GAME_LANGUAGES) {
+                if (!cycle) return;
+                value = (value + BLACK_GAME_LANGUAGES) % BLACK_GAME_LANGUAGES;
+            }
+            if (language_available(value)) break;
+        }
+        if (value == current || !language_available(value)) return;
+        black_SettingsSetGameLanguage(value);
+    } else if (selected == ROW_MENU_LANG) {
+        int count = (int)(sizeof menu_language_names / sizeof menu_language_names[0]);
+        int current = black_SettingsMenuLanguage(), value = current + direction;
+        if (cycle) value = (value + count) % count;
+        value = MAX(0, MIN(count - 1, value));
+        if (value == current) return;
+        black_SettingsSetMenuLanguage(value);
     } else if (selected == ROW_FPS) {
         int current = black_SettingsFpsCounter(), value = cycle ? !current : direction > 0;
         if (value == current) return;
@@ -601,18 +685,19 @@ static NSTimeInterval transition, last_draw;
     NSBezierPath *border = [NSBezierPath bezierPathWithRect:NSMakeRect(61, 25, 838, 550)];
     border.lineWidth = 2; [border stroke];
     /* Center the heading using native text metrics; local font proportions are retained. */
-    centered_text(@"SETTINGS", 480, 45, 22, TEXT);
+    centered_text(T(@"SETTINGS"), 480, 45, 22, TEXT);
     int tab = tab_of(selected);
     for (int i = 0; i < MENU_TABS; ++i) {
-        CGFloat x = 84 + i * TAB_WIDTH, w = text_width(tab_names[i], 14, 0), size = MIN(14, 14 * (TAB_WIDTH - 16) / w);
+        NSString *name = T(tab_names[i]);
+        CGFloat x = 84 + i * TAB_WIDTH, w = text_width(name, 14, 0), size = MIN(14, 14 * (TAB_WIDTH - 16) / w);
         fill(NSMakeRect(x, 82, TAB_WIDTH, 38), i == tab ? HIGHLIGHT : TAB, 1);
         if (i == tab) line(x, 118, TAB_WIDTH, HEADING, .85);
-        centered_text(tab_names[i], x + TAB_WIDTH / 2, 95 + (14 - size) / 2, size, i == tab ? TEXT : DIM);
+        centered_text(name, x + TAB_WIDTH / 2, 95 + (14 - size) / 2, size, i == tab ? TEXT : DIM);
     }
     if (tab == 3) {
         int supported = black_ModsSupported();
-        text([NSString stringWithFormat:@"GAME: %s%@", black_ModsRevision(),
-            supported > 0 ? @" XBE" : supported < 0 ? @"" : @" - MODS OFF"], 96, 130, 10, supported ? DIM : 0xe5a06d, 0);
+        text([NSString stringWithFormat:T(@"GAME: %s%@"), black_ModsRevision(),
+            supported > 0 ? T(@" XBE") : supported < 0 ? @"" : T(@" - MODS OFF")], 96, 130, 10, supported ? DIM : 0xe5a06d, 0);
     }
     text([NSString stringWithFormat:@"%02d / %02d", selected - tab_first[tab] + 1, tab_rows[tab]],
         820, 130, 10, DIM, 0);
@@ -621,12 +706,12 @@ static NSTimeInterval transition, last_draw;
     for (int index = start; index < end; ++index) {
         CGFloat y = row_y(index, selected);
         if (index == start || group_of(index) != group_of(index - 1)) {
-            text(group_name(group_of(index)), 96, y - 17, 10, HEADING, 0);
+            text(T(group_name(group_of(index))), 96, y - 17, 10, HEADING, 0);
             line(96, y - 3, width - 24, HEADING, .35);
         }
         BOOL focus = selected == index;
         if (focus) fill(NSMakeRect(84, y, width, 38), HIGHLIGHT, 1);
-        fitted_text([row_labels()[index] uppercaseString], 96, y + 13, 13,
+        fitted_text(T([row_labels()[index] uppercaseString]), 96, y + 13, 13,
             is_binding(index) ? 490 : left - 108, focus ? TEXT : DIM, 0);
         if (is_binding(index)) {
             for (int slot = 0; slot < 2; ++slot) {
@@ -636,7 +721,7 @@ static NSTimeInterval transition, last_draw;
                 if (active) line(x,y+31,132,HEADING,1);
                 NSString *key = active && binding_capture ? @"PRESS A KEY" :
                     [NSString stringWithUTF8String:black_KeyName(black_SettingsBinding(index-ROW_BIND_FIRST,slot))];
-                fitted_text(key.uppercaseString,x+8,y+13,11,116,active ? HEADING : TEXT,0);
+                fitted_text(T(key.uppercaseString),x+8,y+13,11,116,active ? HEADING : TEXT,0);
             }
             continue;
         }
@@ -662,6 +747,8 @@ static NSTimeInterval transition, last_draw;
             index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
             index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
             index == ROW_FPS ? (black_SettingsFpsCounter() ? @"ON" : @"OFF") :
+            index == ROW_GAME_LANG ? game_language_names[black_SettingsGameLanguage()] :
+            index == ROW_MENU_LANG ? menu_language_names[black_SettingsMenuLanguage()] :
             index == ROW_AA ? aa_name(black_SettingsAntiAliasing()) :
             index == ROW_AF ? af_name(black_SettingsAniso()) :
             index == ROW_INTROS ? (black_SettingsSkipIntros() ? @"ON" : @"OFF") :
@@ -673,7 +760,7 @@ static NSTimeInterval transition, last_draw;
             text(@"<", left + 9, y + 13, 13, HEADING, 0);
             text(@">", left + 105, y + 13, 13, HEADING, 0);
         }
-        fitted_text(value, left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
+        fitted_text(T(value), left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
     }
     NSString *help, *detail;
     if (selected >= ROW_MOD_FIRST) {
@@ -723,13 +810,13 @@ static NSTimeInterval transition, last_draw;
         detail = @"LIVE. SUPPORT DEPENDS ON THE CONTROLLER AND DRIVER.";
     } else if (selected == ROW_HID) {
         help = @"ON: SDL RAW HID. OFF: PLATFORM CONTROLLER DRIVER.";
-        detail = [NSString stringWithFormat:@"RESTART REQUIRED. CURRENT REQUEST: %@.", active_hid ? @"RAW HID" : @"PLATFORM"];
+        detail = [NSString stringWithFormat:T(@"RESTART REQUIRED. CURRENT REQUEST: %@."), T(active_hid ? @"RAW HID" : @"PLATFORM")];
     } else if (selected == ROW_MEASURE) {
         BlackControllerMonitor monitor = black_ControllerMonitor();
         help = @"RELEASE BOTH STICKS FOR TWO SECONDS. ENTER / A STARTS.";
         switch (monitor.calibration) {
         case BLACK_CAL_MEASURING: detail = @"MEASURING... DO NOT TOUCH THE STICKS. LEFT CANCELS."; break;
-        case BLACK_CAL_APPLIED: detail = [NSString stringWithFormat:@"SET LEFT %d%% / RIGHT %d%%, WITH A 2%% NOISE MARGIN.", monitor.suggested[0], monitor.suggested[1]]; break;
+        case BLACK_CAL_APPLIED: detail = [NSString stringWithFormat:T(@"SET LEFT %d%% / RIGHT %d%%, WITH A 2%% NOISE MARGIN."), monitor.suggested[0], monitor.suggested[1]]; break;
         case BLACK_CAL_MOVED: detail = @"TOO MUCH MOVEMENT. NO SETTINGS CHANGED. TRY AGAIN."; break;
         case BLACK_CAL_DISCONNECTED: detail = @"CONNECT THE CONTROLLER AND TRY AGAIN. NO CHANGE."; break;
         case BLACK_CAL_CANCELLED: detail = @"MEASUREMENT CANCELLED. NO SETTINGS CHANGED."; break;
@@ -738,6 +825,14 @@ static NSTimeInterval transition, last_draw;
     } else if (selected == ROW_RESET) {
         help = @"RESTORE ORIGINAL LOOK, STICK ZONES AND CONTROLLER DEFAULTS.";
         detail = @"ENTER / A RESETS INPUT ONLY. DRIVER CHANGES NEED A RESTART.";
+    } else if (selected == ROW_GAME_LANG) {
+        help = @"TEXT AND MENUS OF THE GAME ITSELF, FROM YOUR DISC'S STRING BANKS.";
+        detail = languages_on_disc() > 1 ?
+            [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %@."), game_language_names[launch_language]] :
+            @"THIS DISC HAS ENGLISH ONLY. THE EUROPEAN DISC ADDS FOUR LANGUAGES.";
+    } else if (selected == ROW_MENU_LANG) {
+        help = @"LANGUAGE OF THIS SETTINGS PANEL. AUTO FOLLOWS THE GAME LANGUAGE.";
+        detail = @"LIVE. RUSSIAN IS FOR THIS PANEL ONLY: THE GAME HAS NO RUSSIAN TEXT.";
     } else if (selected == ROW_FPS) {
         help = @"DISPLAYS THE FRAME RATE ON SCREEN, IN THE GAME'S OWN FONT.";
         detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN.";
@@ -745,37 +840,37 @@ static NSTimeInterval transition, last_draw;
         const char *aa = getenv("RECOMP_AA");
         int active = !aa ? 1 : !strcmp(aa, "smaa") ? 2 : strcmp(aa, "0") ? 1 : 0;
         help = @"SMOOTHS JAGGED EDGES. SMAA IS SHARPER, FXAA IS CHEAPER.";
-        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.", aa_name(active)];
+        detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %@."), T(aa_name(active))];
     } else if (selected == ROW_AF) {
         help = @"SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE.";
-        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.", af_name(atoi(getenv("RECOMP_AF") ?: "0"))];
+        detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %@."), T(af_name(atoi(getenv("RECOMP_AF") ?: "0")))];
     } else if (selected == ROW_UPSCALE) {
         const char *up = getenv("RECOMP_UPSCALE");
         help = @"METALFX SHARPENS THE RENDER SCALE UP TO THE WINDOW'S PIXELS.";
-        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.",
-            up && !strcmp(up, "metalfx") ? @"METALFX" : @"OFF"];
+        detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %@."),
+            T(up && !strcmp(up, "metalfx") ? @"METALFX" : @"OFF")];
     } else if (selected == ROW_SCALE) {
         int scale = black_SettingsRenderScale();
-        help = [NSString stringWithFormat:@"INTERNAL RENDER TARGETS: %d X %d.", 640 * scale, 480 * scale];
-        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %dX.", atoi(getenv("RECOMP_SCALE") ?: "2")];
+        help = [NSString stringWithFormat:T(@"INTERNAL RENDER TARGETS: %d X %d."), 640 * scale, 480 * scale];
+        detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %dX."), atoi(getenv("RECOMP_SCALE") ?: "2")];
     } else if (selected == ROW_FOV) {
         help = @"CAMERA ANGLE IN DEGREES. ORIGINAL: 70.";
-        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %d.", atoi(getenv("RECOMP_FOV") ?: "70")];
+        detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %d."), atoi(getenv("RECOMP_FOV") ?: "70")];
     } else {
         help = selected == ROW_MISSIONS ? @"SKIP THE BRIEFING FILM BEFORE EACH MISSION." : @"SKIP EA, CRITERION AND STARTUP FILMS.";
         detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." : @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
     line(84, 430, 792, HEADING, .35);
-    fitted_text(help, 96, 443, 11, 768, TEXT, 0);
-    fitted_text(detail, 96, 464, 10, 768, DIM, 0);
+    fitted_text(T(help), 96, 443, 11, 768, TEXT, 0);
+    fitted_text(T(detail), 96, 464, 10, 768, DIM, 0);
     if (tab == 2) {
         BlackControllerMonitor monitor = black_ControllerMonitor();
         fill(NSMakeRect(704, 147, 1, 264), HEADING, .35);
-        text(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER", 720, 153, 10, HEADING, 0);
+        text(T(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER"), 720, 153, 10, HEADING, 0);
         if (monitor.connected) fitted_text([NSString stringWithUTF8String:monitor.name], 720, 170, 9, 150, DIM, 0);
         for (int stick = 0; stick < 2; ++stick) {
             CGFloat cx = 750, cy = 225 + stick * 118;
-            text(stick ? @"AIM" : @"MOVE", 792, cy - 26, 10, TEXT, 0);
+            text(T(stick ? @"AIM" : @"MOVE"), 792, cy - 26, 10, TEXT, 0);
             int threshold = black_SettingsStickThreshold(stick);
             CGFloat dz = threshold < 0 ? .2 : threshold / 32767.0;
             fill(NSMakeRect(cx - 30, cy - 30, 60, 60), TAB, 1);
@@ -786,21 +881,22 @@ static NSTimeInterval transition, last_draw;
             CGFloat outy = -black_game_axis(monitor.mapped[stick * 2 + 1]);
             fill(NSMakeRect(cx + rawx * 30 - 3, cy + rawy * 30 - 3, 6, 6), HEADING, 1);
             fill(NSMakeRect(cx + outx * 30 - 2, cy + outy * 30 - 2, 4, 4), TEXT, 1);
-            fitted_text([NSString stringWithFormat:@"RAW %+.0f / %+.0f%%", rawx * 100, -rawy * 100], 720, cy + 38, 9, 150, HEADING, 0);
-            fitted_text([NSString stringWithFormat:@"OUT %+.0f / %+.0f%%", outx * 100, -outy * 100], 720, cy + 54, 9, 150, TEXT, 0);
+            fitted_text([NSString stringWithFormat:T(@"RAW %+.0f / %+.0f%%"), rawx * 100, -rawy * 100], 720, cy + 38, 9, 150, HEADING, 0);
+            fitted_text([NSString stringWithFormat:T(@"OUT %+.0f / %+.0f%%"), outx * 100, -outy * 100], 720, cy + 54, 9, 150, TEXT, 0);
         }
         text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 410, 9, DIM, 0);
     }
     BOOL failed = black_SettingsSaveFailed();
-    fitted_text(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"CHANGES ARE SAVED AUTOMATICALLY.",
+    fitted_text(T(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"CHANGES ARE SAVED AUTOMATICALLY."),
         96, 490, 10, 400, failed ? 0xe5a06d : DIM, 0);
-    text(@"Q / E, LB / RB: PAGE     UP / DOWN: SELECT", 480, 490, 9, DIM, 0);
+    fitted_text(T(@"Q / E, LB / RB: PAGE     UP / DOWN: SELECT"), 480, 490, 9, 396, DIM, 0);
     line(84, 514, 792, HEADING, .35);
     fill(NSMakeRect(84, 526, 126, 30), BUTTON, 1);
-    text(@"BACK", 122, 536, 12, TEXT, 0);
+    centered_text(T(@"BACK"), 147, 536, 12, TEXT);
     fill(NSMakeRect(738, 526, 138, 30), BUTTON, 1);
-    text(@"DEFAULTS", 760, 536, 12, TEXT, 0);
-    text(@"LEFT / RIGHT: ADJUST    ENTER / A: CHANGE    ESC / B: BACK", 232, 538, 10, DIM, 0);
+    { NSString *label = T(@"DEFAULTS"); CGFloat w = text_width(label, 12, 0);
+      text(label, 807 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }
+    fitted_text(T(@"LEFT / RIGHT: ADJUST    ENTER / A: CHANGE    ESC / B: BACK"), 232, 538, 10, 494, DIM, 0);
     [NSGraphicsContext restoreGraphicsState];
 }
 - (void)mouseDown:(NSEvent *)event { (void)event; }
@@ -873,6 +969,8 @@ void black_MenuAttach(void *window, void (*capture)(int))
         [(NSString *)([bundle objectForInfoDictionaryKey:@"LSApplicationCategoryType"] ?: @"none") UTF8String],
         [[bundle objectForInfoDictionaryKey:@"LSSupportsGameMode"] boolValue]);
     active_hid = black_SettingsDualSenseHid();
+    launch_language = black_SettingsGameLanguage();
+    if (!language_available(launch_language)) launch_language = BLACK_LANG_ENGLISH;
     NSString *game = [NSString stringWithUTF8String:getenv("BLACK_GAME_DIR") ?: ""];
     load_font(&big_font, [game stringByAppendingPathComponent:@"language/fonts/Big.bin"]);
     load_font(&small_font, [game stringByAppendingPathComponent:@"language/fonts/Small.bin"]);
