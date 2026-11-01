@@ -18,6 +18,7 @@ extern void black_OriginalSolidQuads(void);
 extern void black_OriginalStrip(void);
 extern void black_OriginalFilmDraw(void);
 extern void black_OriginalListDraw(void);
+void black_ModsPlay(void);
 
 /* display: +0 width, +0xC widescreen, view width/aspect of the first view */
 #define DISPLAY 0x2D67F4u
@@ -234,6 +235,9 @@ void sub_001217C0(void)
 /* Begin. Left alone: the Flash player's, a smaller target's. */
 void sub_000D99A0(void)
 {
+    /* Mods page player values: every frame on the game thread, before its
+     * 2D layer; black_ModsPlay itself only acts in 3D play. */
+    black_ModsPlay();
     if (!enabled()) { black_Original2DBegin(); return; }
     uint32_t from = MEM32(g_esp), display = MEM32(DISPLAY);
     follow_output();

@@ -1,7 +1,9 @@
 /* Small persisted port preferences, separate from Xbox saves and game data. */
 #include "port_menu.h"
 #include "keyboard_mouse.h"
+#include "game_mods.h"
 #include <stdatomic.h>
+#include <stdint.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +22,7 @@ static atomic_int anti_aliasing = 2, anisotropic_filtering;
  * measured 31.10, SMAA under 0.1 ms and MetalFX about 4 ms of GPU in the 60 Hz
  * presentation pass, with no effect on the game's own frame rate. */
 static atomic_int upscaler = 1;
+static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top left */
 static atomic_int stick_deadzone[2] = {-1, -1}; /* -1 keeps BLACK's original 20% */
 static atomic_int stick_cli[2] = {-1, -1}; /* exact legacy CLI counts; UI edits clear */
 static atomic_int trigger_deadzone, vibration = 1, dualsense_hid = 1;
@@ -28,6 +31,8 @@ static atomic_int invert_x, rumble_intensity = 100, keyboard_active;
 static atomic_int hold_aim, aim_assist = 1;
 static atomic_int mouse_speed[4] = {50,50,50,50}, mouse_invert[2], mouse_hold_aim = 1, walk_speed = 50;
 static atomic_int bindings[BLACK_ACTION_COUNT][2];
+static atomic_int mods[BLACK_MOD_COUNT], mods_supported = -1;
+static _Atomic(const char *) mods_revision = "DETECTING";
 static atomic_uint menu_commands;
 static char *settings_path;
 
@@ -91,6 +96,13 @@ static void load_settings(void)
                         atomic_store(&bindings[i][slot],black_KeyCanonical((int)n));
                 }
             }
+            for (int i = 0; i < BLACK_MOD_COUNT; ++i) {
+                char format[96]; snprintf(format, sizeof format, " %s = %%15s %%c", black_mod_info[i].key);
+                if (sscanf(line, format, value, &extra) == 1) {
+                    if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&mods[i], 1);
+                    else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&mods[i], 0);
+                }
+            }
             if (sscanf(line, " render_scale = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 1 && n <= 6) atomic_store(&render_scale, (int)n);
@@ -102,6 +114,10 @@ static void load_settings(void)
             if (sscanf(line, " anti_aliasing = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 2) atomic_store(&anti_aliasing, (int)n);
+            }
+            if (sscanf(line, " fps_counter = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= 0 && n <= 1) atomic_store(&fps_counter, (int)n);
             }
             if (sscanf(line, " upscaler = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -202,6 +218,9 @@ static int save_setting(atomic_int *setting, int value)
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
+                written &= fprintf(file, "fps_counter=%d\n# Mods page: 1 on, 0 off\n", atomic_load(&fps_counter)) > 0;
+                for (int i = 0; i < BLACK_MOD_COUNT; ++i)
+                    written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
                 int flushed = fflush(file) == 0 && fsync(fd) == 0;
                 int closed = fclose(file) == 0;
                 if (written && flushed && closed && rename(temporary, settings_path) == 0) success = 1;
@@ -235,6 +254,9 @@ int black_SettingsSetAntiAliasing(int mode)
 { return mode >= 0 && mode <= 2 ? save_setting(&anti_aliasing, mode) : 0; }
 int black_SettingsSetUpscaler(int mode)
 { return mode >= 0 && mode <= 1 ? save_setting(&upscaler, mode) : 0; }
+int black_SettingsFpsCounter(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&fps_counter); }
+int black_SettingsSetFpsCounter(int enabled) { return save_setting(&fps_counter, !!enabled); }
 int black_SettingsSetAniso(int level)
 { return black_SettingsValidAniso(level) ? save_setting(&anisotropic_filtering, level) : 0; }
 
@@ -338,3 +360,28 @@ int black_SettingsResetKeyboard(void)
     for (int i=0;i<2;++i) atomic_store(&mouse_invert[i],0);
     atomic_store(&walk_speed,50); return save_setting(&mouse_hold_aim,1);
 }
+
+int black_SettingsMod(int mod)
+{ pthread_once(&initialized, load_settings); return mod >= 0 && mod < BLACK_MOD_COUNT && atomic_load(&mods[mod]); }
+int black_SettingsSetMod(int mod, int enabled)
+{
+    if (mod < 0 || mod >= BLACK_MOD_COUNT) return 0;
+    int success = save_setting(&mods[mod], !!enabled);
+    fprintf(stderr, "[MODS] %s=%d\n", black_mod_info[mod].key, !!enabled);
+    return success;
+}
+int black_SettingsResetMods(void)
+{
+    pthread_once(&initialized, load_settings);
+    for (int i = 0; i < BLACK_MOD_COUNT; ++i) atomic_store(&mods[i], 0);
+    atomic_store(&skip_missions, 0);
+    return save_setting(&skip_intros, 0);
+}
+void black_ModsSetRevision(const char *name, int supported)
+{ atomic_store(&mods_revision, name); atomic_store(&mods_supported, !!supported); }
+const char *black_ModsRevision(void) { return atomic_load(&mods_revision); }
+/* -1 until the game has checked its executable. */
+int black_ModsSupported(void) { return atomic_load(&mods_supported); }
+/* Overridden by the game executable (game_mods.c); tools without game code
+ * show no counter. */
+__attribute__((weak)) uint32_t black_GameFrameCount(void) { return 0; }

@@ -35,6 +35,37 @@ macOS 27.0.1. This is an experimental release, not a complete-game qualification
   GUI screenshot inspection of the final Finder window was unavailable in this
   environment; this is not described as a clean-machine hardware qualification.
 
+## Mods page and FPS counter (in development)
+
+Not part of the 0.1.0 download. The settings panel gains a fourth **Mods**
+page laid out like TGP's menu, and Recomp Settings → Display gains
+**FPS Counter**, a small corner label counting the game's finished frames.
+
+| Group | Mods | Takes effect |
+| --- | --- | --- |
+| Films | Skip Intro Movies, Skip Mission Intros (moved from Recomp Settings) | Immediately |
+| Player | God Mode (health refilled every frame), Infinite Medkits (3), Infinite Grenades (9), Always Silenced (experimental) | Immediately |
+| Player | Infinite Ammo through the game's own Silver Weapons reward | Next mission start or restart |
+| Unlocks | All missions; Black Ops difficulty; BFG code | Saved into the profile; turning a mod off never relocks |
+| Unlocks | M16A2 at mission start | Next mission start or restart |
+
+Addresses are kept per XBE revision and chosen by the executable's header
+timestamp. The Mac build runs code lifted from the USA executable, and the
+supported European disc is normalized to it, so both discs report the USA
+revision. An unknown executable shows `MODS OFF` and nothing is written.
+
+- New unit tests cover revisions, both health scales, menus/loading without
+  writes, unlocks, campaign-only spawn rewards and the silencer point; the menu
+  preview covers all four pages. **101 CTest checks** and **30 Python checks**
+  passed.
+- First mission on Normal with the player mods on: the log reported the USA
+  revision, `silver=1 m16a2=1` at spawn and `health=1200.0 max=1200.0
+  medkits=3 grenades=9` every 150 frames. A window capture showed three medkits,
+  nine grenades, 999 rounds, the M16A2 and `FPS: 29.9`.
+- Scripted pad only. Damage above the maximum in one frame can still kill.
+  Always Silenced and the BFG were not exercised in combat. The trainer's weapon
+  swap and faster game speed were not ported.
+
 ## Open work
 
 - Longer combat/death/retry stress, additional missions and a complete playthrough.

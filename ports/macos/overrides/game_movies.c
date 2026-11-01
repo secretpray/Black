@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 extern void black_OriginalFilmTick(void);
+void black_ModsFrontEnd(void);
 
 /* Developer qualification only (launcher --dev-unlock-levels N, which also
  * gives the run its own save directory): open missions 0..N on every
@@ -34,6 +35,7 @@ static void dev_unlock_levels(void)
 void sub_00209DC0(void)
 {
     dev_unlock_levels();
+    black_ModsFrontEnd();
     static int configured, all;
     static BlackFilmSkip selection;
     if (!configured) {

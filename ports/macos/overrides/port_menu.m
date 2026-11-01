@@ -6,6 +6,7 @@
 #include "controller_monitor.h"
 #include "controller_axes.h"
 #include "keyboard_mouse.h"
+#include "game_mods.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -143,24 +144,29 @@ static void centered_text(NSString *value, CGFloat center, CGFloat y, CGFloat si
 { text(value, center - text_width(value, size, 0) / 2, y, size, rgb, 0); }
 
 /* TGP's centered settings panel: supported recomp groups and controller page. */
-enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_AA, ROW_AF, ROW_INTROS, ROW_MISSIONS,
+enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
        ROW_HID, ROW_MEASURE, ROW_RESET,
        ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
-       ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1, MENU_ROWS };
-enum { MENU_TABS = 3, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 264 };
-static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER"};
-static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X};
-static const int tab_rows[MENU_TABS] = {7, 8 + BLACK_ACTION_COUNT, 15};
-static int tab_of(int row) { return row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
+       ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1,
+       ROW_INTROS, ROW_MISSIONS, ROW_MOD_FIRST, ROW_MOD_LAST = ROW_MOD_FIRST + BLACK_MOD_COUNT - 1, MENU_ROWS };
+/* TGP's tab bar: one tab a page, sharing the line equally. */
+enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 198 };
+static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER", @"MODS"};
+static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X, ROW_INTROS};
+static const int tab_rows[MENU_TABS] = {6, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
+static int tab_of(int row) { return row >= ROW_INTROS ? 3 : row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
+static int is_binding(int row) { return row >= ROW_BIND_FIRST && row <= ROW_BIND_LAST; }
 static int group_of(int row)
 {
+    if (row >= ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS) return 13;
+    if (row >= ROW_MOD_FIRST) return 12;
+    if (row >= ROW_INTROS) return 11;
     if (row >= ROW_BIND_FIRST) return 10;
     if (row >= ROW_MOUSE_X) return 9;
-    if (row <= ROW_FOV) return 0;
+    if (row <= ROW_FPS) return 0;
     if (row <= ROW_AF) return 1;
-    if (row <= ROW_MISSIONS) return 2;
     if (row <= ROW_INVERT_X) return 3;
     if (row <= ROW_AIM_ASSIST) return 4;
     if (row <= ROW_TRIGGER_DZ) return 5;
@@ -169,7 +175,8 @@ static int group_of(int row)
     return 8;
 }
 static NSString *group_name(int group)
-{ return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS"])[group]; }
+{ return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS",
+    @"FILMS", @"PLAYER", @"UNLOCKS"])[group]; }
 static int visible_start(int selected)
 { return MAX(tab_first[tab_of(selected)], selected - MENU_TAB_MAX_ROWS + 1); }
 static CGFloat row_y(int row, int selected)
@@ -184,14 +191,16 @@ static CGFloat row_y(int row, int selected)
 }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"Anti-Aliasing", @"Anisotropic Filtering",
-        @"Skip Intro Movies", @"Skip Mission Intros", @"Horizontal Sensitivity", @"Vertical Sensitivity",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering",
+        @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
         @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Reset Input", @"Mouse Horizontal Sensitivity", @"Mouse Vertical Sensitivity",
         @"Mouse Aim Horizontal Sensitivity", @"Mouse Aim Vertical Sensitivity", @"Invert Mouse X", @"Invert Mouse Y",
         @"Mouse Hold to Aim", @"Walk Speed"]];
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
+    [labels addObjectsFromArray:@[@"Skip Intro Movies", @"Skip Mission Intros"]];
+    for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
     return labels;
 }
 /* sRGB values from TGP menu.cpp: panel, border, text, selected row, heading, dim. */
@@ -201,6 +210,23 @@ static const int aniso_levels[] = {0, 2, 4, 8, 16};
 static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
 static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
 static int active_hid;
+/* What each mod does, then when it takes effect and what it leaves behind. */
+static NSString *const mod_help[BLACK_MOD_COUNT][2] = {
+    {@"REFILLS YOUR HEALTH EVERY GAME STEP. ONE HUGE HIT CAN STILL KILL.", @"LIVE. YOUR CHARACTER ONLY; ENEMIES AND SAVES ARE UNCHANGED."},
+    {@"KEEPS THE MEDKIT POUCH FULL: THREE, THE GAME'S OWN LIMIT.", @"LIVE. USING ONE STILL HEALS AS USUAL."},
+    {@"KEEPS NINE GRENADES.", @"LIVE. THROW AS MANY AS YOU LIKE."},
+    {@"THE GAME'S SILVER WEAPONS REWARD: MAGAZINES REFILL, 999 SHOWN.", @"FROM THE NEXT MISSION START OR RESTART. CAMPAIGN MISSIONS ONLY."},
+    {@"FITS A SILENCER EVERYWHERE THE +9 TRAINER DID. EXPERIMENTAL.", @"LIVE. AFFECTS EVERY WEAPON THE GAME UPDATES, NOT ONLY YOURS."},
+    {@"OPENS ALL EIGHT MISSIONS ON EASY, NORMAL AND HARD.", @"ALSO BLACK OPS WHEN THAT MOD IS ON. SAVED IN THE PROFILE; OFF DOES NOT RELOCK."},
+    {@"OPENS THE BLACK OPS DIFFICULTY, NORMALLY EARNED ON HARD.", @"FIRST MISSION, OR ALL WITH UNLOCK ALL MISSIONS. SAVED IN THE PROFILE."},
+    {@"STARTS EACH MISSION WITH THE M16A2, THE BLACK OPS REWARD.", @"FROM THE NEXT MISSION START OR RESTART. CAMPAIGN MISSIONS ONLY."},
+    {@"M249 IN PLACE OF THE FIRST MISSION'S STARTING WEAPON.", @"SAME AS A XXXX-XXXX-XXXX-XXXX PROFILE NAME. SAVED; OFF DOES NOT REMOVE IT."},
+};
+static NSString *mod_value(int mod)
+{
+    if (black_ModsSupported() == 0) return @"N/A";
+    return black_SettingsMod(mod) ? @"ON" : @"OFF";
+}
 static NSString *dz_name(int right)
 {
     int percent = black_SettingsStickDeadzone(right);
@@ -233,9 +259,35 @@ static NSString *dz_name(int right)
 - (void)drawRect:(NSRect)dirty { (void)dirty; }
 @end
 
+/* TGP's FPS COUNTER (src/game/fps_counter.cpp): "FPS: 30.0" in the game's
+ * small font, HUD grey with a black shadow, in the top left corner; smaller
+ * than TGP's 15-line text so it stays unobtrusive over the picture. It
+ * counts the game's finished frames, not the fixed-rate presentation. */
+uint32_t black_GameFrameCount(void);
+@interface BlackFpsView : NSView {
+@public
+    double fps;
+}
+@end
+@implementation BlackFpsView
+- (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }
+- (void)drawRect:(NSRect)dirty
+{
+    (void)dirty;
+    /* text() sizes by capital height: about 5 lines of a 480 frame, never
+     * below 7 points, with a one-point shadow. */
+    CGFloat unit = self.bounds.size.height / 480, cap = MAX(7, 5 * unit), margin = 6 * unit;
+    NSString *value = [NSString stringWithFormat:@"FPS: %.1f", fps];
+    text(value, margin + 1, margin + 1, cap, 0x000000, 0);
+    text(value, margin, margin, cap, 0xbababa, 0);
+}
+@end
+
 static NSWindow *menu_window;
 static NSView *game_view, *container;
 static BlackMenuView *menu_view;
+static BlackFpsView *fps_view;
 static id event_monitor;
 static void (*capture_input)(int);
 static int shown, closing;
@@ -252,8 +304,8 @@ static NSTimeInterval transition, last_draw;
         NSArray *labels = row_labels();
         NSArray *help = @[@"Internal render resolution, 1 to 6 times native. Applied next launch.",
             @"Off or MetalFX spatial. Applied next launch.", @"Camera angle, 45 to 140 degrees. Applied next launch.",
+            @"Displays the game's frame rate on screen. Live.",
             @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
-            @"Skip startup logos and intro films.", @"Skip mission briefings.",
             @"Horizontal look speed after the game's stick curve. Live.", @"Vertical look speed. Live.",
             @"Horizontal look speed while aiming or scoped. Live.", @"Vertical look speed while aiming or scoped. Live.",
             @"Invert the controller's horizontal look axis. Live. Invert Y is in the game's own options.",
@@ -272,7 +324,10 @@ static NSTimeInterval transition, last_draw;
             rows[i].focusRingType = NSFocusRingTypeNone;
             [rows[i] setAccessibilityLabel:labels[i]];
             [rows[i] setAccessibilityHelp:i < ROW_MOUSE_X ? help[i] :
-                i >= ROW_BIND_FIRST ? @"Two key slots. Left and Right choose a slot. Enter waits for a key or mouse button. Escape cancels, Delete clears." :
+                i >= ROW_INTROS ? (i == ROW_INTROS ? @"Skip startup logos and intro films." :
+                    i == ROW_MISSIONS ? @"Skip mission briefings." :
+                    [mod_help[i - ROW_MOD_FIRST][0] stringByAppendingFormat:@" %@", mod_help[i - ROW_MOD_FIRST][1]].capitalizedString) :
+                is_binding(i) ? @"Two key slots. Left and Right choose a slot. Enter waits for a key or mouse button. Escape cancels, Delete clears." :
                 @"Mouse and keyboard preferences. Applied live and saved automatically."];
             [self addSubview:rows[i]]; [rows[i] release];
         }
@@ -321,6 +376,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
+    [rows[ROW_FPS] setAccessibilityValue:black_SettingsFpsCounter() ? @"On" : @"Off"];
     [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
     [rows[ROW_AA] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", aa_name(black_SettingsAntiAliasing())]];
     [rows[ROW_AF] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", af_name(black_SettingsAniso())]];
@@ -335,6 +391,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_TRIGGER_DZ] setAccessibilityValue:[NSString stringWithFormat:@"%d percent", black_SettingsTriggerDeadzone()]];
     [rows[ROW_VIBRATION] setAccessibilityValue:black_SettingsVibration() ? @"On" : @"Off"];
     [rows[ROW_HID] setAccessibilityValue:black_SettingsDualSenseHid() ? @"On, next launch" : @"Off, next launch"];
+    for (int i = 0; i < BLACK_MOD_COUNT; ++i) [rows[ROW_MOD_FIRST + i] setAccessibilityValue:mod_value(i).capitalizedString];
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [rows[ROW_BIND_FIRST+i] setAccessibilityValue:
         [NSString stringWithFormat:@"%s / %s",black_KeyName(black_SettingsBinding(i,0)),black_KeyName(black_SettingsBinding(i,1))]];
     for (int i=0;i<4;++i) [rows[ROW_MOUSE_X+i] setAccessibilityValue:[NSString stringWithFormat:@"%.2f times",black_SettingsMouseSpeed(i)/50.0]];
@@ -351,10 +408,10 @@ static NSTimeInterval transition, last_draw;
     binding_capture = NO;
     if (tab_of(selected) == 1) black_SettingsResetKeyboard();
     else if (tab_of(selected) == 2) black_SettingsResetInput();
+    else if (tab_of(selected) == 3) black_SettingsResetMods();
     else {
         black_SettingsSetRenderScale(2); black_SettingsSetUpscaler(1); black_SettingsSetFov(70);
-        black_SettingsSetAntiAliasing(2); black_SettingsSetAniso(0);
-        black_SettingsSetSkipIntros(0); black_SettingsSetSkipMissionIntros(0);
+        black_SettingsSetAntiAliasing(2); black_SettingsSetAniso(0); black_SettingsSetFpsCounter(0);
     }
     changed = CACurrentMediaTime(); [self refreshValues]; [self setNeedsDisplay:YES];
 }
@@ -382,7 +439,7 @@ static NSTimeInterval transition, last_draw;
 }
 - (void)captureBinding:(int)key
 {
-    if (!binding_capture || selected < ROW_BIND_FIRST) return;
+    if (!binding_capture || !is_binding(selected)) return;
     if (key == -2) binding_capture = NO;
     else if (black_KeyValid(key)) {
         black_SettingsSetBinding(selected - ROW_BIND_FIRST, binding_slot, key);
@@ -398,7 +455,7 @@ static NSTimeInterval transition, last_draw;
         CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
         NSPoint point = [self convertPoint:NSApp.currentEvent.locationInWindow fromView:nil];
         CGFloat x = (point.x - (size.width - 960 * scale) / 2) / scale;
-        if (selected >= ROW_BIND_FIRST) {
+        if (is_binding(selected)) {
             if (x >= 600 && x < 876) {
                 binding_slot = x >= 738; binding_capture = YES; black_KeyReleaseAll(); [self setNeedsDisplay:YES];
             }
@@ -413,10 +470,15 @@ static NSTimeInterval transition, last_draw;
 }
 - (void)adjustOption:(int)direction cycle:(BOOL)cycle
 {
-    if (selected >= ROW_BIND_FIRST) {
+    if (is_binding(selected)) {
         if (cycle) { binding_capture = YES; black_KeyReleaseAll(); }
         else { binding_capture = NO; binding_slot = direction > 0; }
         [self setNeedsDisplay:YES]; return;
+    } else if (selected >= ROW_MOD_FIRST) {
+        int mod = selected - ROW_MOD_FIRST, current = black_SettingsMod(mod);
+        int value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        black_SettingsSetMod(mod, value);
     } else if (selected >= ROW_MOUSE_X && selected <= ROW_MOUSE_AIM_Y) {
         int axis = selected - ROW_MOUSE_X;
         int value = black_SettingsMouseSpeed(axis) + direction;
@@ -485,6 +547,10 @@ static NSTimeInterval transition, last_draw;
         if (current == value) return;
         if (selected == ROW_MISSIONS) black_SettingsSetSkipMissionIntros(value);
         else black_SettingsSetSkipIntros(value);
+    } else if (selected == ROW_FPS) {
+        int current = black_SettingsFpsCounter(), value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        black_SettingsSetFpsCounter(value);
     } else if (selected == ROW_AA) {
         int current = black_SettingsAntiAliasing(), value = current + direction;
         if (cycle && value > 2) value = 0;
@@ -538,10 +604,15 @@ static NSTimeInterval transition, last_draw;
     centered_text(@"SETTINGS", 480, 45, 22, TEXT);
     int tab = tab_of(selected);
     for (int i = 0; i < MENU_TABS; ++i) {
-        CGFloat x = 84 + i * TAB_WIDTH;
+        CGFloat x = 84 + i * TAB_WIDTH, w = text_width(tab_names[i], 14, 0), size = MIN(14, 14 * (TAB_WIDTH - 16) / w);
         fill(NSMakeRect(x, 82, TAB_WIDTH, 38), i == tab ? HIGHLIGHT : TAB, 1);
         if (i == tab) line(x, 118, TAB_WIDTH, HEADING, .85);
-        centered_text(tab_names[i], x + TAB_WIDTH / 2, 95, 14, i == tab ? TEXT : DIM);
+        centered_text(tab_names[i], x + TAB_WIDTH / 2, 95 + (14 - size) / 2, size, i == tab ? TEXT : DIM);
+    }
+    if (tab == 3) {
+        int supported = black_ModsSupported();
+        text([NSString stringWithFormat:@"GAME: %s%@", black_ModsRevision(),
+            supported > 0 ? @" XBE" : supported < 0 ? @"" : @" - MODS OFF"], 96, 130, 10, supported ? DIM : 0xe5a06d, 0);
     }
     text([NSString stringWithFormat:@"%02d / %02d", selected - tab_first[tab] + 1, tab_rows[tab]],
         820, 130, 10, DIM, 0);
@@ -556,8 +627,8 @@ static NSTimeInterval transition, last_draw;
         BOOL focus = selected == index;
         if (focus) fill(NSMakeRect(84, y, width, 38), HIGHLIGHT, 1);
         fitted_text([row_labels()[index] uppercaseString], 96, y + 13, 13,
-            index >= ROW_BIND_FIRST ? 490 : left - 108, focus ? TEXT : DIM, 0);
-        if (index >= ROW_BIND_FIRST) {
+            is_binding(index) ? 490 : left - 108, focus ? TEXT : DIM, 0);
+        if (is_binding(index)) {
             for (int slot = 0; slot < 2; ++slot) {
                 CGFloat x = 600 + slot * 138;
                 BOOL active = focus && slot == binding_slot;
@@ -569,7 +640,8 @@ static NSTimeInterval transition, last_draw;
             }
             continue;
         }
-        NSString *value = index >= ROW_MOUSE_X && index <= ROW_MOUSE_AIM_Y ?
+        NSString *value = index >= ROW_MOD_FIRST ? mod_value(index - ROW_MOD_FIRST) :
+            index >= ROW_MOUSE_X && index <= ROW_MOUSE_AIM_Y ?
             [NSString stringWithFormat:@"%.2fX",black_SettingsMouseSpeed(index-ROW_MOUSE_X)/50.0] :
             index == ROW_MOUSE_INVERT_X ? (black_SettingsMouseInvert(0) ? @"ON" : @"OFF") :
             index == ROW_MOUSE_INVERT_Y ? (black_SettingsMouseInvert(1) ? @"ON" : @"OFF") :
@@ -589,6 +661,7 @@ static NSTimeInterval transition, last_draw;
             index == ROW_RESET ? @"RESET" :
             index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
             index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
+            index == ROW_FPS ? (black_SettingsFpsCounter() ? @"ON" : @"OFF") :
             index == ROW_AA ? aa_name(black_SettingsAntiAliasing()) :
             index == ROW_AF ? af_name(black_SettingsAniso()) :
             index == ROW_INTROS ? (black_SettingsSkipIntros() ? @"ON" : @"OFF") :
@@ -603,7 +676,11 @@ static NSTimeInterval transition, last_draw;
         fitted_text(value, left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
     }
     NSString *help, *detail;
-    if (selected >= ROW_BIND_FIRST) {
+    if (selected >= ROW_MOD_FIRST) {
+        help = mod_help[selected - ROW_MOD_FIRST][0];
+        detail = black_ModsSupported() == 0 ? @"THIS GAME REVISION HAS NO VERIFIED ADDRESSES. MODS STAY OFF." :
+            mod_help[selected - ROW_MOD_FIRST][1];
+    } else if (is_binding(selected)) {
         help = binding_capture ? @"PRESS A KEY, MOUSE BUTTON OR WHEEL. ESC CANCELS, DELETE CLEARS." :
             @"LEFT / RIGHT SELECT A SLOT. ENTER / A STARTS KEY CAPTURE.";
         detail = @"TWO BINDINGS PER ACTION. PHYSICAL KEY POSITIONS; SAVED IMMEDIATELY.";
@@ -661,6 +738,9 @@ static NSTimeInterval transition, last_draw;
     } else if (selected == ROW_RESET) {
         help = @"RESTORE ORIGINAL LOOK, STICK ZONES AND CONTROLLER DEFAULTS.";
         detail = @"ENTER / A RESETS INPUT ONLY. DRIVER CHANGES NEED A RESTART.";
+    } else if (selected == ROW_FPS) {
+        help = @"DISPLAYS THE FRAME RATE ON SCREEN, IN THE GAME'S OWN FONT.";
+        detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN.";
     } else if (selected == ROW_AA) {
         const char *aa = getenv("RECOMP_AA");
         int active = !aa ? 1 : !strcmp(aa, "smaa") ? 2 : strcmp(aa, "0") ? 1 : 0;
@@ -806,6 +886,10 @@ void black_MenuAttach(void *window, void (*capture)(int))
     menu_view = [[BlackMenuView alloc] initWithFrame:container.bounds];
     menu_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     menu_view.hidden = YES;
+    fps_view = [[BlackFpsView alloc] initWithFrame:container.bounds];
+    fps_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    fps_view.hidden = YES;
+    [container addSubview:fps_view];
     [container addSubview:menu_view];
     [menu_window makeFirstResponder:game_view];
     event_monitor = [[NSEvent addLocalMonitorForEventsMatchingMask:
@@ -848,7 +932,7 @@ void black_MenuAttach(void *window, void (*capture)(int))
         }
         if (!black_MenuIsOpen()) return event;
         if (down && !event.isARepeat) {
-            if (code == 117 && menu_view->selected >= ROW_BIND_FIRST) {
+            if (code == 117 && is_binding(menu_view->selected)) {
                 menu_view->binding_capture = YES; [menu_view captureBinding:-1];
             } else if (code == 53 || code == 11) black_MenuCommand(BLACK_MENU_BACK);
             else if (code == 36 || code == 76 || code == 49) black_MenuCommand(BLACK_MENU_CHANGE);
@@ -906,6 +990,18 @@ void black_MenuPump(void)
         menu_view->changed = CACurrentMediaTime();
         [menu_view refreshValues];
     }
+    static uint32_t fps_frames;
+    static double fps_time;
+    if (black_SettingsFpsCounter()) {
+        uint32_t frames = black_GameFrameCount();
+        double now = CACurrentMediaTime();
+        if (!fps_time || frames < fps_frames) { fps_time = now; fps_frames = frames; }
+        else if (now - fps_time >= .5) {
+            fps_view->fps = (frames - fps_frames) / (now - fps_time);
+            fps_time = now; fps_frames = frames;
+            fps_view.hidden = NO; [fps_view setNeedsDisplay:YES];
+        }
+    } else if (!fps_view.hidden) { fps_view.hidden = YES; fps_time = 0; }
     unsigned command = black_MenuTakeCommands();
     if (command & BLACK_MENU_TOGGLE) set_open(!black_MenuIsOpen());
     else if (command & BLACK_MENU_BACK) {
@@ -950,6 +1046,7 @@ void black_MenuDetach(void)
     if (quit.target == actions) { quit.target = NSApp; quit.action = @selector(terminate:); }
     [actions release]; actions = nil;
     [menu_view removeFromSuperview]; [menu_view release]; menu_view = nil;
+    [fps_view removeFromSuperview]; [fps_view release]; fps_view = nil;
     [game_view removeFromSuperview]; [menu_window setContentView:game_view]; [game_view release]; game_view = nil;
     [container release]; container = nil;
     menu_window = nil; capture_input = NULL; shown = closing = 0;

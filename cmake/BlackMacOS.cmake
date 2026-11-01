@@ -299,6 +299,8 @@ add_executable(black-voice-gain tools/macos/voice_gain_test.c)
 add_test(NAME macos_voice_gain COMMAND black-voice-gain)
 add_executable(black-film-policy tools/macos/film_policy_test.c)
 add_test(NAME macos_film_policy COMMAND black-film-policy)
+add_executable(black-game-mods tools/macos/game_mods_test.c)
+add_test(NAME macos_game_mods COMMAND black-game-mods)
 add_executable(black-video-flags tools/macos/video_flags_test.c)
 add_test(NAME macos_video_flags COMMAND black-video-flags)
 add_executable(black-hud-layout tools/macos/hud_layout_test.c)
@@ -386,6 +388,7 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mouse.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_movies.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mods.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_audio.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_hud.c"
         "${BLACK_MAC_GAME}/src/recomp_manual.c"

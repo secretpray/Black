@@ -19,6 +19,8 @@ int black_SettingsSetAniso(int level);
 int black_SettingsValidAniso(int level);
 int black_SettingsUpscaler(void);
 int black_SettingsSetUpscaler(int mode);
+int black_SettingsFpsCounter(void);
+int black_SettingsSetFpsCounter(int enabled);
 int black_SettingsSaveFailed(void);
 int black_MenuIsOpen(void);
 void black_MenuSetOpen(int open);
@@ -50,6 +52,14 @@ int black_SettingsAimAssist(void);
 int black_SettingsSetAimAssist(int enabled);
 int black_ControllerAimAssist(void);
 void black_MenuPollHost(void);
+/* Mods page flags (game_mods.h order), live and saved. The game reports the
+ * XBE revision it found; "DETECTING" until then. */
+int black_SettingsMod(int mod);
+int black_SettingsSetMod(int mod, int enabled);
+int black_SettingsResetMods(void);
+void black_ModsSetRevision(const char *name, int supported);
+const char *black_ModsRevision(void);
+int black_ModsSupported(void);
 /* Cocoa entry points, called on the main thread only. */
 void black_MenuAttach(void *window, void (*capture)(int));
 void black_MenuDetach(void);

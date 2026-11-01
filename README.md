@@ -63,6 +63,10 @@ PS2 and Xbox 360 files are not supported.
 - Native fullscreen and Game Mode opt-in. Activation was observed on the test Mac;
   macOS controls it. FPS and controller latency improvements were not measured.
 - Separate installation, settings, saves and per-session logs.
+- A **Mods** page: film skipping, God Mode, infinite medkits, grenades and
+  ammo, Always Silenced, mission and Black Ops unlocks, M16A2 and the BFG code,
+  all off by default (in development, not in the 0.1.0 download).
+  [Validation and limits](docs/VALIDATION.md#mods-page-and-fps-counter-in-development).
 
 ## Controls and settings
 

@@ -1,5 +1,6 @@
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
+#include "../../ports/macos/overrides/game_mods.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,14 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "fail"))
             return black_SettingsSetSkipIntros(1) || !black_SettingsSaveFailed() || !black_SettingsSkipIntros();
         if (!strcmp(argv[1], "mission")) return !black_SettingsSkipMissionIntros();
+        if (!strcmp(argv[1], "mods")) return !black_SettingsMod(BLACK_MOD_GOD_MODE) || !black_SettingsMod(BLACK_MOD_BFG) ||
+            black_SettingsMod(BLACK_MOD_AMMO) || black_SettingsMod(-1) || black_SettingsMod(BLACK_MOD_COUNT) ||
+            black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "fps")) return !black_SettingsFpsCounter() || black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "mods-defaults")) {
+            for (int i = 0; i < BLACK_MOD_COUNT; ++i) if (black_SettingsMod(i)) return 1;
+            return black_SettingsSkipIntros() || black_SettingsSkipMissionIntros();
+        }
         if (!strcmp(argv[1], "graphics")) return black_SettingsRenderScale() != 3 || black_SettingsFov() != 85;
         if (!strcmp(argv[1], "defaults")) return black_SettingsRenderScale() != 2 || black_SettingsFov() != 70 ||
             black_SettingsAntiAliasing() != 2 || black_SettingsAniso() != 0 || black_SettingsUpscaler() != 1;
@@ -102,6 +111,12 @@ int main(int argc, char **argv)
         child(argv[0],"keyboard",path))return 28;
     if(!black_SettingsResetInput()||child(argv[0],"keyboard",path)||!black_SettingsResetKeyboard()||
         child(argv[0],"keyboard-defaults",path)||child(argv[0],"filtering",path))return 29;
+    if (child(argv[0], "mods-defaults", path)) return 30;
+    if (!black_SettingsSetFpsCounter(1) || child(argv[0], "fps", path) || !black_SettingsSetFpsCounter(0) ||
+        !child(argv[0], "fps", path)) return 33;
+    if (!black_SettingsSetMod(BLACK_MOD_GOD_MODE, 1) || !black_SettingsSetMod(BLACK_MOD_BFG, 5) ||
+        black_SettingsSetMod(BLACK_MOD_COUNT, 1) || black_SettingsSetMod(-1, 1) || child(argv[0], "mods", path)) return 31;
+    if (!black_SettingsSetSkipIntros(1) || !black_SettingsResetMods() || child(argv[0], "mods-defaults", path)) return 32;
     setenv("BLACK_SKIP_INTROS", "1", 1);
     if (child(argv[0], "1", path)) return 5;
     unsetenv("BLACK_SKIP_INTROS");
@@ -110,9 +125,10 @@ int main(int argc, char **argv)
     FILE *file = fopen(path, "w");
     if (!file) return 8;
     fputs("skip_intro_movies=broken\nrender_scale=7\nfield_of_view=45oops\nrender_scale=3 extra\n"
-          "anti_aliasing=5\nanisotropic_filtering=6\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\n", file); fclose(file);
+          "anti_aliasing=5\nanisotropic_filtering=6\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\nmod_god_mode=2\nmod_bfg=on\n", file); fclose(file);
     if (child(argv[0], "0", path)) return 9;
-    if (child(argv[0], "defaults", path) || child(argv[0], "input-defaults", path) || child(argv[0],"keyboard-defaults",path)) return 16;
+    if (child(argv[0], "defaults", path) || child(argv[0], "input-defaults", path) || child(argv[0],"keyboard-defaults",path) ||
+        child(argv[0], "mods-defaults", path)) return 16;
     black_MenuCommand(BLACK_MENU_CHANGE);
     black_MenuCommand(BLACK_MENU_ON);
     if (black_MenuTakeCommands() != (BLACK_MENU_CHANGE | BLACK_MENU_ON) || black_MenuTakeCommands()) return 10;

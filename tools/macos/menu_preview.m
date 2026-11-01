@@ -4,6 +4,7 @@
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/controller_monitor.h"
+#include "../../ports/macos/overrides/game_mods.h"
 #include <unistd.h>
 static int quit_requests;
 void black_HostQuit(void) { ++quit_requests; }
@@ -101,16 +102,40 @@ int main(int argc, char **argv)
         key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
         if (black_SettingsFov() != 75) return 22;
         key(window, 123, @"\uF702");
+        key(window, 125, @"\uF701"); key(window, 36, @"\r");
+        if (!black_SettingsFpsCounter()) return 23;
+        key(window, 123, @"\uF702");
+        if (black_SettingsFpsCounter()) return 24;
         key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
         if (black_SettingsAntiAliasing() != 1) return 30;
         key(window, 124, @"\uF703");
         key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
         if (black_SettingsAniso() != 2) return 31;
         key(window, 123, @"\uF702");
-        key(window, 125, @"\uF701"); key(window, 36, @"\r");
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-graphics.png"]);
+        /* Recomp Settings -> Mods (the previous tab wraps): films, then the mods. */
+        key(window, 12, @"q");
+        key(window, 36, @"\r");
         key(window, 125, @"\uF701"); key(window, 36, @"\r");
         if (!black_SettingsSkipIntros() || !black_SettingsSkipMissionIntros()) return 3;
-        snapshot(window, [output stringByAppendingPathComponent:@"recomp-general.png"]);
+        snapshot(window, [output stringByAppendingPathComponent:@"mods-films.png"]);
+        key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
+        key(window, 125, @"\uF701"); key(window, 36, @"\r");
+        if (!black_SettingsMod(BLACK_MOD_GOD_MODE) || !black_SettingsMod(BLACK_MOD_MEDKITS)) return 70;
+        key(window, 123, @"\uF702");
+        if (black_SettingsMod(BLACK_MOD_MEDKITS)) return 71;
+        snapshot(window, [output stringByAppendingPathComponent:@"mods-player.png"]);
+        for (int i = BLACK_MOD_MEDKITS; i < BLACK_MOD_UNLOCK_MISSIONS; ++i) key(window, 125, @"\uF701");
+        key(window, 36, @"\r");
+        if (!black_SettingsMod(BLACK_MOD_UNLOCK_MISSIONS)) return 72;
+        snapshot(window, [output stringByAppendingPathComponent:@"mods-unlocks.png"]);
+        NSButton *mod_defaults = button(window.contentView, @"Defaults");
+        if (!mod_defaults) return 73;
+        click(window, mod_defaults, mod_defaults.bounds.size.width / 2, mod_defaults.bounds.size.height / 2);
+        if (black_SettingsMod(BLACK_MOD_GOD_MODE) || black_SettingsMod(BLACK_MOD_UNLOCK_MISSIONS) ||
+            black_SettingsSkipIntros() || black_SettingsRenderScale() != 2) return 74;
+        black_SettingsSetSkipIntros(1); black_SettingsSetSkipMissionIntros(1);
+        key(window, 14, @"e"); /* back to Recomp Settings, where the next open starts */
         key(window, 53, @"\e"); if (black_MenuIsOpen()) return 4;
         key(window, 122, @"\uF704");
         if (!black_MenuIsOpen() || !black_SettingsSkipIntros()) return 5;
@@ -226,7 +251,7 @@ int main(int argc, char **argv)
         [window performClose:nil];
         if (quit_requests != 4) return 19;
         black_MenuDetach(); [window close]; [window release];
-        puts("TGP native UI: recomp/controller/mouse pages, dual key slots, capture/cancel/clear/mouse bind/defaults, resize/quit: PASS");
+        puts("TGP native UI: recomp/controller/mouse/mods pages, FPS counter, dual key slots, capture/cancel/clear/mouse bind/defaults, resize/quit: PASS");
     }
     return 0;
 }
