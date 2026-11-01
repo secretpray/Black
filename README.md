@@ -1,94 +1,128 @@
-# Black - XBE Recomp
-An unofficial native PC port of the original Xbox version of Black, with extended graphics options, keyboard and mouse support, and other enhancements.
+<p align="center"><img src="resources/macos/AppIcon.png" alt="BLACK app icon" width="128"></p>
+<h1 align="center">BLACK</h1>
+<p align="center">An unofficial native Apple Silicon port of <i>BLACK</i> for Original Xbox.<br>Bring your own supported USA or European disc image.</p>
+<p align="center"><a href="#download"><b>Download</b></a> · <a href="#quick-start">Quick start</a> · <a href="#highlights">Highlights</a> · <a href="#controls-and-settings">Controls</a> · <a href="docs/BUILD.md">Build</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="#acknowledgements">Acknowledgements</a></p>
 
-This port was created using the [Xbox XBE Recomp](https://github.com/TGP482/XboxXBE-Recomp) tool.
+> [!IMPORTANT]
+> This is a non-commercial fan project, not affiliated with or endorsed by Electronic Arts,
+> Criterion Games, Microsoft or Apple. No disc images, original executables, game assets,
+> music, saves or generated game sources are distributed. You need your own supported
+> Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> This project does not include any game assets. You must provide the files from your own legally acquired copy of the game to install or build.
+> **0.1.0 is the first experimental macOS release.** Combat, menus and profile saving
+> have been exercised on the development Mac. A complete playthrough, all runtime races,
+> audio quality and controller calibration are not yet qualified. [Validation](docs/VALIDATION.md).
 
-## Installation
-- Put your game files in the `assets` folder. This can be an ISO, or the extracted data files, of the USA or Europe release.
-- Run `BLACK.exe`. The first start compiles the game's code for your PC, this only happens once.
-- Recomp settings can be adjusted in the in-game options menu while the game is running, or through the Settings overlay, which is opened with F10 by default.
-<img width="1920" height="1080" alt="{5852D359-24A0-48C8-9319-07C3A619E355}" src="https://github.com/user-attachments/assets/e0156eb8-c1b5-49d9-ab93-3abb46bf5f47" />
+## Download
 
+**[BLACK 0.1.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.1.0)**
 
-## Features
-### Display
-- **Monitor** - Picks the monitor the game shows on, for Fullscreen and Borderless (and where Windowed opens). Lists every connected monitor by its Windows number and desktop resolution.
-- **Display Mode** - Switch between Fullscreen, Borderless and Windowed.
-- **Resolution** - Lists every mode your monitor reports and defaults to your desktop resolution, replacing the original 640x480 resolution.
-- **Render Resolution** - Renders the game at 20% to 200% of the output resolution, allowing supersampling or downscaling independent of the window size.
-- **Field of View** - Sets the horizontal field of view during gameplay from 45 to 140 degrees, with 70 being the game's default.
-- **Viewmodel Field of View** - Adjusts the first-person weapon and arms field of view.
-- **Max Frame Rate** - Caps the frame rate to your monitor's refresh rate or a custom value, or removes the cap entirely, replacing the Xbox's 30 FPS limiter.
-- **V-Sync** - Reduces screen tearing.
-- **HDR Output** - Enables HDR10 output on displays with Windows HDR turned on, detected automatically. Highlights extend up to the display's peak brightness.
-- **FPS Counter** - Displays the frame rate on screen.
-- **FMV Scale** - Choose between Fill, which zooms the 4:3 FMVs to fill widescreen displays, and 4:3, which keeps them at their original aspect ratio.
-- **Colour Blind Mode** - Adjusts the colours for Protanopia, Deuteranopia or Tritanopia.
+| Download | Purpose |
+| --- | --- |
+| `BLACK-0.1.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `SHA256SUMS` | Optional download integrity check |
+| `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
-### Graphics
-- **Multisample Antialiasing (MSAA)** - Enables 2x, 4x or 8x MSAA to smooth jagged edges while preserving a sharp image.
-- **Subpixel Morphological Antialiasing (SMAA)** - Enables SMAA to smooth jagged edges across the whole frame with a softer image. SMAA also smooths alpha-tested edges such as fences and foliage, and can be combined with MSAA.
-- **Anisotropic Filtering** - Forces the selected anisotropic filtering level on all textures.
-- **Draw Distance** - Increases the level of detail and draw distances past the game's values: 2x, 4x, 8x, 12x or 16x.
-- **Ambient Occlusion** - Adds screen space ambient occlusion, creating soft contact shadows where surfaces meet. Choose between SSAO and GTAO.
-- **Reload Blur** - Toggles the blur effect while reloading.
+Bundled libraries currently require macOS 27+. Older macOS versions, Intel Macs,
+Linux and Steam Deck are not qualified. GitHub's automatic **Source code** downloads
+are source snapshots, not playable apps.
 
-### Textures
-- **Texture Replacement** - Replaces the game's textures with the `.dds` or `.png` images in the `textures\replacement` folder beside the exe.
-- **Texture Dumping** - Saves every texture the game uses into the `textures\dumps` folder beside the exe.
-- **Dump Format** - Choose between PNG or DDS, which keeps the original compression and mipmaps.
+## Quick start
 
-### Input
-- **Mouse and Keyboard** - Full keyboard and mouse support with raw input, adjustable horizontal and vertical sensitivity, inverted look and rebindable controls.
-- **Controller** - Controller with SDL3 support and additional features.
-- **Gyro Aiming** - Adds gyro aiming for controllers with motion sensors, such as the DualSense, DualShock 4 and Switch Pro Controller, with adjustable sensitivity. Works together with the right stick.
+1. Open the DMG and drag **BLACK.app** to **Applications**.
+2. Open **BLACK** from Applications or your app launcher.
+3. Choose your own **Original Xbox BLACK ISO/XISO** or extracted disc folder.
+   The app validates the revision and copies files into your Library. Your source
+   stays unchanged. The supported European executable is normalized in that private copy.
+4. **F1/F10**, **Cmd+,** or **Back + Start** opens recomp settings.
 
-### General
-- **Skip Intro** - Skips the intro logos.
-- **Pause On Focus Loss** - Pauses the game and its sound while the window is in the background or minimized.
+The app is **ad-hoc signed, not notarized**. If macOS blocks it, use
+**System Settings → Privacy & Security → Open Anyway** after checking the download source.
+No Homebrew, Python or development checkout is required to run the DMG app.
 
-### Miscellaneous
-- **Custom Menu Cursor** - Place a `cursor.png` (or `cursor.dds`) beside the exe to replace the Windows arrow in the game's menus.
+Supported USA executable SHA-256:
+`df2739c372d254a90aeeccf5971d12097f22d89fbb90db021fda96dd4deb68f6`.
+Supported European executable SHA-1:
+`796ad8369354e48aa15644d4707dd70bd3bc3b4c`.
+PS2 and Xbox 360 files are not supported.
 
-## System Requirements
-### Minimum
-- **OS**
-  - Windows 10 64-bit
-- **CPU** with 2 cores and support for SSE4.2 and POPCNT
-  - Intel Nehalem (Intel Core 1st Generation)
-  - AMD Bulldozer (AMD FX series)
-- **GPU** with support for Direct3D 12
-  - NVIDIA GeForce GT 630 (Kepler)
-  - AMD Radeon HD 7750
-  - Intel HD Graphics 510 (Skylake)
-- **Memory**
-  - 4 GB
-- **Storage**
-  - 3 GB for the game files, the compiled game code and saves
+## Highlights
 
-## Building
-### 1. Clone the Repository
-Clone this repository using [Git](https://git-scm.com/).
-```
-git clone https://github.com/TGP482/BLACK-XBERecomp.git
-```
+- Native ARM64 game code, NV2A rendering through ANGLE Metal and the DSP audio path.
+- Saved 1–6× render scale, camera FOV, SMAA/FXAA, anisotropic filtering and MetalFX
+  spatial upscaling. Graphics changes take effect on the next launch.
+- A TGP-inspired panel with **Recomp Settings**, **Mouse and Keyboard** and
+  **Controller** pages, using fonts from your own game.
+- Separate stick/trigger deadzones, explicit drift measurement, live axes,
+  normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.
+- Direct mouse look, two bindings per action, Flash menu cursor navigation
+  and keyboard profile-name entry.
+- Console-style gameplay timing around 30 updates per second. Unlocked-FPS
+  physics and guaranteed 60 FPS are not advertised.
+- Native fullscreen and Game Mode opt-in. Activation was observed on the test Mac;
+  macOS controls it. FPS and controller latency improvements were not measured.
+- Separate installation, settings, saves and per-session logs.
 
-### 2. Add the Required Game Files
-Place your extracted game data files in the `assets` folder. `default.xbe` from the USA release must be there, with the rest of the game's files beside it.
+## Controls and settings
 
+| Action | Default |
+| --- | --- |
+| Recomp settings | F1 / F10 / Cmd+, / Back + Start |
+| Change settings page | Q / E, Tab, LB / RB |
+| Fullscreen / quit | Cmd+Return / Cmd+Q |
+| Move / crouch / walk | W A S D / C / Alt |
+| Fire / aim / reload / interact | Left mouse / right mouse / R / F |
+| Melee / grenade / silencer / medkit | V / G / T / H |
+| Change weapon | Q / E or mouse wheel |
+| Objectives / pause | Tab / Escape |
+| Game menus | Click / wheel / arrows; Enter confirms, Escape or right mouse goes back |
 
-### 3. Install Dependencies
-Install [Visual Studio 2022](https://visualstudio.microsoft.com/downloads/) and select the following **Workloads** and **Individual components**:
-- Desktop development with C++
-- C++ Clang tools for Windows
-- C++ CMake tools for Windows
+Click the game to capture the mouse in play. Escape releases it and pauses;
+game menus release it automatically. Mouse motion alone does not take control
+away from a gamepad. Measure drift with the sticks released, then test the
+smallest comfortable deadzone on your own controller. Physical calibration,
+rumble and hotplug still need broader acceptance testing.
 
-> [!TIP]
-> `build.bat` offers to install the Clang and CMake components for you if they're missing.
+## Your data and updates
 
-### 4. Build the Project
-- Run `build.bat`. The first build recompiles the entire game and can take 30 to 90 minutes on weaker systems.
-- When it finishes, run `out\build\release\BLACK.exe`.
+Data is stored in `~/Library/Application Support/BLACK/`:
+
+| Folder/file | Purpose |
+| --- | --- |
+| `Game/` | Your privately installed game files |
+| `Data/xboxrecomp/` | Xbox saves, metadata and virtual cache partitions |
+| `settings.ini` | Recomp preferences and bindings |
+| `Logs/run-*/` | A separate log for every launch |
+
+Replacing the app in Applications leaves Library data intact. Back up `Data/`
+before changing save files. Development launcher data under `out/macos/user/`
+is separate and is not automatically migrated or deleted.
+
+## Building and reporting issues
+
+[Build instructions](docs/BUILD.md) cover pinned sources, revision checks and packaging.
+The root tree/history retains the upstream Windows implementation; its D3D12
+features do not describe this Mac build. [Upstream README](docs/UPSTREAM_README.md).
+
+Include the version, Mac model, macOS version, settings and reproduction steps
+when reporting a problem. Distinguish a normal exit from a time limit.
+Do not attach game data, private saves or unredacted personal information.
+
+## Acknowledgements
+
+Special thanks to **[TGP482 / BLACK-XBERecomp](https://github.com/TGP482/BLACK-XBERecomp)**
+for the Original Xbox BLACK recompilation project, Xbox XBE Recomp tooling,
+settings/menu design, control policies and the checked European revision patch.
+
+Thanks to **elpetese** for the [native macOS game host](https://github.com/elpetese/black-macos-recomp)
+and [runtime](https://github.com/elpetese/black-macos-runtime), **sp00nz** and
+**portingpete** for xboxrecomp and BLACK runtime work, the **xemu** team for Xbox
+hardware/rendering/audio foundations, **Matt Borgerson** for dsp56300, and the
+**ANGLE**, **SDL** and other library contributors.
+
+The [Burnout Revenge project](https://github.com/secretpray/burnout-revenge) served
+as a product and packaging reference. BLACK keeps its own code, runtime ABI and data.
+See [component provenance](THIRD_PARTY_NOTICES.md) and the app's
+`Contents/Resources/Licenses/` for upstream licenses. The combined executable
+contains differently licensed components and is not described as wholly MIT licensed.

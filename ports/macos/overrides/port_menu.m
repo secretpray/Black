@@ -1,0 +1,962 @@
+/* Native macOS adaptation of TGP's src/common/menu.cpp settings layout and
+ * palette. Cocoa controls and local BLACK fonts retain the pinned Mac ABI. */
+#import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
+#include "port_menu.h"
+#include "controller_monitor.h"
+#include "controller_axes.h"
+#include "keyboard_mouse.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+typedef struct {
+    CGImageRef image[128];
+    float width[128], height[128], left[128], top[128], advance[128];
+    float cap;
+} BlackMenuFont;
+static BlackMenuFont big_font, small_font;
+static uint32_t read32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
+static float read_float(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
+
+static void free_font(BlackMenuFont *font)
+{
+    for (int i = 0; i < 128; ++i) if (font->image[i]) CGImageRelease(font->image[i]);
+    memset(font, 0, sizeof *font);
+}
+
+static void load_font(BlackMenuFont *font, NSString *path)
+{
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length < 0x220) return;
+    const uint8_t *b = data.bytes;
+    if (memcmp(b, "4.1v", 4)) return;
+    uint32_t texture = read32(b + 4);
+    if ((uint64_t)texture + 128 > data.length) return;
+    uint32_t format = read32(b + texture + 12);
+    unsigned width = 1u << ((format >> 20) & 15), height = 1u << ((format >> 24) & 15);
+    if (((format >> 8) & 0xFF) != 0x0E || width < 4 || height < 4 ||
+        width > 1024 || height > 1024 || (uint64_t)texture + 128 + width * height > data.length) return;
+    /* Xbox DXT3 blocks: explicit 4-bit alpha followed by the color block.
+     * The original glyph atlas is white; only alpha is needed for tinting. */
+    NSMutableData *alpha = [NSMutableData dataWithLength:width * height * 4];
+    uint8_t *pixels = alpha.mutableBytes;
+    const uint8_t *blocks = b + texture + 128;
+    for (unsigned by = 0; by < height / 4; ++by)
+        for (unsigned bx = 0; bx < width / 4; ++bx) {
+            const uint8_t *block = blocks + (by * (width / 4) + bx) * 16;
+            for (unsigned i = 0; i < 16; ++i) {
+                unsigned pixel = ((by * 4 + i / 4) * width + bx * 4 + i % 4) * 4;
+                pixels[pixel] = pixels[pixel + 1] = pixels[pixel + 2] = 255;
+                pixels[pixel + 3] = ((block[i / 2] >> ((i & 1) * 4)) & 15) * 17;
+            }
+        }
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)alpha);
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGImageRef atlas = CGImageCreate(width, height, 8, 32, width * 4, space,
+        (CGBitmapInfo)kCGImageAlphaLast, provider, NULL, false, kCGRenderingIntentDefault);
+    CGColorSpaceRelease(space);
+    CGDataProviderRelease(provider);
+    if (!atlas) return;
+    /* Scan the glyph pool rather than trusting the file's hash-chain offsets. */
+    for (uint32_t at = 0x220; (uint64_t)at + 40 <= texture; at += 40) {
+        uint16_t code; memcpy(&code, b + at + 28, 2);
+        if (code >= 128) continue;
+        float u = read_float(b + at), v = read_float(b + at + 4);
+        float w = read_float(b + at + 8), h = read_float(b + at + 12);
+        float advance = read_float(b + at + 24);
+        if (!isfinite(u) || !isfinite(v) || !isfinite(w) || !isfinite(h) ||
+            !isfinite(advance) || advance < 0 || advance > 1) continue;
+        font->advance[code] = advance * width;
+        font->width[code] = w * width; font->height[code] = h * height;
+        font->left[code] = read_float(b + at + 16) * width;
+        font->top[code] = read_float(b + at + 20) * height;
+        if (w > 0 && h > 0 && u >= 0 && v >= 0 && u + w <= 1.001 && v + h <= 1.001) {
+            if (font->image[code]) CGImageRelease(font->image[code]);
+            font->image[code] = CGImageCreateWithImageInRect(atlas,
+                CGRectMake(round(u * width), round(v * height), round(w * width), round(h * height)));
+        }
+    }
+    font->cap = font->height['A'];
+    CGImageRelease(atlas);
+    fprintf(stderr, "[MENU] local font %s: %ux%u DXT3, cap %.0f\n", path.lastPathComponent.UTF8String,
+        width, height, font->cap);
+}
+
+static NSColor *color(unsigned rgb, CGFloat alpha)
+{
+    return [NSColor colorWithSRGBRed:((rgb >> 16) & 255) / 255.0
+        green:((rgb >> 8) & 255) / 255.0 blue:(rgb & 255) / 255.0 alpha:alpha];
+}
+static void fill(NSRect r, unsigned rgb, CGFloat opacity) { [color(rgb, opacity) setFill]; NSRectFill(r); }
+static void line(CGFloat x, CGFloat y, CGFloat w, unsigned rgb, CGFloat opacity) { fill(NSMakeRect(x, y, w, 1), rgb, opacity); }
+
+static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
+{
+    BlackMenuFont *font = large ? &big_font : &small_font;
+    if (!(font->cap > 0)) {
+        NSFont *fallback = [NSFont fontWithName:large ? @"Arial-Black" : @"Arial-BoldMT" size:size];
+        [value drawAtPoint:NSMakePoint(x, y) withAttributes:@{
+            NSFontAttributeName:fallback ?: [NSFont boldSystemFontOfSize:size],
+            NSForegroundColorAttributeName:color(rgb, 1)}];
+        return;
+    }
+    CGContextRef ctx = NSGraphicsContext.currentContext.CGContext;
+    CGFloat scale = size / font->cap;
+    for (NSUInteger i = 0; i < value.length; ++i) {
+        unichar c = [value characterAtIndex:i];
+        if (c >= 128) c = '?';
+        if (font->image[c]) {
+            CGRect r = CGRectMake(x + font->left[c] * scale, y + font->top[c] * scale,
+                font->width[c] * scale, font->height[c] * scale);
+            CGContextSaveGState(ctx);
+            CGContextTranslateCTM(ctx, r.origin.x, r.origin.y + r.size.height);
+            CGContextScaleCTM(ctx, 1, -1);
+            CGRect local = CGRectMake(0, 0, r.size.width, r.size.height);
+            CGContextClipToMask(ctx, local, font->image[c]);
+            CGContextSetFillColorWithColor(ctx, color(rgb, 1).CGColor);
+            CGContextFillRect(ctx, local);
+            CGContextRestoreGState(ctx);
+        }
+        x += (font->advance[c] > 0 ? font->advance[c] : font->cap * 0.4) * scale;
+    }
+}
+
+static CGFloat text_width(NSString *value, CGFloat size, int large)
+{
+    BlackMenuFont *font = large ? &big_font : &small_font;
+    CGFloat advance = 0;
+    if (font->cap > 0) {
+        for (NSUInteger i = 0; i < value.length; ++i) {
+            unichar c = [value characterAtIndex:i]; if (c >= 128) c = '?';
+            advance += (font->advance[c] > 0 ? font->advance[c] : font->cap * .4) * size / font->cap;
+        }
+    } else advance = [value sizeWithAttributes:@{NSFontAttributeName:[NSFont boldSystemFontOfSize:size]}].width;
+    return advance;
+}
+static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGFloat width, unsigned rgb, int large)
+{
+    CGFloat advance = text_width(value, size, large);
+    text(value, x, y, advance > width ? size * width / advance : size, rgb, large);
+}
+static void centered_text(NSString *value, CGFloat center, CGFloat y, CGFloat size, unsigned rgb)
+{ text(value, center - text_width(value, size, 0) / 2, y, size, rgb, 0); }
+
+/* TGP's centered settings panel: supported recomp groups and controller page. */
+enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_AA, ROW_AF, ROW_INTROS, ROW_MISSIONS,
+       ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
+       ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
+       ROW_HID, ROW_MEASURE, ROW_RESET,
+       ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
+       ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1, MENU_ROWS };
+enum { MENU_TABS = 3, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 264 };
+static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER"};
+static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X};
+static const int tab_rows[MENU_TABS] = {7, 8 + BLACK_ACTION_COUNT, 15};
+static int tab_of(int row) { return row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
+static int group_of(int row)
+{
+    if (row >= ROW_BIND_FIRST) return 10;
+    if (row >= ROW_MOUSE_X) return 9;
+    if (row <= ROW_FOV) return 0;
+    if (row <= ROW_AF) return 1;
+    if (row <= ROW_MISSIONS) return 2;
+    if (row <= ROW_INVERT_X) return 3;
+    if (row <= ROW_AIM_ASSIST) return 4;
+    if (row <= ROW_TRIGGER_DZ) return 5;
+    if (row <= ROW_RUMBLE) return 6;
+    if (row == ROW_HID) return 7;
+    return 8;
+}
+static NSString *group_name(int group)
+{ return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS"])[group]; }
+static int visible_start(int selected)
+{ return MAX(tab_first[tab_of(selected)], selected - MENU_TAB_MAX_ROWS + 1); }
+static CGFloat row_y(int row, int selected)
+{
+    int start = visible_start(selected); CGFloat y = 146;
+    for (int i = start; i <= row; ++i) {
+        if (i == start || group_of(i) != group_of(i - 1)) y += 20;
+        if (i == row) return y;
+        y += 40;
+    }
+    return y;
+}
+static NSArray *row_labels(void)
+{
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"Anti-Aliasing", @"Anisotropic Filtering",
+        @"Skip Intro Movies", @"Skip Mission Intros", @"Horizontal Sensitivity", @"Vertical Sensitivity",
+        @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
+        @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
+        @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Reset Input", @"Mouse Horizontal Sensitivity", @"Mouse Vertical Sensitivity",
+        @"Mouse Aim Horizontal Sensitivity", @"Mouse Aim Vertical Sensitivity", @"Invert Mouse X", @"Invert Mouse Y",
+        @"Mouse Hold to Aim", @"Walk Speed"]];
+    for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
+    return labels;
+}
+/* sRGB values from TGP menu.cpp: panel, border, text, selected row, heading, dim. */
+enum { PANEL = 0x090806, BORDER = 0xb8944d, TEXT = 0xe6e0d6, HIGHLIGHT = 0x4d3b1a,
+       HEADING = 0xdbb057, DIM = 0x9e9480, TAB = 0x1f1a12, BUTTON = 0x2b2414 };
+static const int aniso_levels[] = {0, 2, 4, 8, 16};
+static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
+static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
+static int active_hid;
+static NSString *dz_name(int right)
+{
+    int percent = black_SettingsStickDeadzone(right);
+    return percent < 0 ? @"GAME 20%" : [NSString stringWithFormat:@"%d%%", percent];
+}
+
+@interface BlackMenuView : NSView {
+@public
+    NSButton *rows[MENU_ROWS];
+    NSButton *categories[MENU_TABS];
+    NSButton *back, *defaults;
+    int selected, binding_slot;
+    BOOL binding_capture;
+    NSTimeInterval changed;
+}
+- (void)changeOption:(id)sender;
+- (void)selectRow:(int)row;
+- (void)stepTab:(int)direction;
+- (void)stepRow:(int)direction;
+- (void)adjustOption:(int)direction cycle:(BOOL)cycle;
+- (void)refreshValues;
+- (void)layoutRows;
+- (void)captureBinding:(int)key;
+@end
+/* Native transparent controls retain accessibility and mouse hit targets;
+ * their visible labels/focus state are drawn in the game's typography. */
+@interface BlackMenuButton : NSButton
+@end
+@implementation BlackMenuButton
+- (void)drawRect:(NSRect)dirty { (void)dirty; }
+@end
+
+static NSWindow *menu_window;
+static NSView *game_view, *container;
+static BlackMenuView *menu_view;
+static id event_monitor;
+static void (*capture_input)(int);
+static int shown, closing;
+static NSTimeInterval transition, last_draw;
+
+@implementation BlackMenuView
+- (BOOL)isFlipped { return YES; }
+- (BOOL)acceptsFirstResponder { return YES; }
+- (instancetype)initWithFrame:(NSRect)frame
+{
+    if ((self = [super initWithFrame:frame])) {
+        self.wantsLayer = YES;
+        [self setAccessibilityLabel:@"BLACK recomp settings"];
+        NSArray *labels = row_labels();
+        NSArray *help = @[@"Internal render resolution, 1 to 6 times native. Applied next launch.",
+            @"Off or MetalFX spatial. Applied next launch.", @"Camera angle, 45 to 140 degrees. Applied next launch.",
+            @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
+            @"Skip startup logos and intro films.", @"Skip mission briefings.",
+            @"Horizontal look speed after the game's stick curve. Live.", @"Vertical look speed. Live.",
+            @"Horizontal look speed while aiming or scoped. Live.", @"Vertical look speed while aiming or scoped. Live.",
+            @"Invert the controller's horizontal look axis. Live. Invert Y is in the game's own options.",
+            @"Hold the aim button for aiming and scopes; Off keeps the original mixed/toggle behavior. Live, controller only.",
+            @"Enable the game's view attraction and shot assistance on a controller. Off skips both. Live.",
+            @"Movement inner deadzone. Game keeps BLACK's original 20 percent. Live.",
+            @"Camera inner deadzone. Replaces BLACK's threshold. Live.", @"Trigger travel before activation, 0 to 50 percent. Live.",
+            @"Enable controller rumble. Live.", @"Strength of the game's vibration, 0 to 200 percent. Live.",
+            @"SDL raw HID or platform driver. Restart required.",
+            @"Release both sticks for two seconds, then start. Sets neutral noise plus a two percent margin. Movement or disconnect cancels.",
+            @"Restore original controller response and driver defaults. Other settings are kept."];
+        for (int i = 0; i < MENU_ROWS; ++i) {
+            rows[i] = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
+            rows[i].title = labels[i]; rows[i].tag = i;
+            rows[i].target = self; rows[i].action = @selector(changeOption:);
+            rows[i].focusRingType = NSFocusRingTypeNone;
+            [rows[i] setAccessibilityLabel:labels[i]];
+            [rows[i] setAccessibilityHelp:i < ROW_MOUSE_X ? help[i] :
+                i >= ROW_BIND_FIRST ? @"Two key slots. Left and Right choose a slot. Enter waits for a key or mouse button. Escape cancels, Delete clears." :
+                @"Mouse and keyboard preferences. Applied live and saved automatically."];
+            [self addSubview:rows[i]]; [rows[i] release];
+        }
+        for (int i = 0; i < MENU_TABS; ++i) {
+            categories[i] = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
+            categories[i].title = tab_names[i].capitalizedString; categories[i].tag = tab_first[i];
+            categories[i].target = self; categories[i].action = @selector(changeCategory:);
+            [categories[i] setAccessibilityLabel:categories[i].title];
+            [self addSubview:categories[i]]; [categories[i] release];
+        }
+        back = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
+        back.title = @"Back"; back.target = self; back.action = @selector(goBack:);
+        [self addSubview:back]; [back release];
+        defaults = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
+        defaults.title = @"Defaults"; defaults.target = self; defaults.action = @selector(restoreDefaults:);
+        [defaults setAccessibilityHelp:@"Restore defaults for the selected page only."];
+        [self addSubview:defaults]; [defaults release];
+        [self selectRow:ROW_SCALE];
+    }
+    return self;
+}
+- (void)setFrameSize:(NSSize)size
+{
+    [super setFrameSize:size];
+    [self layoutRows];
+}
+- (void)layoutRows
+{
+    NSSize size = self.bounds.size;
+    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
+    CGFloat ox = (size.width - 960 * scale) / 2, oy = (size.height - 600 * scale) / 2;
+    int tab = tab_of(selected), start = visible_start(selected);
+    for (int i = 0; i < MENU_ROWS; ++i) {
+        rows[i].hidden = tab_of(i) != tab || i < start || i >= start + MENU_TAB_MAX_ROWS;
+        rows[i].frame = NSMakeRect(ox + 84 * scale, oy + row_y(i, selected) * scale,
+            (tab == 2 ? 600 : 792) * scale, 38 * scale);
+    }
+    for (int i = 0; i < MENU_TABS; ++i)
+        categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * scale, TAB_WIDTH * scale, 38 * scale);
+    back.frame = NSMakeRect(ox + 84 * scale, oy + 526 * scale, 126 * scale, 30 * scale);
+    defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
+}
+- (void)refreshValues
+{
+    [rows[ROW_INTROS] setAccessibilityValue:black_SettingsSkipIntros() ? @"On" : @"Off"];
+    [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
+    [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
+    [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
+    [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
+    [rows[ROW_AA] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", aa_name(black_SettingsAntiAliasing())]];
+    [rows[ROW_AF] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", af_name(black_SettingsAniso())]];
+    for (int i = 0; i < 4; ++i) [rows[ROW_LOOK_X + i] setAccessibilityValue:
+        [NSString stringWithFormat:@"%.2f times", black_SettingsLookSpeed(i) / 50.0]];
+    [rows[ROW_HOLD_AIM] setAccessibilityValue:black_SettingsHoldAim() ? @"On" : @"Off"];
+    [rows[ROW_AIM_ASSIST] setAccessibilityValue:black_SettingsAimAssist() ? @"On" : @"Off"];
+    [rows[ROW_INVERT_X] setAccessibilityValue:black_SettingsInvertX() ? @"On" : @"Off"];
+    [rows[ROW_RUMBLE] setAccessibilityValue:[NSString stringWithFormat:@"%d percent", black_SettingsRumbleIntensity()]];
+    [rows[ROW_LEFT_DZ] setAccessibilityValue:dz_name(0)];
+    [rows[ROW_RIGHT_DZ] setAccessibilityValue:dz_name(1)];
+    [rows[ROW_TRIGGER_DZ] setAccessibilityValue:[NSString stringWithFormat:@"%d percent", black_SettingsTriggerDeadzone()]];
+    [rows[ROW_VIBRATION] setAccessibilityValue:black_SettingsVibration() ? @"On" : @"Off"];
+    [rows[ROW_HID] setAccessibilityValue:black_SettingsDualSenseHid() ? @"On, next launch" : @"Off, next launch"];
+    for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [rows[ROW_BIND_FIRST+i] setAccessibilityValue:
+        [NSString stringWithFormat:@"%s / %s",black_KeyName(black_SettingsBinding(i,0)),black_KeyName(black_SettingsBinding(i,1))]];
+    for (int i=0;i<4;++i) [rows[ROW_MOUSE_X+i] setAccessibilityValue:[NSString stringWithFormat:@"%.2f times",black_SettingsMouseSpeed(i)/50.0]];
+    [rows[ROW_MOUSE_INVERT_X] setAccessibilityValue:black_SettingsMouseInvert(0)?@"On":@"Off"];
+    [rows[ROW_MOUSE_INVERT_Y] setAccessibilityValue:black_SettingsMouseInvert(1)?@"On":@"Off"];
+    [rows[ROW_MOUSE_HOLD] setAccessibilityValue:black_SettingsMouseHoldAim()?@"On":@"Off"];
+    [rows[ROW_WALK_SPEED] setAccessibilityValue:[NSString stringWithFormat:@"%d percent",black_SettingsWalkSpeed()]];
+    [rows[ROW_MEASURE] setAccessibilityValue:[NSString stringWithFormat:@"Measurement state %d", black_ControllerMonitor().calibration]];
+}
+- (void)goBack:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_BACK); }
+- (void)restoreDefaults:(id)sender
+{
+    (void)sender; black_ControllerCancelMeasure();
+    binding_capture = NO;
+    if (tab_of(selected) == 1) black_SettingsResetKeyboard();
+    else if (tab_of(selected) == 2) black_SettingsResetInput();
+    else {
+        black_SettingsSetRenderScale(2); black_SettingsSetUpscaler(1); black_SettingsSetFov(70);
+        black_SettingsSetAntiAliasing(2); black_SettingsSetAniso(0);
+        black_SettingsSetSkipIntros(0); black_SettingsSetSkipMissionIntros(0);
+    }
+    changed = CACurrentMediaTime(); [self refreshValues]; [self setNeedsDisplay:YES];
+}
+- (void)selectRow:(int)row
+{
+    binding_capture = NO;
+    selected = (row + MENU_ROWS) % MENU_ROWS;
+    [self layoutRows];
+    for (int i = 0; i < MENU_TABS; ++i)
+        [categories[i] setAccessibilityValue:i == tab_of(selected) ? @"Selected" : @""];
+    [self refreshValues];
+    if (menu_window && black_MenuIsOpen()) [menu_window makeFirstResponder:rows[selected]];
+    [self setNeedsDisplay:YES];
+}
+- (void)changeCategory:(id)sender { [self selectRow:(int)[sender tag]]; }
+- (void)stepTab:(int)direction
+{
+    int tab = (tab_of(selected) + direction + MENU_TABS) % MENU_TABS;
+    [self selectRow:tab_first[tab]];
+}
+- (void)stepRow:(int)direction
+{
+    int tab = tab_of(selected), count = tab_rows[tab], row = selected - tab_first[tab];
+    [self selectRow:tab_first[tab] + (row + direction + count) % count];
+}
+- (void)captureBinding:(int)key
+{
+    if (!binding_capture || selected < ROW_BIND_FIRST) return;
+    if (key == -2) binding_capture = NO;
+    else if (black_KeyValid(key)) {
+        black_SettingsSetBinding(selected - ROW_BIND_FIRST, binding_slot, key);
+        binding_capture = NO; changed = CACurrentMediaTime();
+    }
+    black_KeyReleaseAll(); [self refreshValues]; [self setNeedsDisplay:YES];
+}
+- (void)changeOption:(id)sender
+{
+    if (sender) [self selectRow:(int)[sender tag]];
+    if (sender && selected != ROW_MEASURE && selected != ROW_RESET && NSApp.currentEvent.type == NSEventTypeLeftMouseUp) {
+        NSSize size = self.bounds.size;
+        CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
+        NSPoint point = [self convertPoint:NSApp.currentEvent.locationInWindow fromView:nil];
+        CGFloat x = (point.x - (size.width - 960 * scale) / 2) / scale;
+        if (selected >= ROW_BIND_FIRST) {
+            if (x >= 600 && x < 876) {
+                binding_slot = x >= 738; binding_capture = YES; black_KeyReleaseAll(); [self setNeedsDisplay:YES];
+            }
+            return;
+        }
+        CGFloat left = tab_of(selected) == 2 ? 560 : 752;
+        if (x >= left && x < left + 26) { [self adjustOption:-1 cycle:NO]; return; }
+        if (x >= left + 96 && x < left + 122) { [self adjustOption:1 cycle:NO]; return; }
+        return;
+    }
+    [self adjustOption:1 cycle:YES];
+}
+- (void)adjustOption:(int)direction cycle:(BOOL)cycle
+{
+    if (selected >= ROW_BIND_FIRST) {
+        if (cycle) { binding_capture = YES; black_KeyReleaseAll(); }
+        else { binding_capture = NO; binding_slot = direction > 0; }
+        [self setNeedsDisplay:YES]; return;
+    } else if (selected >= ROW_MOUSE_X && selected <= ROW_MOUSE_AIM_Y) {
+        int axis = selected - ROW_MOUSE_X;
+        int value = black_SettingsMouseSpeed(axis) + direction;
+        if (cycle && value > 200) value = 1;
+        black_SettingsSetMouseSpeed(axis,MAX(1,MIN(200,value)));
+    } else if (selected == ROW_MOUSE_INVERT_X || selected == ROW_MOUSE_INVERT_Y) {
+        int vertical = selected == ROW_MOUSE_INVERT_Y;
+        black_SettingsSetMouseInvert(vertical,cycle ? !black_SettingsMouseInvert(vertical) : direction > 0);
+    } else if (selected == ROW_MOUSE_HOLD) {
+        black_SettingsSetMouseHoldAim(cycle ? !black_SettingsMouseHoldAim() : direction > 0);
+    } else if (selected == ROW_WALK_SPEED) {
+        int value = black_SettingsWalkSpeed() + direction * 5;
+        if (cycle && value > 100) value = 5;
+        black_SettingsSetWalkSpeed(MAX(1,MIN(100,value)));
+    } else if (selected >= ROW_LOOK_X && selected <= ROW_AIM_Y) {
+        int axis = selected - ROW_LOOK_X, current = black_SettingsLookSpeed(axis);
+        int value = current + direction;
+        if (cycle && value > 200) value = 1;
+        value = MAX(1, MIN(200, value));
+        if (value == current) return;
+        black_SettingsSetLookSpeed(axis, value);
+    } else if (selected == ROW_INVERT_X) {
+        black_SettingsSetInvertX(cycle ? !black_SettingsInvertX() : direction > 0);
+    } else if (selected == ROW_HOLD_AIM || selected == ROW_AIM_ASSIST) {
+        int current = selected == ROW_HOLD_AIM ? black_SettingsHoldAim() : black_SettingsAimAssist();
+        int value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        if (selected == ROW_HOLD_AIM) black_SettingsSetHoldAim(value); else black_SettingsSetAimAssist(value);
+    } else if (selected == ROW_RUMBLE) {
+        int current = black_SettingsRumbleIntensity(), value = current + direction * 10;
+        if (cycle && value > 200) value = 0;
+        black_SettingsSetRumbleIntensity(MAX(0, MIN(200, value)));
+    } else if (selected == ROW_MEASURE) {
+        if (direction < 0) black_ControllerCancelMeasure();
+        else black_ControllerMeasure();
+        [self setNeedsDisplay:YES];
+        return;
+    } else if (selected == ROW_RESET) {
+        if (direction < 0) return;
+        black_ControllerCancelMeasure();
+        black_SettingsResetInput();
+    } else if (selected == ROW_LEFT_DZ || selected == ROW_RIGHT_DZ) {
+        int right = selected == ROW_RIGHT_DZ;
+        int current = black_SettingsStickDeadzone(right);
+        int value = (current < 0 ? 20 : current) + direction;
+        if (cycle && value > 50) value = 0;
+        value = MAX(0, MIN(50, value));
+        if (value == current) return;
+        black_ControllerCancelMeasure();
+        black_SettingsSetStickDeadzone(right, value);
+    } else if (selected == ROW_TRIGGER_DZ) {
+        int current = black_SettingsTriggerDeadzone(), value = current + direction;
+        if (cycle && value > 50) value = 0;
+        value = MAX(0, MIN(50, value));
+        if (value == current) return;
+        black_SettingsSetTriggerDeadzone(value);
+    } else if (selected == ROW_VIBRATION || selected == ROW_HID) {
+        int hid = selected == ROW_HID;
+        int current = hid ? black_SettingsDualSenseHid() : black_SettingsVibration();
+        int value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        if (hid) black_SettingsSetDualSenseHid(value); else black_SettingsSetVibration(value);
+    } else if ((selected == ROW_INTROS || selected == ROW_MISSIONS)) {
+        int current = selected == ROW_MISSIONS ? black_SettingsSkipMissionIntros() : black_SettingsSkipIntros();
+        int value = cycle ? !current : direction > 0;
+        if (current == value) return;
+        if (selected == ROW_MISSIONS) black_SettingsSetSkipMissionIntros(value);
+        else black_SettingsSetSkipIntros(value);
+    } else if (selected == ROW_AA) {
+        int current = black_SettingsAntiAliasing(), value = current + direction;
+        if (cycle && value > 2) value = 0;
+        value = MAX(0, MIN(2, value));
+        if (value == current) return;
+        black_SettingsSetAntiAliasing(value);
+    } else if (selected == ROW_UPSCALE) {
+        int current = black_SettingsUpscaler(), value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        black_SettingsSetUpscaler(value);
+    } else if (selected == ROW_AF) {
+        int count = (int)(sizeof aniso_levels / sizeof aniso_levels[0]), index = 0;
+        for (int i = 0; i < count; ++i) if (aniso_levels[i] == black_SettingsAniso()) index = i;
+        int next = index + direction;
+        if (cycle && next >= count) next = 0;
+        next = MAX(0, MIN(count - 1, next));
+        if (next == index) return;
+        black_SettingsSetAniso(aniso_levels[next]);
+    } else if (selected == ROW_SCALE) {
+        int current = black_SettingsRenderScale(), value = current + direction;
+        if (cycle && value > 6) value = 1;
+        value = MAX(1, MIN(6, value));
+        if (value == current) return;
+        black_SettingsSetRenderScale(value);
+    } else {
+        int current = black_SettingsFov(), value = current + 5 * direction;
+        if (cycle && value > 140) value = 45;
+        value = MAX(45, MIN(140, value));
+        if (value == current) return;
+        black_SettingsSetFov(value);
+    }
+    changed = CACurrentMediaTime();
+    [self refreshValues];
+    [self setNeedsDisplay:YES];
+}
+- (void)drawRect:(NSRect)dirty
+{
+    (void)dirty;
+    NSSize size = self.bounds.size;
+    fill(self.bounds, 0x000000, .35);
+    [NSGraphicsContext saveGraphicsState];
+    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
+    NSAffineTransform *transform = [NSAffineTransform transform];
+    [transform translateXBy:(size.width - 960 * scale) / 2 yBy:(size.height - 600 * scale) / 2];
+    [transform scaleBy:scale]; [transform concat];
+    fill(NSMakeRect(60, 24, 840, 552), PANEL, .94);
+    [color(BORDER, .85) setStroke];
+    NSBezierPath *border = [NSBezierPath bezierPathWithRect:NSMakeRect(61, 25, 838, 550)];
+    border.lineWidth = 2; [border stroke];
+    /* Center the heading using native text metrics; local font proportions are retained. */
+    centered_text(@"SETTINGS", 480, 45, 22, TEXT);
+    int tab = tab_of(selected);
+    for (int i = 0; i < MENU_TABS; ++i) {
+        CGFloat x = 84 + i * TAB_WIDTH;
+        fill(NSMakeRect(x, 82, TAB_WIDTH, 38), i == tab ? HIGHLIGHT : TAB, 1);
+        if (i == tab) line(x, 118, TAB_WIDTH, HEADING, .85);
+        centered_text(tab_names[i], x + TAB_WIDTH / 2, 95, 14, i == tab ? TEXT : DIM);
+    }
+    text([NSString stringWithFormat:@"%02d / %02d", selected - tab_first[tab] + 1, tab_rows[tab]],
+        820, 130, 10, DIM, 0);
+    int start = visible_start(selected), end = MIN(start + MENU_TAB_MAX_ROWS, tab_first[tab] + tab_rows[tab]);
+    CGFloat width = tab == 2 ? 600 : 792, left = tab == 2 ? 560 : 752;
+    for (int index = start; index < end; ++index) {
+        CGFloat y = row_y(index, selected);
+        if (index == start || group_of(index) != group_of(index - 1)) {
+            text(group_name(group_of(index)), 96, y - 17, 10, HEADING, 0);
+            line(96, y - 3, width - 24, HEADING, .35);
+        }
+        BOOL focus = selected == index;
+        if (focus) fill(NSMakeRect(84, y, width, 38), HIGHLIGHT, 1);
+        fitted_text([row_labels()[index] uppercaseString], 96, y + 13, 13,
+            index >= ROW_BIND_FIRST ? 490 : left - 108, focus ? TEXT : DIM, 0);
+        if (index >= ROW_BIND_FIRST) {
+            for (int slot = 0; slot < 2; ++slot) {
+                CGFloat x = 600 + slot * 138;
+                BOOL active = focus && slot == binding_slot;
+                fill(NSMakeRect(x,y+6,132,26),active ? HIGHLIGHT : BUTTON,1);
+                if (active) line(x,y+31,132,HEADING,1);
+                NSString *key = active && binding_capture ? @"PRESS A KEY" :
+                    [NSString stringWithUTF8String:black_KeyName(black_SettingsBinding(index-ROW_BIND_FIRST,slot))];
+                fitted_text(key.uppercaseString,x+8,y+13,11,116,active ? HEADING : TEXT,0);
+            }
+            continue;
+        }
+        NSString *value = index >= ROW_MOUSE_X && index <= ROW_MOUSE_AIM_Y ?
+            [NSString stringWithFormat:@"%.2fX",black_SettingsMouseSpeed(index-ROW_MOUSE_X)/50.0] :
+            index == ROW_MOUSE_INVERT_X ? (black_SettingsMouseInvert(0) ? @"ON" : @"OFF") :
+            index == ROW_MOUSE_INVERT_Y ? (black_SettingsMouseInvert(1) ? @"ON" : @"OFF") :
+            index == ROW_MOUSE_HOLD ? (black_SettingsMouseHoldAim() ? @"ON" : @"OFF") :
+            index == ROW_WALK_SPEED ? [NSString stringWithFormat:@"%d%%",black_SettingsWalkSpeed()] :
+            index >= ROW_LOOK_X && index <= ROW_AIM_Y ?
+            [NSString stringWithFormat:@"%.2fX", black_SettingsLookSpeed(index - ROW_LOOK_X) / 50.0] :
+            index == ROW_HOLD_AIM ? (black_SettingsHoldAim() ? @"ON" : @"OFF") :
+            index == ROW_AIM_ASSIST ? (black_SettingsAimAssist() ? @"ON" : @"OFF") :
+            index == ROW_INVERT_X ? (black_SettingsInvertX() ? @"ON" : @"OFF") :
+            index == ROW_RUMBLE ? [NSString stringWithFormat:@"%d%%", black_SettingsRumbleIntensity()] :
+            index == ROW_LEFT_DZ ? dz_name(0) : index == ROW_RIGHT_DZ ? dz_name(1) :
+            index == ROW_TRIGGER_DZ ? [NSString stringWithFormat:@"%d%%", black_SettingsTriggerDeadzone()] :
+            index == ROW_VIBRATION ? (black_SettingsVibration() ? @"ON" : @"OFF") :
+            index == ROW_HID ? (black_SettingsDualSenseHid() ? @"ON" : @"OFF") :
+            index == ROW_MEASURE ? (black_ControllerMonitor().calibration == BLACK_CAL_MEASURING ? @"WAIT" : @"START") :
+            index == ROW_RESET ? @"RESET" :
+            index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
+            index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
+            index == ROW_AA ? aa_name(black_SettingsAntiAliasing()) :
+            index == ROW_AF ? af_name(black_SettingsAniso()) :
+            index == ROW_INTROS ? (black_SettingsSkipIntros() ? @"ON" : @"OFF") :
+            index == ROW_MISSIONS ? (black_SettingsSkipMissionIntros() ? @"ON" : @"OFF") :
+            [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
+        if (index != ROW_MEASURE && index != ROW_RESET) {
+            fill(NSMakeRect(left, y + 6, 26, 26), BUTTON, 1);
+            fill(NSMakeRect(left + 96, y + 6, 26, 26), BUTTON, 1);
+            text(@"<", left + 9, y + 13, 13, HEADING, 0);
+            text(@">", left + 105, y + 13, 13, HEADING, 0);
+        }
+        fitted_text(value, left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
+    }
+    NSString *help, *detail;
+    if (selected >= ROW_BIND_FIRST) {
+        help = binding_capture ? @"PRESS A KEY, MOUSE BUTTON OR WHEEL. ESC CANCELS, DELETE CLEARS." :
+            @"LEFT / RIGHT SELECT A SLOT. ENTER / A STARTS KEY CAPTURE.";
+        detail = @"TWO BINDINGS PER ACTION. PHYSICAL KEY POSITIONS; SAVED IMMEDIATELY.";
+    } else if (selected >= ROW_MOUSE_X && selected <= ROW_MOUSE_AIM_Y) {
+        help = selected >= ROW_MOUSE_AIM_X ? @"MOUSE SPEED WHILE AIMING OR SCOPED. ORIGINAL: 1.00X." :
+            @"RELATIVE MOUSE MOVEMENT TURNS THE VIEW DIRECTLY, WITHOUT STICK LIMITS.";
+        detail = @"LIVE. CLICK THE GAME TO CAPTURE THE MOUSE; ESC RELEASES AND PAUSES.";
+    } else if (selected == ROW_MOUSE_INVERT_X || selected == ROW_MOUSE_INVERT_Y) {
+        help = @"REVERSE THIS AXIS OF THE MOUSE. CONTROLLER INVERSION IS SEPARATE.";
+        detail = @"LIVE. DOES NOT CHANGE THE GAME'S CONTROLLER INVERT Y OPTION.";
+    } else if (selected == ROW_MOUSE_HOLD) {
+        help = @"HOLD THE AIM BUTTON FOR AIMING AND SCOPES WITH MOUSE AND KEYBOARD.";
+        detail = @"LIVE. OFF KEEPS THE GAME'S ORIGINAL AIM RULES. CONTROLLER IS SEPARATE.";
+    } else if (selected == ROW_WALK_SPEED) {
+        help = @"MOVEMENT SPEED WHILE THE WALK ACTION IS HELD. DEFAULT: 50%.";
+        detail = @"LIVE. WALK IS ALT BY DEFAULT; BOTH KEY SLOTS CAN BE REBOUND.";
+    } else if (selected >= ROW_LOOK_X && selected <= ROW_AIM_Y) {
+        help = selected >= ROW_AIM_X ? @"LOOK SPEED WHILE AIMING OR SCOPED. ORIGINAL: 1.00X." : @"LOOK SPEED AFTER BLACK'S STICK CURVE. ORIGINAL: 1.00X.";
+        detail = @"LIVE. X / Y AND AIMING ARE INDEPENDENT. STEP: 0.02X.";
+    } else if (selected == ROW_INVERT_X) {
+        help = @"REVERSE HORIZONTAL CAMERA MOVEMENT ON THE CONTROLLER.";
+        detail = @"LIVE. VERTICAL INVERSION IS IN THE GAME'S OWN OPTIONS.";
+    } else if (selected == ROW_HOLD_AIM) {
+        help = @"HOLD THE AIM BUTTON FOR AIMING AND SCOPES.";
+        detail = @"LIVE, CONTROLLER ONLY. OFF KEEPS THE GAME'S ORIGINAL AIM RULES.";
+    } else if (selected == ROW_AIM_ASSIST) {
+        help = @"ENABLE BLACK'S VIEW ATTRACTION AND SHOT ASSISTANCE.";
+        detail = @"LIVE. OFF SKIPS BOTH. ASSISTANCE IS DISABLED WITH KEYBOARD INPUT.";
+    } else if (selected == ROW_RUMBLE) {
+        help = @"MOTOR STRENGTH AS A PERCENTAGE OF THE GAME'S VIBRATION.";
+        detail = @"LIVE. ORIGINAL: 100%. ZERO IS SILENT. MAXIMUM: 200%.";
+    } else if (selected == ROW_LEFT_DZ || selected == ROW_RIGHT_DZ) {
+        help = selected == ROW_LEFT_DZ ? @"MOVEMENT: LOWER FOR SMALLER, EARLIER INPUTS." : @"CAMERA: LOWER FOR FINER AIM NEAR THE CENTER.";
+        detail = @"LIVE. GAME KEEPS 20%. REPLACES THE INNER ZONE, NOT ADDED TO IT.";
+    } else if (selected == ROW_TRIGGER_DZ) {
+        help = @"TRIGGER TRAVEL BEFORE INPUT COUNTS. ZERO KEEPS ORIGINAL.";
+        detail = @"LIVE. REMAINING TRAVEL IS RESCALED TO FULL INPUT.";
+    } else if (selected == ROW_VIBRATION) {
+        help = @"OFF STOPS RUMBLE. ON ALLOWS THE GAME TO DRIVE THE MOTORS.";
+        detail = @"LIVE. SUPPORT DEPENDS ON THE CONTROLLER AND DRIVER.";
+    } else if (selected == ROW_HID) {
+        help = @"ON: SDL RAW HID. OFF: PLATFORM CONTROLLER DRIVER.";
+        detail = [NSString stringWithFormat:@"RESTART REQUIRED. CURRENT REQUEST: %@.", active_hid ? @"RAW HID" : @"PLATFORM"];
+    } else if (selected == ROW_MEASURE) {
+        BlackControllerMonitor monitor = black_ControllerMonitor();
+        help = @"RELEASE BOTH STICKS FOR TWO SECONDS. ENTER / A STARTS.";
+        switch (monitor.calibration) {
+        case BLACK_CAL_MEASURING: detail = @"MEASURING... DO NOT TOUCH THE STICKS. LEFT CANCELS."; break;
+        case BLACK_CAL_APPLIED: detail = [NSString stringWithFormat:@"SET LEFT %d%% / RIGHT %d%%, WITH A 2%% NOISE MARGIN.", monitor.suggested[0], monitor.suggested[1]]; break;
+        case BLACK_CAL_MOVED: detail = @"TOO MUCH MOVEMENT. NO SETTINGS CHANGED. TRY AGAIN."; break;
+        case BLACK_CAL_DISCONNECTED: detail = @"CONNECT THE CONTROLLER AND TRY AGAIN. NO CHANGE."; break;
+        case BLACK_CAL_CANCELLED: detail = @"MEASUREMENT CANCELLED. NO SETTINGS CHANGED."; break;
+        default: detail = @"SETS INNER ZONES ONLY. NEVER CHANGES THE STICK CENTER.";
+        }
+    } else if (selected == ROW_RESET) {
+        help = @"RESTORE ORIGINAL LOOK, STICK ZONES AND CONTROLLER DEFAULTS.";
+        detail = @"ENTER / A RESETS INPUT ONLY. DRIVER CHANGES NEED A RESTART.";
+    } else if (selected == ROW_AA) {
+        const char *aa = getenv("RECOMP_AA");
+        int active = !aa ? 1 : !strcmp(aa, "smaa") ? 2 : strcmp(aa, "0") ? 1 : 0;
+        help = @"SMOOTHS JAGGED EDGES. SMAA IS SHARPER, FXAA IS CHEAPER.";
+        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.", aa_name(active)];
+    } else if (selected == ROW_AF) {
+        help = @"SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE.";
+        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.", af_name(atoi(getenv("RECOMP_AF") ?: "0"))];
+    } else if (selected == ROW_UPSCALE) {
+        const char *up = getenv("RECOMP_UPSCALE");
+        help = @"METALFX SHARPENS THE RENDER SCALE UP TO THE WINDOW'S PIXELS.";
+        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %@.",
+            up && !strcmp(up, "metalfx") ? @"METALFX" : @"OFF"];
+    } else if (selected == ROW_SCALE) {
+        int scale = black_SettingsRenderScale();
+        help = [NSString stringWithFormat:@"INTERNAL RENDER TARGETS: %d X %d.", 640 * scale, 480 * scale];
+        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %dX.", atoi(getenv("RECOMP_SCALE") ?: "2")];
+    } else if (selected == ROW_FOV) {
+        help = @"CAMERA ANGLE IN DEGREES. ORIGINAL: 70.";
+        detail = [NSString stringWithFormat:@"APPLIES NEXT LAUNCH. CURRENT: %d.", atoi(getenv("RECOMP_FOV") ?: "70")];
+    } else {
+        help = selected == ROW_MISSIONS ? @"SKIP THE BRIEFING FILM BEFORE EACH MISSION." : @"SKIP EA, CRITERION AND STARTUP FILMS.";
+        detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." : @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
+    }
+    line(84, 430, 792, HEADING, .35);
+    fitted_text(help, 96, 443, 11, 768, TEXT, 0);
+    fitted_text(detail, 96, 464, 10, 768, DIM, 0);
+    if (tab == 2) {
+        BlackControllerMonitor monitor = black_ControllerMonitor();
+        fill(NSMakeRect(704, 147, 1, 264), HEADING, .35);
+        text(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER", 720, 153, 10, HEADING, 0);
+        if (monitor.connected) fitted_text([NSString stringWithUTF8String:monitor.name], 720, 170, 9, 150, DIM, 0);
+        for (int stick = 0; stick < 2; ++stick) {
+            CGFloat cx = 750, cy = 225 + stick * 118;
+            text(stick ? @"AIM" : @"MOVE", 792, cy - 26, 10, TEXT, 0);
+            int threshold = black_SettingsStickThreshold(stick);
+            CGFloat dz = threshold < 0 ? .2 : threshold / 32767.0;
+            fill(NSMakeRect(cx - 30, cy - 30, 60, 60), TAB, 1);
+            fill(NSMakeRect(cx - dz * 30, cy - dz * 30, dz * 60, dz * 60), HIGHLIGHT, 1);
+            line(cx - 30, cy, 60, HEADING, .35); fill(NSMakeRect(cx, cy - 30, 1, 60), HEADING, .35);
+            CGFloat rawx = monitor.raw[stick * 2] / 32767.0, rawy = monitor.raw[stick * 2 + 1] / 32767.0;
+            CGFloat outx = black_game_axis(monitor.mapped[stick * 2]);
+            CGFloat outy = -black_game_axis(monitor.mapped[stick * 2 + 1]);
+            fill(NSMakeRect(cx + rawx * 30 - 3, cy + rawy * 30 - 3, 6, 6), HEADING, 1);
+            fill(NSMakeRect(cx + outx * 30 - 2, cy + outy * 30 - 2, 4, 4), TEXT, 1);
+            fitted_text([NSString stringWithFormat:@"RAW %+.0f / %+.0f%%", rawx * 100, -rawy * 100], 720, cy + 38, 9, 150, HEADING, 0);
+            fitted_text([NSString stringWithFormat:@"OUT %+.0f / %+.0f%%", outx * 100, -outy * 100], 720, cy + 54, 9, 150, TEXT, 0);
+        }
+        text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 410, 9, DIM, 0);
+    }
+    BOOL failed = black_SettingsSaveFailed();
+    fitted_text(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"CHANGES ARE SAVED AUTOMATICALLY.",
+        96, 490, 10, 400, failed ? 0xe5a06d : DIM, 0);
+    text(@"Q / E, LB / RB: PAGE     UP / DOWN: SELECT", 480, 490, 9, DIM, 0);
+    line(84, 514, 792, HEADING, .35);
+    fill(NSMakeRect(84, 526, 126, 30), BUTTON, 1);
+    text(@"BACK", 122, 536, 12, TEXT, 0);
+    fill(NSMakeRect(738, 526, 138, 30), BUTTON, 1);
+    text(@"DEFAULTS", 760, 536, 12, TEXT, 0);
+    text(@"LEFT / RIGHT: ADJUST    ENTER / A: CHANGE    ESC / B: BACK", 232, 538, 10, DIM, 0);
+    [NSGraphicsContext restoreGraphicsState];
+}
+- (void)mouseDown:(NSEvent *)event { (void)event; }
+- (void)rightMouseDown:(NSEvent *)event { (void)event; }
+- (void)scrollWheel:(NSEvent *)event
+{
+    static NSTimeInterval last_scroll;
+    NSTimeInterval now = CACurrentMediaTime();
+    if (fabs(event.scrollingDeltaY) > .1 && now - last_scroll > .09) {
+        last_scroll = now; [self stepRow:event.scrollingDeltaY < 0 ? 1 : -1];
+    }
+}
+@end
+
+extern void black_HostQuit(void) __attribute__((weak));
+static void request_quit(void)
+{
+    if (black_HostQuit) black_HostQuit();
+    else [NSApp terminate:nil];
+}
+@interface BlackMenuActions : NSObject <NSWindowDelegate>
+- (void)toggle:(id)sender;
+- (void)quit:(id)sender;
+@end
+@implementation BlackMenuActions
+- (void)toggle:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_TOGGLE); }
+- (void)quit:(id)sender { (void)sender; request_quit(); }
+- (BOOL)windowShouldClose:(NSWindow *)sender { (void)sender; request_quit(); return NO; }
+- (void)windowDidEnterFullScreen:(NSNotification *)note
+{ (void)note;fprintf(stderr,"[HOST-APP] native_fullscreen=1\n"); }
+- (void)windowDidExitFullScreen:(NSNotification *)note
+{ (void)note;fprintf(stderr,"[HOST-APP] native_fullscreen=0\n"); }
+- (void)windowDidResignKey:(NSNotification *)note
+{ (void)note; menu_view->binding_capture = NO; black_KeyReleaseAll(); [menu_view setNeedsDisplay:YES]; }
+@end
+static BlackMenuActions *actions;
+static NSMenuItem *settings_item;
+static BOOL reduced_motion(void)
+{
+    return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+}
+
+static void set_open(int open)
+{
+    if (open) {
+        closing = 0;
+        if (!shown) {
+            shown = 1; black_MenuSetOpen(1);
+            if (capture_input) capture_input(1);
+            menu_view.hidden = NO;
+            menu_view.alphaValue = reduced_motion() ? 1 : 0;
+            transition = CACurrentMediaTime();
+            [menu_view setFrameSize:container.bounds.size];
+            [menu_view selectRow:menu_view->selected];
+            fprintf(stderr, "[MENU] opened %s\n", tab_names[tab_of(menu_view->selected)].UTF8String);
+        }
+    } else if (shown && !closing) {
+        black_ControllerCancelMeasure(); menu_view->binding_capture = NO;
+        closing = 1; transition = CACurrentMediaTime();
+    }
+}
+
+void black_MenuAttach(void *window, void (*capture)(int))
+{
+    if (menu_window || !window) return;
+    menu_window = (NSWindow *)window; capture_input = capture;
+    NSBundle *bundle=NSBundle.mainBundle;
+    fprintf(stderr,"[HOST-APP] bundle=%s category=%s game_mode_opt_in=%d\n",
+        (bundle.bundleIdentifier ?: @"none").UTF8String,
+        [(NSString *)([bundle objectForInfoDictionaryKey:@"LSApplicationCategoryType"] ?: @"none") UTF8String],
+        [[bundle objectForInfoDictionaryKey:@"LSSupportsGameMode"] boolValue]);
+    active_hid = black_SettingsDualSenseHid();
+    NSString *game = [NSString stringWithUTF8String:getenv("BLACK_GAME_DIR") ?: ""];
+    load_font(&big_font, [game stringByAppendingPathComponent:@"language/fonts/Big.bin"]);
+    load_font(&small_font, [game stringByAppendingPathComponent:@"language/fonts/Small.bin"]);
+    game_view = [menu_window.contentView retain];
+    container = [[NSView alloc] initWithFrame:game_view.bounds];
+    container.wantsLayer = YES;
+    [menu_window setContentView:container];
+    game_view.frame = container.bounds;
+    game_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [container addSubview:game_view];
+    menu_view = [[BlackMenuView alloc] initWithFrame:container.bounds];
+    menu_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    menu_view.hidden = YES;
+    [container addSubview:menu_view];
+    [menu_window makeFirstResponder:game_view];
+    event_monitor = [[NSEvent addLocalMonitorForEventsMatchingMask:
+        NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged | NSEventMaskLeftMouseDown |
+        NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown | NSEventMaskScrollWheel handler:^NSEvent *(NSEvent *event) {
+        if (event.window != menu_window) return event;
+        BOOL mouse = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown ||
+            event.type == NSEventTypeOtherMouseDown || event.type == NSEventTypeScrollWheel;
+        if (mouse) {
+            if (black_MenuIsOpen() && menu_view->binding_capture) {
+                if (event.type == NSEventTypeScrollWheel) {
+                    if (event.scrollingDeltaY != 0) [menu_view captureBinding:event.scrollingDeltaY > 0 ? BLACK_WHEEL_UP : BLACK_WHEEL_DOWN];
+                } else if (event.type == NSEventTypeLeftMouseDown) [menu_view captureBinding:BLACK_MOUSE_LEFT];
+                else if (event.type == NSEventTypeRightMouseDown) [menu_view captureBinding:BLACK_MOUSE_RIGHT];
+                else if (event.buttonNumber >= 2 && event.buttonNumber <= 4) [menu_view captureBinding:BLACK_MOUSE_LEFT + (int)event.buttonNumber];
+                return nil;
+            }
+            return event;
+        }
+        unsigned short code = event.keyCode;
+        BOOL down = event.type == NSEventTypeKeyDown;
+        if (code == 12 && (event.modifierFlags & NSEventModifierFlagCommand)) {
+            if (down && !event.isARepeat) request_quit();
+            return nil;
+        }
+        if (black_MenuIsOpen() && menu_view->binding_capture) {
+            if (event.modifierFlags & NSEventModifierFlagCommand) return nil;
+            if (down && !event.isARepeat) [menu_view captureBinding:code == 53 ? -2 : code == 117 ? -1 : code];
+            if (event.type == NSEventTypeFlagsChanged) {
+                NSUInteger mask = code == 56 || code == 60 ? NSEventModifierFlagShift : code == 58 || code == 61 ? NSEventModifierFlagOption :
+                    code == 59 || code == 62 ? NSEventModifierFlagControl : 0;
+                if (event.modifierFlags & mask) [menu_view captureBinding:code];
+            }
+            return nil;
+        }
+        BOOL shortcut = code == 122 || code == 109 || (code == 43 && (event.modifierFlags & NSEventModifierFlagCommand));
+        if (shortcut) {
+            if (down && !event.isARepeat) black_MenuCommand(BLACK_MENU_TOGGLE);
+            return nil;
+        }
+        if (!black_MenuIsOpen()) return event;
+        if (down && !event.isARepeat) {
+            if (code == 117 && menu_view->selected >= ROW_BIND_FIRST) {
+                menu_view->binding_capture = YES; [menu_view captureBinding:-1];
+            } else if (code == 53 || code == 11) black_MenuCommand(BLACK_MENU_BACK);
+            else if (code == 36 || code == 76 || code == 49) black_MenuCommand(BLACK_MENU_CHANGE);
+            else if (code == 123) black_MenuCommand(BLACK_MENU_OFF);
+            else if (code == 124) black_MenuCommand(BLACK_MENU_ON);
+            else if (code == 126) black_MenuCommand(BLACK_MENU_UP);
+            else if (code == 125) black_MenuCommand(BLACK_MENU_DOWN);
+            else if (code == 12 || (code == 48 && (event.modifierFlags & NSEventModifierFlagShift)))
+                black_MenuCommand(BLACK_MENU_PREV_TAB);
+            else if (code == 14 || code == 48) black_MenuCommand(BLACK_MENU_NEXT_TAB);
+        }
+        return nil;
+    }] retain];
+    actions = [[BlackMenuActions alloc] init];
+    menu_window.delegate = actions;
+    NSMenu *main = NSApp.mainMenu;
+    if (!main) {
+        main = [[[NSMenu alloc] initWithTitle:@"BLACK"] autorelease];
+        NSApp.mainMenu = main;
+        NSMenuItem *app = [[[NSMenuItem alloc] initWithTitle:@"BLACK" action:nil keyEquivalent:@""] autorelease];
+        [main addItem:app];
+        app.submenu = [[[NSMenu alloc] initWithTitle:@"BLACK"] autorelease];
+    }
+    NSMenu *app_menu = main.itemArray.firstObject.submenu ?: main;
+    NSMenuItem *quit = [app_menu itemWithTitle:@"Quit BLACK"];
+    if (!quit) quit = [app_menu addItemWithTitle:@"Quit BLACK" action:@selector(quit:) keyEquivalent:@"q"];
+    quit.action = @selector(quit:); quit.target = actions;
+    settings_item = [[NSMenuItem alloc] initWithTitle:@"Recomp Settings…" action:@selector(toggle:) keyEquivalent:@","];
+    settings_item.target = actions;
+    [app_menu insertItem:settings_item atIndex:0];
+    if (getenv("BLACK_OPEN_SETTINGS")) black_MenuCommand(BLACK_MENU_TOGGLE);
+}
+
+void black_MenuPump(void)
+{
+    /* Local process-only integration check; never injects OS keyboard input. */
+    static double test_start;
+    static int test_sent;
+    const char *test_quit = getenv("BLACK_TEST_QUIT_AFTER");
+    if (test_quit && menu_window && !test_sent) {
+        if (!test_start) test_start = CACurrentMediaTime();
+        if (CACurrentMediaTime() - test_start >= atof(test_quit)) {
+            test_sent = 1;
+            NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+                modifierFlags:NSEventModifierFlagCommand timestamp:0 windowNumber:menu_window.windowNumber
+                context:nil characters:@"q" charactersIgnoringModifiers:@"q" isARepeat:NO keyCode:12];
+            [NSApp postEvent:event atStart:NO];
+        }
+    }
+    if (!menu_window) return;
+    int measured[2];
+    if (black_ControllerTakeMeasurement(measured)) {
+        black_SettingsSetStickDeadzone(0, measured[0]);
+        black_SettingsSetStickDeadzone(1, measured[1]);
+        menu_view->changed = CACurrentMediaTime();
+        [menu_view refreshValues];
+    }
+    unsigned command = black_MenuTakeCommands();
+    if (command & BLACK_MENU_TOGGLE) set_open(!black_MenuIsOpen());
+    else if (command & BLACK_MENU_BACK) {
+        if (menu_view->binding_capture) [menu_view captureBinding:-2]; else set_open(0);
+    }
+    else if (black_MenuIsOpen() && !closing) {
+        if (command & (BLACK_MENU_UP | BLACK_MENU_DOWN)) {
+            [menu_view stepRow:(command & BLACK_MENU_DOWN) ? 1 : -1];
+        } else if (command & (BLACK_MENU_PREV_TAB | BLACK_MENU_NEXT_TAB)) {
+            [menu_view stepTab:(command & BLACK_MENU_NEXT_TAB) ? 1 : -1];
+        } else if (command & BLACK_MENU_CHANGE) [menu_view changeOption:nil];
+        else if (command & (BLACK_MENU_ON | BLACK_MENU_OFF)) {
+            [menu_view adjustOption:(command & BLACK_MENU_ON) ? 1 : -1 cycle:NO];
+        }
+    }
+    if (!shown) return;
+    NSTimeInterval now = CACurrentMediaTime(), duration = closing ? 0.12 : 0.18;
+    double t = reduced_motion() ? 1 : MIN(1, (now - transition) / duration);
+    double eased = 1 - pow(1 - t, 4);
+    menu_view.alphaValue = closing ? 1 - eased : eased;
+    menu_view.layer.transform = CATransform3DMakeTranslation(reduced_motion() ? 0 :
+        (closing ? eased : 1 - eased) * 12, 0, 0);
+    if (closing && t >= 1) {
+        menu_view.hidden = YES; shown = closing = 0;
+        black_MenuSetOpen(0);
+        [menu_window makeFirstResponder:game_view];
+        if (capture_input) capture_input(0);
+        fprintf(stderr, "[MENU] closed\n");
+    } else if (now - last_draw > 1.0 / 30) {
+        last_draw = now; [menu_view setNeedsDisplay:YES];
+    }
+}
+
+void black_MenuDetach(void)
+{
+    if (!menu_window) return;
+    black_MenuSetOpen(0);
+    if (event_monitor) { [NSEvent removeMonitor:event_monitor]; [event_monitor release]; event_monitor = nil; }
+    [settings_item.menu removeItem:settings_item]; [settings_item release]; settings_item = nil;
+    if (menu_window.delegate == actions) menu_window.delegate = nil;
+    NSMenuItem *quit = [NSApp.mainMenu.itemArray.firstObject.submenu itemWithTitle:@"Quit BLACK"];
+    if (quit.target == actions) { quit.target = NSApp; quit.action = @selector(terminate:); }
+    [actions release]; actions = nil;
+    [menu_view removeFromSuperview]; [menu_view release]; menu_view = nil;
+    [game_view removeFromSuperview]; [menu_window setContentView:game_view]; [game_view release]; game_view = nil;
+    [container release]; container = nil;
+    menu_window = nil; capture_input = NULL; shown = closing = 0;
+    free_font(&big_font); free_font(&small_font);
+}
+
+int black_MenuUsingGameFonts(void)
+{
+    return big_font.cap > 0 && small_font.cap > 0 && big_font.image['A'] && small_font.image['A'];
+}

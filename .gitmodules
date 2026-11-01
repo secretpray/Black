@@ -1,0 +1,6 @@
+[submodule "ports/macos/game"]
+	path = ports/macos/game
+	url = https://github.com/elpetese/black-macos-recomp.git
+[submodule "ports/macos/runtime"]
+	path = ports/macos/runtime
+	url = https://github.com/elpetese/black-macos-runtime.git

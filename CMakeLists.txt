@@ -1,6 +1,11 @@
 # Black (original Xbox), statically recompiled
 
 cmake_minimum_required(VERSION 3.25)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    project(black_macos LANGUAGES C OBJC)
+    include(cmake/BlackMacOS.cmake)
+    return()
+endif()
 project(black LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)

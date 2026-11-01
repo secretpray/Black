@@ -26,3 +26,23 @@ black.toml
 
 # Local temporary folder
 .local
+
+# macOS port: local dependencies, disc files and generated game code
+/.research/
+/.venv/
+/game_files/
+*.iso
+*.xiso
+*.xbe
+*.dylib
+.DS_Store
+__pycache__/
+
+# Private development notes and evidence; public release docs are in English.
+/local-development-docs/
+/docs/*_RU.md
+/docs/research/
+/AGENTS.md
+/PRODUCT.md
+/DESIGN.md
+/resources/macos/*.iconset/
