@@ -96,14 +96,21 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
 
 - The key follows portingpete's renderer exactly: 64-bit FNV-1a with each
   little-endian 64-bit word of the top level, as stored in guest memory, as one
-  step (DXT unswizzled as on Xbox, the I8 palette texture still swizzled, the
-  palette itself excluded). Width, height and the NV2A colour format are
+  step (DXT as stored, the I8 palette texture still swizzled, the palette
+  itself excluded). Width, height and the NV2A colour format are
   separate lookup fields, not hashed.
 - The pinned xemu `gl/texture.c` is patched at configure time through four
   checked anchors; the submodule is unchanged. A texture is first made from the
-  game's data, its pack file is read and decoded on a loader thread, and a new
-  GL texture takes its place only after an error-free upload. A missing file,
-  a decoding failure, an unsupported format or a GL error keeps the original.
+  game's data. Each pack file is read and decoded once on a loader thread and
+  becomes one GL texture, kept and shared; it takes the original's place only
+  after an error-free upload. A missing file, a decoding failure, an unsupported
+  format or a GL error keeps the original.
+- The first build read the file again for every remade texture. In a manual
+  session the game remade some mapped textures about 60 times a second (the
+  cause was not traced; the key leaves out the palette), so the originals kept
+  showing while files loaded and the pack looked missing. Pack textures are now
+  shared and kept up to 1 GB when unused, so a remade texture gets its HD
+  replacement at once.
 - Pack files are found by bare name anywhere under
   `~/Library/Application Support/BLACK/Textures/replacement/`, also through a
   folder link to another volume. DDS BC1–BC3/BC7 upload compressed; PNG is
@@ -113,7 +120,7 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
   PCSX2-style folder layout. **103 CTest checks**, **30 Python checks** and the
   native menu preview, including the new row in Russian, passed.
 - The user's copy of the pack (1324 files, all 1007 mapped files present), in
-  three bounded, muted, scripted first-mission runs with the same input script:
+  bounded, muted, scripted first-mission runs:
   - Off: no texture-pack activity in the log.
   - On: of 191 eligible textures, 111 were replaced and 80 had no map entry;
     no failures; 382 MB of HD textures resident after loading the level. The
@@ -121,7 +128,12 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
     (181 ms with the option off).
   - On, with an empty folder: the log reports that replacement stays off and the
     level loads normally.
-  All three stopped at their time limit without a forced kill. Window captures
+  - On, after the fix, 170 seconds with longer walking: 1,462 textures were
+    replaced from 127 file reads, with no failures, 448 MB resident and the
+    game at 30 FPS. The slowest frame (117 ms) came while no file was loading.
+  - Manual: turning the option on in the settings panel while the game ran
+    loaded the pack and remade the textures without a restart.
+  All runs stopped at their time limit without a forced kill. Window captures
   from the same frame show HD concrete, wood and floor art from the pack where
   the original textures were.
 - Not checked: other missions, long sessions, GPU memory on 8 GB Macs, and every

@@ -49,7 +49,7 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
         black_trace_replace(content "            key_out->binding = generate_texture(state, texture_data, palette_data);\n"
             "            key_out->binding = generate_texture(state, texture_data, palette_data);\n            if (!surf_to_tex)\n                black_tp_created(key_out->binding, state, texture_data, length);\n")
         black_trace_replace(content "        glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);"
-            "        black_tp_forget(binding);\n        glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);")
+            "        if (!black_tp_forget(binding))\n            glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);")
     else()
         black_trace_replace(content "void pgraph_gl_bind_shaders(PGRAPHState *pg)\n{"
             "void pgraph_gl_bind_shaders(PGRAPHState *pg)\n{\n#ifdef XBOXRECOMP_ANGLE\n    /* GLES has no GL_BGRA vertex size. The existing GLSL path must undo\n     * D3DCOLOR's BGRA byte order before both FF and programmable shaders. */\n    pg->swizzle_attrs = 0;\n    for (unsigned i = 0; i < NV2A_VERTEXSHADER_ATTRIBUTES; ++i)\n        if (pg->vertex_attributes[i].count &&\n            pg->vertex_attributes[i].format == NV097_SET_VERTEX_DATA_ARRAY_FORMAT_TYPE_UB_D3D)\n            pg->swizzle_attrs |= 1u << i;\n#endif")
