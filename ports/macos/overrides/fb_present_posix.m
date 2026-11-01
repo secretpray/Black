@@ -108,8 +108,11 @@ static id<MTLTexture> black_PostProcess(id<MTLCommandBuffer> command, id<MTLText
 /* The host pumps Cocoa itself rather than running NSApplication's main loop.
  * Explicitly exit on the main thread, flushing stdio/atexit and releasing the
  * captured pointer. Do not wait forever for a blocked guest thread. */
+void black_AudioFadeOut(void);
 void black_HostQuit(void)
 {
+    /* Before exit: ending the process mid-buffer clicked in the speakers. */
+    black_AudioFadeOut();
     xek_capture_mouse(NO);
     xbox_KeyboardReleaseAll();
     xbox_MouseReleaseAll();
