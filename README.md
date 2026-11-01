@@ -1,7 +1,7 @@
 <p align="center"><img src="resources/macos/AppIcon.png" alt="BLACK app icon" width="128"></p>
 <h1 align="center">BLACK</h1>
 <p align="center">An unofficial native Apple Silicon port of <i>BLACK</i> for Original Xbox.<br>Bring your own supported USA or European disc image.</p>
-<p align="center"><a href="#download"><b>Download</b></a> · <a href="#quick-start">Quick start</a> · <a href="#highlights">Highlights</a> · <a href="#controls-and-settings">Controls</a> · <a href="docs/BUILD.md">Build</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="#acknowledgements">Acknowledgements</a></p>
+<p align="center"><a href="#download"><b>Download</b></a> · <a href="#quick-start">Quick start</a> · <a href="#highlights">Highlights</a> · <a href="#mods">Mods</a> · <a href="#controls-and-settings">Controls</a> · <a href="docs/BUILD.md">Build</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="#acknowledgements">Acknowledgements</a></p>
 
 > [!IMPORTANT]
 > This is a non-commercial fan project, not affiliated with or endorsed by Electronic Arts,
@@ -10,17 +10,36 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.1.0 is the first experimental macOS release.** Combat, menus and profile saving
-> have been exercised on the development Mac. A complete playthrough, all runtime races,
-> audio quality and controller calibration are not yet qualified. [Validation](docs/VALIDATION.md).
+> **0.2.0 is an experimental macOS release** that adds a Mods page and an FPS counter.
+> Combat, menus and profile saving have been exercised on the development Mac. A complete
+> playthrough, all runtime races, audio quality and controller calibration are not yet
+> qualified. [Validation](docs/VALIDATION.md).
+
+<p align="center">
+  <img src="docs/screenshots/gameplay-firefight.jpg" alt="A firefight on an autumn street: an Uzi fires past a brick wall, leaves and smoke fly, an abandoned yellow car down the road" width="100%">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/gameplay-courtyard.jpg" alt="A burning courtyard seen past a G36, crates stacked by a warehouse"><br><sub>A burning courtyard.</sub></td>
+    <td width="50%"><img src="docs/screenshots/gameplay-muzzle-flash.jpg" alt="Muzzle flash fills a dark corridor as the rifle fires"><br><sub>Muzzle flash in a dark corridor.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/gameplay-interior.jpg" alt="Inside a ruined house by tall windows, a bullet spark outside"><br><sub>The first mission, by the windows.</sub></td>
+    <td width="50%"><img src="docs/screenshots/gameplay-debris.jpg" alt="Debris and smoke burst from a wall hit by gunfire"><br><sub>Walls break apart under fire.</sub></td>
+  </tr>
+</table>
+
+<sub>Unedited macOS screenshots from this port on an M1 Pro, 2× render scale with SMAA and
+MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.1.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.1.0)**
+**[BLACK 0.2.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.2.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.1.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.2.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -29,6 +48,10 @@ Linux and Steam Deck are not qualified. GitHub's automatic **Source code** downl
 are source snapshots, not playable apps.
 
 ## Quick start
+
+<p align="center">
+  <img src="docs/screenshots/setup-drag-to-applications.jpg" alt="The download's Finder window: BLACK FOR MAC in worn gold capitals, the app icon, an arrow to the Applications folder and DRAG BLACK TO APPLICATIONS" width="60%">
+</p>
 
 1. Open the DMG and drag **BLACK.app** to **Applications**.
 2. Open **BLACK** from Applications or your app launcher.
@@ -52,8 +75,9 @@ PS2 and Xbox 360 files are not supported.
 - Native ARM64 game code, NV2A rendering through ANGLE Metal and the DSP audio path.
 - Saved 1–6× render scale, camera FOV, SMAA/FXAA, anisotropic filtering and MetalFX
   spatial upscaling. Graphics changes take effect on the next launch.
-- A TGP-inspired panel with **Recomp Settings**, **Mouse and Keyboard** and
-  **Controller** pages, using fonts from your own game.
+- A TGP-inspired panel with **Recomp Settings**, **Mouse and Keyboard**,
+  **Controller** and **Mods** pages, using fonts from your own game.
+- An optional **FPS counter** showing the game's own frame rate.
 - Separate stick/trigger deadzones, explicit drift measurement, live axes,
   normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.
 - Direct mouse look, two bindings per action, Flash menu cursor navigation
@@ -63,10 +87,37 @@ PS2 and Xbox 360 files are not supported.
 - Native fullscreen and Game Mode opt-in. Activation was observed on the test Mac;
   macOS controls it. FPS and controller latency improvements were not measured.
 - Separate installation, settings, saves and per-session logs.
-- A **Mods** page: film skipping, God Mode, infinite medkits, grenades and
-  ammo, Always Silenced, mission and Black Ops unlocks, M16A2 and the BFG code,
-  all off by default (in development, not in the 0.1.0 download).
-  [Validation and limits](docs/VALIDATION.md#mods-page-and-fps-counter-in-development).
+
+## Mods
+
+<p align="center">
+  <img src="docs/screenshots/settings-mods.jpg" alt="Settings, Mods page: GAME USA XBE, Films with Skip Intro Movies, and Player with God Mode, Infinite Medkits and Infinite Grenades" width="85%">
+</p>
+
+The **Mods** page collects cheats and modifications, all **off by default**:
+
+| Group | Mod | What it does |
+| --- | --- | --- |
+| Films | Skip Intro Movies / Skip Mission Intros | Skips the startup films and mission briefings |
+| Player | God Mode | Refills your health every frame; one hit above the maximum can still kill |
+| Player | Infinite Medkits / Infinite Grenades | Keeps three medkits (the game's limit) and nine grenades |
+| Player | Infinite Ammo (Silver Weapons) | The game's own Silver Weapons reward: magazines refill, 999 shown |
+| Player | Always Silenced | Fits a silencer everywhere the old +9 trainer did (experimental) |
+| Unlocks | Unlock All Missions / Unlock Black Ops Difficulty | Opens every mission and the Black Ops difficulty |
+| Unlocks | M16A2 at Mission Start | The Black Ops reward rifle as your starting weapon |
+| Unlocks | BFG (M249) Code | The same as a `XXXX-XXXX-XXXX-XXXX` profile name: an M249 in the first mission |
+
+Infinite Ammo and the M16A2 apply from the next mission start or restart. Unlocks are
+saved into your profile, and turning a mod off never relocks earned progress.
+Addresses are kept per game revision; the page shows the detected one, and an
+unrecognised executable leaves every mod off.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/mods-in-game.jpg" alt="In a mission with mods on: three medkits, nine grenades, 999 rounds, the M16A2 and FPS 29.9 in the corner"><br><sub>Mods in play, with the FPS counter.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-mods-unlocks.jpg" alt="Mods page scrolled to Infinite Ammo, Always Silenced and Unlock All Missions"><br><sub>Player mods and unlocks.</sub></td>
+  </tr>
+</table>
 
 ## Controls and settings
 
@@ -81,6 +132,13 @@ PS2 and Xbox 360 files are not supported.
 | Change weapon | Q / E or mouse wheel |
 | Objectives / pause | Tab / Escape |
 | Game menus | Click / wheel / arrows; Enter confirms, Escape or right mouse goes back |
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="Recomp Settings: render scale 2x, MetalFX upscaling, field of view 70, FPS counter and SMAA"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-controller.jpg" alt="Controller page: look and aim sensitivity with live stick monitors"><br><sub>Controller: sensitivity and live sticks.</sub></td>
+  </tr>
+</table>
 
 Click the game to capture the mouse in play. Escape releases it and pauses;
 game menus release it automatically. Mouse motion alone does not take control

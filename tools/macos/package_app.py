@@ -162,6 +162,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", default="0.2.0")
     args = parser.parse_args()
     build(args.binary, args.output, args.version)

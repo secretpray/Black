@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-01
 
 - Settings gain a fourth **Mods** page, laid out like TGP's menu: skip intro
   and mission films, God Mode, infinite medkits and grenades, infinite ammo

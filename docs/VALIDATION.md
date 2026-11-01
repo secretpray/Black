@@ -1,6 +1,6 @@
 # Release validation and current limits
 
-Candidate: **BLACK 0.1.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Candidate: **BLACK 0.2.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
 ## Evidence
@@ -35,9 +35,9 @@ macOS 27.0.1. This is an experimental release, not a complete-game qualification
   GUI screenshot inspection of the final Finder window was unavailable in this
   environment; this is not described as a clean-machine hardware qualification.
 
-## Mods page and FPS counter (in development)
+## Mods page and FPS counter (0.2.0)
 
-Not part of the 0.1.0 download. The settings panel gains a fourth **Mods**
+New in 0.2.0. The settings panel gains a fourth **Mods**
 page laid out like TGP's menu, and Recomp Settings → Display gains
 **FPS Counter**, a small corner label counting the game's finished frames.
 
@@ -62,6 +62,9 @@ revision. An unknown executable shows `MODS OFF` and nothing is written.
   revision, `silver=1 m16a2=1` at spawn and `health=1200.0 max=1200.0
   medkits=3 grenades=9` every 150 frames. A window capture showed three medkits,
   nine grenades, 999 rounds, the M16A2 and `FPS: 29.9`.
+- The packaged 0.2.0 app, run from its mounted DMG with a system-only PATH,
+  enabled the DSP56300 JIT, reported the USA revision and quit normally with
+  code 0 before its limit.
 - Scripted pad only. Damage above the maximum in one frame can still kill.
   Always Silenced and the BFG were not exercised in combat. The trainer's weapon
   swap and faster game speed were not ported.

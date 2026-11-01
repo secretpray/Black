@@ -30,6 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--version", default="0.2.0")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Output already exists")
@@ -73,11 +74,11 @@ def main():
         shutil.copy2(ROOT / ".research/angle-root/angle/LICENSE", stage / "ANGLE-LICENSE")
         (stage / "manifest.json").write_text(json.dumps(inventory, indent=2) + "\n")
         (stage / "README.txt").write_text(
-            "BLACK 0.1.0 library source and relinking materials\n\n"
+            f"BLACK {args.version} library source and relinking materials\n\n"
             "Exact runtime/game host/DSP source archives, local overlays, and shipped Homebrew\n"
             "library source archives with the original build recipes and verified SHA-256.\n"
             "No ISO, XBE, game assets, generated game C, saves or local session logs are included.\n\n"
-            "Clone https://github.com/secretpray/Black at tag v0.1.0 with submodules.\n"
+            f"Clone https://github.com/secretpray/Black at tag v{args.version} with submodules.\n"
             "Follow docs/BUILD.md and generate native code from your own supported disc.\n"
             "To modify static runtime libraries, edit the included source, pin that revision\n"
             "explicitly in tools/macos/black.py, clear the build directory and rebuild.\n"
