@@ -19,6 +19,7 @@ for english, fr, de, it, es in re.findall(
 # english: (fr, de, es, it) for labels TGP does not have; None leaves English.
 LOCAL = {
     "MODS": ("Mods", "Mods", "Mods", "Mod"),
+    "HD TEXTURE SIZE": ("Taille des textures HD", "HD-Texturgröße", "Tamaño de texturas HD", "Dimensione texture HD"),
     "LOOK SENSITIVITY": ("Sensibilité de la vue", "Blickempfindlichkeit", "Sensibilidad de la vista", "Sensibilità visuale"),
     "AIMING": ("Visée", "Zielen", "Apuntado", "Mira"),
     "DEADZONES": ("Zones mortes", "Totzonen", "Zonas muertas", "Zone morte"),
@@ -83,7 +84,9 @@ RU = {
     "RENDER SCALE": "Масштаб рендера", "UPSCALING": "Апскейлинг", "FIELD OF VIEW": "Угол обзора",
     "FPS COUNTER": "Счётчик FPS", "ANTI-ALIASING": "Сглаживание", "ANISOTROPIC FILTERING": "Анизотропная фильтрация",
     "GAME LANGUAGE": "Язык игры", "MENU LANGUAGE": "Язык меню",
-    "TEXTURES": "Текстуры", "TEXTURE REPLACEMENT": "Замена текстур",
+    "TEXTURES": "Текстуры", "TEXTURE REPLACEMENT": "Замена текстур", "HD TEXTURE SIZE": "Размер HD-текстур",
+    "LARGEST SIDE OF AN HD TEXTURE. LARGER FILES USE A SMALLER LEVEL.": "Наибольшая сторона HD-текстуры. Файлы крупнее берутся с меньшего уровня.",
+    "LIVE. 1024 USES ABOUT A QUARTER OF THE MEMORY OF 2048; MOST OF THE PACK IS 2048.": "Сразу. 1024 занимает около четверти памяти 2048; большая часть пака — 2048.",
     "HORIZONTAL SENSITIVITY": "Чувствительность по горизонтали", "VERTICAL SENSITIVITY": "Чувствительность по вертикали",
     "AIM HORIZONTAL SENSITIVITY": "Прицел: по горизонтали", "AIM VERTICAL SENSITIVITY": "Прицел: по вертикали",
     "INVERT X AXIS": "Инверсия оси X", "HOLD TO AIM": "Прицел при удержании", "AIM ASSIST": "Помощь в прицеливании",

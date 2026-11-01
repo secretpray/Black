@@ -25,6 +25,8 @@ static atomic_int upscaler = 1;
 static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top left */
 /* HD textures from the user's pack and the shipped map (texture_pack.h); live. */
 static atomic_int texture_replacement;
+/* Largest side of a replacement: 1024, 2048 or 4096; larger files lose top levels. */
+static atomic_int texture_max_size = 2048;
 /* game_language: 0 English, 1 French, 2 German, 3 Spanish, 4 Italian (next launch).
  * menu_language: 0 follows the game, then English, French, German, Spanish,
  * Italian, Russian. */
@@ -137,6 +139,10 @@ static void load_settings(void)
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 1) atomic_store(&texture_replacement, (int)n);
             }
+            if (sscanf(line, " texture_max_size = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && (n == 1024 || n == 2048 || n == 4096)) atomic_store(&texture_max_size, (int)n);
+            }
             if (sscanf(line, " upscaler = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 1) atomic_store(&upscaler, (int)n);
@@ -236,9 +242,9 @@ static int save_setting(atomic_int *setting, int value)
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
-                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\n# Mods page: 1 on, 0 off\n",
+                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off\n",
                     atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language),
-                    atomic_load(&texture_replacement)) > 0;
+                    atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
                     written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
                 int flushed = fflush(file) == 0 && fsync(fd) == 0;
@@ -280,6 +286,10 @@ int black_SettingsSetFpsCounter(int enabled) { return save_setting(&fps_counter,
 int black_SettingsTextureReplacement(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&texture_replacement); }
 int black_SettingsSetTextureReplacement(int enabled) { return save_setting(&texture_replacement, !!enabled); }
+int black_SettingsTextureMaxSize(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&texture_max_size); }
+int black_SettingsSetTextureMaxSize(int size)
+{ return size == 1024 || size == 2048 || size == 4096 ? save_setting(&texture_max_size, size) : 0; }
 int black_SettingsGameLanguage(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&game_language); }
 int black_SettingsSetGameLanguage(int language)

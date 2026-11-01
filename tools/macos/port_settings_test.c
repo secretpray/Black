@@ -29,6 +29,7 @@ int main(int argc, char **argv)
             black_SettingsMenuLanguage() != 6;
         if (!strcmp(argv[1], "fps")) return !black_SettingsFpsCounter() || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "textures")) return !black_SettingsTextureReplacement() || black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "texture-size")) return black_SettingsTextureMaxSize() != 1024;
         if (!strcmp(argv[1], "mods-defaults")) {
             for (int i = 0; i < BLACK_MOD_COUNT; ++i) if (black_SettingsMod(i)) return 1;
             return black_SettingsSkipIntros() || black_SettingsSkipMissionIntros();
@@ -124,6 +125,10 @@ int main(int argc, char **argv)
     if (child(argv[0], "textures", path) != 1 || !black_SettingsSetTextureReplacement(1) ||
         child(argv[0], "textures", path) || !black_SettingsSetTextureReplacement(0) ||
         !child(argv[0], "textures", path)) return 35;
+    /* HD texture size: 2048 until chosen; only 1024, 2048 and 4096. */
+    if (!child(argv[0], "texture-size", path) || black_SettingsSetTextureMaxSize(3000) ||
+        !black_SettingsSetTextureMaxSize(1024) || child(argv[0], "texture-size", path) ||
+        !black_SettingsSetTextureMaxSize(2048)) return 36;
     if (!black_SettingsSetMod(BLACK_MOD_GOD_MODE, 1) || !black_SettingsSetMod(BLACK_MOD_BFG, 5) ||
         black_SettingsSetMod(BLACK_MOD_COUNT, 1) || black_SettingsSetMod(-1, 1) || child(argv[0], "mods", path)) return 31;
     if (!black_SettingsSetSkipIntros(1) || !black_SettingsResetMods() || child(argv[0], "mods-defaults", path)) return 32;

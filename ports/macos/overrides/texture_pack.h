@@ -53,6 +53,11 @@ unsigned black_TextureAlphaMax(const BlackTextureImage *image);
 /* Every level's alpha times to/from, clamped (BC2, BC3 and RGBA8). */
 void black_TextureScaleAlpha(BlackTextureImage *image, unsigned from, unsigned to);
 
+/* Largest side `limit`: block formats drop their top levels while a smaller one
+ * is there (a single-level file stays as it is), RGBA8 is halved by a box
+ * filter. 1 when the picture changed. */
+int black_TextureLimitSize(BlackTextureImage *image, unsigned limit);
+
 /* DDS: BC1, BC2, BC3, BC7 (also as DX10) and 32-bit RGBA; PNG through ImageIO.
  * 1 on success; black_TextureImageFree releases either. */
 int black_TextureDecodeDds(const uint8_t *data, size_t size, BlackTextureImage *image);
@@ -74,7 +79,7 @@ unsigned black_TexturePackMissing(const BlackTexturePack *pack);
 
 /* Renderer side, all on the GL thread. The setting and the pack in the
  * background: the value changes whenever the replaced textures should be made
- * again (on/off, pack ready); 0 while off or still being read. */
+ * again (on/off, pack ready, size limit); 0 while off or still being read. */
 unsigned black_TexturePackGeneration(void);
 /* The running pack's file for a texture, or -1 (also while off). */
 int black_TexturePackLookup(uint64_t key, unsigned width, unsigned height, unsigned format);

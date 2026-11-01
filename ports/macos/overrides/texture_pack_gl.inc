@@ -306,6 +306,7 @@ static void black_tp_poll(NV2AState *d)
             fprintf(stderr, "[TEXPACK] GPU formats: BC1-BC3 %s, BC7 %s\n",
                     black_tp.s3tc ? "yes" : "no", black_tp.bptc ? "yes" : "no");
         }
+        if (generation) fprintf(stderr, "[TEXPACK] size limit %u\n", generation);
         black_tp_summary(generation ? "on, remaking textures" : "off, remaking textures");
         black_tp.generation = generation;
         black_tp_flush(d);

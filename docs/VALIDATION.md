@@ -144,10 +144,19 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
   All runs stopped at their time limit without a forced kill. Window captures
   from the same frame show HD concrete, wood and floor art from the pack where
   the original textures were.
-- Coverage differs by mission: in the first mission the map named 111 of 191
-  eligible textures, in the second only 50 of about 1,210; the rest keep the
-  game's own textures. Each pack file stays on the GPU once used, so a level can
-  hold 300–800 MB of replacements.
+- Coverage differs by mission. The log's counts include every time the game
+  remakes a texture; counted once per texture, the map named 50 of 94 eligible
+  textures in a second-mission run. The rest keep the game's own textures.
+- **HD Texture Size** (Recomp Settings → Textures; 1024, 2048 or 4096, default
+  2048, saved as `texture_max_size`, applied live) caps the largest side: block
+  files lose their top levels on the loader thread, PNG pictures are halved.
+  Each pack file stays on the GPU once used, and unused ones are kept up to
+  1 GB, so a level holds 300–900 MB at 2048. The same 170-second first-mission
+  run held 448 MB at 2048 and 313 MB at 1024 (1,469 replacements from 128 file
+  reads, 30 FPS). In a manual fourth-mission session, reaching the level's next
+  part loaded 63 more files (621 to 880 MB) as the frame rate fell to about
+  12–16; the cause is not established and needs the same scene measured with
+  the option on, off and at 1024.
 - Not checked: the grenade crate after the alpha fix, missions after the second,
   long sessions, GPU memory on 8 GB Macs, and every mapped texture by eye. The
   map's pairs were matched by portingpete. Texture dumping is not implemented.

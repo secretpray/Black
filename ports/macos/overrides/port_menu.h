@@ -30,6 +30,9 @@ int black_SettingsSetFpsCounter(int enabled);
 /* HD texture replacement (texture_pack.h): off by default, live. */
 int black_SettingsTextureReplacement(void);
 int black_SettingsSetTextureReplacement(int enabled);
+/* Largest replacement side: 1024, 2048 (default) or 4096; live. */
+int black_SettingsTextureMaxSize(void);
+int black_SettingsSetTextureMaxSize(int size);
 int black_SettingsSaveFailed(void);
 int black_MenuIsOpen(void);
 void black_MenuSetOpen(int open);

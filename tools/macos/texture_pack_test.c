@@ -181,6 +181,25 @@ int main(void)
     if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 255) return 55;
     black_TextureImageFree(&image);
 
+    /* Size limit: block formats drop top levels, RGBA8 is halved, one level stays. */
+    at = dds(buf, 16, 16, 5, 0x35545844u, 0, 0, 0, 0); /* 16, 8, 4, 2, 1: 256+64+16+16+16 */
+    for (int i = 0; i < 368; ++i) buf[at + i] = (uint8_t)(i < 256 ? 1 : i < 320 ? 2 : 3);
+    if (!black_TextureDecodeDds(buf, at + 368, &image) || image.levels != 5 || black_TextureLimitSize(&image, 16) ||
+        !black_TextureLimitSize(&image, 8) || image.levels != 4 || image.width != 8 || image.height != 8 ||
+        image.level[0] != image.storage || image.level_size[0] != 64 || image.level[0][0] != 2 || image.level[1][0] != 3)
+        return 56;
+    black_TextureImageFree(&image);
+    at = dds(buf, 8, 8, 1, 0x35545844u, 0, 0, 0, 0);
+    memset(buf + at, 4, 64);
+    if (!black_TextureDecodeDds(buf, at + 64, &image) || black_TextureLimitSize(&image, 4) || image.width != 8) return 57;
+    black_TextureImageFree(&image);
+    at = dds(buf, 4, 2, 1, 0, 0xffu, 0xff0000u, 0, 0);
+    for (int i = 0; i < 32; ++i) buf[at + i] = (uint8_t)(i < 16 ? (i % 8 < 4 ? 10 : 30) : (i % 8 < 4 ? 50 : 70));
+    if (!black_TextureDecodeDds(buf, at + 32, &image) || !black_TextureLimitSize(&image, 2) || image.width != 2 ||
+        image.height != 1 || image.levels != 1 || image.level[0][0] != 40 || image.level[0][4] != 40)
+        return 58;
+    black_TextureImageFree(&image);
+
     /* A pack in PCSX2's layout, names in other case, macOS ._ files and a link. */
     char root[] = "/tmp/black-texture-pack.XXXXXX", path[1024];
     if (!mkdtemp(root)) return 16;

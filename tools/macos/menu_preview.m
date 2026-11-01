@@ -124,7 +124,16 @@ int main(int argc, char **argv)
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-ru.png"]);
         key(window, 12, @"q");
         snapshot(window, [output stringByAppendingPathComponent:@"mods-ru.png"]);
-        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to Texture Replacement */
+        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to HD Texture Size */
+        if (black_SettingsTextureMaxSize() != 2048) return 87;
+        key(window, 36, @"\r");
+        if (black_SettingsTextureMaxSize() != 4096) return 88;
+        key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
+        if (black_SettingsTextureMaxSize() != 1024) return 89;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-texture-size-ru.png"]);
+        key(window, 124, @"\uF703");
+        if (black_SettingsTextureMaxSize() != 2048) return 90;
+        key(window, 126, @"\uF700"); /* Texture Replacement */
         if (black_SettingsTextureReplacement()) return 84;
         key(window, 36, @"\r");
         if (!black_SettingsTextureReplacement()) return 85;

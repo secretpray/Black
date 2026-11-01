@@ -281,6 +281,62 @@ void black_TextureScaleAlpha(BlackTextureImage *image, unsigned from, unsigned t
     }
 }
 
+int black_TextureLimitSize(BlackTextureImage *image, unsigned limit)
+{
+    if (!limit || !image->levels || (image->width <= limit && image->height <= limit)) return 0;
+    if (image->format == BLACK_TEX_RGBA8) {
+        BlackTextureImage smaller;
+        unsigned w = image->width, h = image->height;
+        const uint8_t *src = image->level[0];
+        uint8_t *buffer = NULL;
+        while (w > limit || h > limit) {
+            unsigned nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
+            uint8_t *dst = malloc((size_t)nw * nh * 4);
+            if (!dst) { free(buffer); return 0; }
+            for (unsigned y = 0; y < nh; ++y)
+                for (unsigned x = 0; x < nw; ++x) {
+                    unsigned x0 = x * 2 < w ? x * 2 : w - 1, y0 = y * 2 < h ? y * 2 : h - 1;
+                    unsigned x1 = x0 + 1 < w ? x0 + 1 : x0, y1 = y0 + 1 < h ? y0 + 1 : y0;
+                    for (int c = 0; c < 4; ++c)
+                        dst[((size_t)y * nw + x) * 4 + c] = (uint8_t)((src[((size_t)y0 * w + x0) * 4 + c] +
+                            src[((size_t)y0 * w + x1) * 4 + c] + src[((size_t)y1 * w + x0) * 4 + c] +
+                            src[((size_t)y1 * w + x1) * 4 + c] + 2) / 4);
+                }
+            free(buffer);
+            buffer = dst; src = dst; w = nw; h = nh;
+        }
+        memset(&smaller, 0, sizeof smaller);
+        if (!image_alloc(&smaller, BLACK_TEX_RGBA8, w, h, 1)) { free(buffer); return 0; }
+        memcpy(smaller.storage, buffer, smaller.level_size[0]);
+        free(buffer);
+        smaller.alpha_max = image->alpha_max;
+        black_TextureImageFree(image);
+        *image = smaller;
+        return 1;
+    }
+    unsigned skip = 0;
+    while (skip + 1 < image->levels &&
+           ((image->width >> skip ? image->width >> skip : 1) > limit ||
+            (image->height >> skip ? image->height >> skip : 1) > limit))
+        skip++;
+    if (!skip) return 0;
+    /* Keep the levels at the start of the allocation (the renderer copies it whole). */
+    size_t offset = 0, kept = 0;
+    for (unsigned i = 0; i < skip; ++i) offset += image->level_size[i];
+    for (unsigned i = skip; i < image->levels; ++i) kept += image->level_size[i];
+    memmove(image->storage, (uint8_t *)image->storage + offset, kept);
+    size_t at = 0;
+    for (unsigned i = 0; i + skip < image->levels; ++i) {
+        image->level_size[i] = image->level_size[i + skip];
+        image->level[i] = (const uint8_t *)image->storage + at;
+        at += image->level_size[i];
+    }
+    image->levels -= skip;
+    image->width = image->width >> skip ? image->width >> skip : 1;
+    image->height = image->height >> skip ? image->height >> skip : 1;
+    return 1;
+}
+
 /* ImageIO's own bytes when they are already 8-bit RGB(A) without
  * premultiplication, so no colour is changed on the way. */
 static int png_raw(CGImageRef picture, uint8_t *out, size_t width, size_t height)
@@ -559,7 +615,10 @@ static void *loader(void *unused)
         pthread_mutex_unlock(&R.lock);
         BlackTextureImage image;
         int ok = black_TextureLoadFile(black_TexturePackPath(R.pack, file), &image);
-        if (ok) image.alpha_max = black_TextureAlphaMax(&image);
+        if (ok) {
+            black_TextureLimitSize(&image, (unsigned)black_SettingsTextureMaxSize());
+            image.alpha_max = black_TextureAlphaMax(&image);
+        }
         if (!ok)
             fprintf(stderr, "[TEXPACK] cannot read %s; the game's texture stays\n",
                     black_TexturePackPath(R.pack, file));
@@ -621,7 +680,8 @@ unsigned black_TexturePackGeneration(void)
 {
     if (!black_SettingsTextureReplacement()) return 0;
     pthread_once(&R.once, start);
-    return atomic_load_explicit(&R.ready, memory_order_acquire) == 1;
+    if (atomic_load_explicit(&R.ready, memory_order_acquire) != 1) return 0;
+    return (unsigned)black_SettingsTextureMaxSize();
 }
 
 int black_TexturePackLookup(uint64_t key, unsigned width, unsigned height, unsigned format)

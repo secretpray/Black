@@ -17,7 +17,9 @@
   each Xbox texture. Files load in the background, once each, and stay on the
   GPU; a missing or unreadable file keeps the game's own texture. The pack's
   PS2-scale alpha follows the game's own texture, so opaque surfaces stay
-  opaque and foliage keeps its cut-outs. The pack is not included.
+  opaque and foliage keeps its cut-outs. **HD Texture Size** (1024, 2048 or
+  4096, default 2048) caps the largest side to save memory. The pack is not
+  included.
 
 ## 0.2.0 — 2026-11-01
 
