@@ -14,8 +14,10 @@
   textures from your own copy of the PCSX2 "BLACK HD Reimagined" pack, placed
   as it is under `~/Library/Application Support/BLACK/Textures/replacement/`.
   portingpete's MIT-licensed map, shipped with the app, names the pack file for
-  each Xbox texture. Files load in the background; a missing or unreadable file
-  keeps the game's own texture. The pack is not included.
+  each Xbox texture. Files load in the background, once each, and stay on the
+  GPU; a missing or unreadable file keeps the game's own texture. The pack's
+  PS2-scale alpha follows the game's own texture, so opaque surfaces stay
+  opaque and foliage keeps its cut-outs. The pack is not included.
 
 ## 0.2.0 — 2026-11-01
 

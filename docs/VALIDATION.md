@@ -144,10 +144,14 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
   All runs stopped at their time limit without a forced kill. Window captures
   from the same frame show HD concrete, wood and floor art from the pack where
   the original textures were.
-- Not checked: other missions, long sessions, GPU memory on 8 GB Macs, and every
-  mapped texture by eye. The map's pairs were matched by portingpete. Texture
-  dumping is not implemented. The pack is never included in the repository or
-  in downloads.
+- Coverage differs by mission: in the first mission the map named 111 of 191
+  eligible textures, in the second only 50 of about 1,210; the rest keep the
+  game's own textures. Each pack file stays on the GPU once used, so a level can
+  hold 300–800 MB of replacements.
+- Not checked: the grenade crate after the alpha fix, missions after the second,
+  long sessions, GPU memory on 8 GB Macs, and every mapped texture by eye. The
+  map's pairs were matched by portingpete. Texture dumping is not implemented.
+  The pack is never included in the repository or in downloads.
 
 ## Open work
 
