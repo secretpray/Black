@@ -10,6 +10,12 @@
   language, help lines in Russian; the game itself has no Russian text.
 - Quitting no longer clicks in the speakers: game audio fades out over 20 ms
   and the device closes before the app exits.
+- **Texture Replacement** in Recomp Settings → Textures, off by default: HD
+  textures from your own copy of the PCSX2 "BLACK HD Reimagined" pack, placed
+  as it is under `~/Library/Application Support/BLACK/Textures/replacement/`.
+  portingpete's MIT-licensed map, shipped with the app, names the pack file for
+  each Xbox texture. Files load in the background; a missing or unreadable file
+  keeps the game's own texture. The pack is not included.
 
 ## 0.2.0 — 2026-11-01
 

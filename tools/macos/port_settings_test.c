@@ -28,6 +28,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "language")) return black_SettingsGameLanguage() != BLACK_LANG_GERMAN ||
             black_SettingsMenuLanguage() != 6;
         if (!strcmp(argv[1], "fps")) return !black_SettingsFpsCounter() || black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "textures")) return !black_SettingsTextureReplacement() || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "mods-defaults")) {
             for (int i = 0; i < BLACK_MOD_COUNT; ++i) if (black_SettingsMod(i)) return 1;
             return black_SettingsSkipIntros() || black_SettingsSkipMissionIntros();
@@ -119,6 +120,10 @@ int main(int argc, char **argv)
         child(argv[0], "language", path) || !black_SettingsSetGameLanguage(0) || !black_SettingsSetMenuLanguage(0)) return 34;
     if (!black_SettingsSetFpsCounter(1) || child(argv[0], "fps", path) || !black_SettingsSetFpsCounter(0) ||
         !child(argv[0], "fps", path)) return 33;
+    /* Texture replacement is off until chosen, then saved like the others. */
+    if (child(argv[0], "textures", path) != 1 || !black_SettingsSetTextureReplacement(1) ||
+        child(argv[0], "textures", path) || !black_SettingsSetTextureReplacement(0) ||
+        !child(argv[0], "textures", path)) return 35;
     if (!black_SettingsSetMod(BLACK_MOD_GOD_MODE, 1) || !black_SettingsSetMod(BLACK_MOD_BFG, 5) ||
         black_SettingsSetMod(BLACK_MOD_COUNT, 1) || black_SettingsSetMod(-1, 1) || child(argv[0], "mods", path)) return 31;
     if (!black_SettingsSetSkipIntros(1) || !black_SettingsResetMods() || child(argv[0], "mods-defaults", path)) return 32;

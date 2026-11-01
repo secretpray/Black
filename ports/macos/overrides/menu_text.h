@@ -89,6 +89,7 @@ static const BlackMenuText black_menu_text[] = {
     {"LIVE. OFF KEEPS THE GAME'S ORIGINAL AIM RULES. CONTROLLER IS SEPARATE.", {"", "", "", "", "Сразу. Выкл. — исходные правила игры. Геймпад настраивается отдельно."}},
     {"LIVE. OFF SKIPS BOTH. ASSISTANCE IS DISABLED WITH KEYBOARD INPUT.", {"", "", "", "", "Сразу. Выкл. отключает оба. С клавиатуры помощь не работает."}},
     {"LIVE. ORIGINAL: 100%. ZERO IS SILENT. MAXIMUM: 200%.", {"", "", "", "", "Сразу. Исходная: 100%. Ноль — без вибрации. Максимум: 200%."}},
+    {"LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.", {"", "", "", "", "Сразу. Файлы находит таблица portingpete; без файла остаётся текстура игры."}},
     {"LIVE. REMAINING TRAVEL IS RESCALED TO FULL INPUT.", {"", "", "", "", "Сразу. Оставшийся ход растягивается до полного."}},
     {"LIVE. RUSSIAN IS FOR THIS PANEL ONLY: THE GAME HAS NO RUSSIAN TEXT.", {"", "", "", "", "Сразу. Русский — только для этой панели: в игре нет русского текста."}},
     {"LIVE. SUPPORT DEPENDS ON THE CONTROLLER AND DRIVER.", {"", "", "", "", "Сразу. Поддержка зависит от геймпада и драйвера."}},
@@ -178,6 +179,8 @@ static const BlackMenuText black_menu_text[] = {
     {"STRAFE LEFT", {"Pas latéral à gauche", "Seitwärts nach links", "Desplazamiento lateral a la izquierda", "Spostamento laterale a sinistra", "Шаг влево"}},
     {"STRAFE RIGHT", {"Pas latéral à droite", "Seitwärts nach rechts", "Desplazamiento lateral a la derecha", "Spostamento laterale a destra", "Шаг вправо"}},
     {"TEXT AND MENUS OF THE GAME ITSELF, FROM YOUR DISC'S STRING BANKS.", {"", "", "", "", "Текст и меню самой игры из языковых файлов вашего диска."}},
+    {"TEXTURE REPLACEMENT", {"Remplacement des textures", "Texturersetzung", "Reemplazo de texturas", "Sostituzione delle texture", "Замена текстур"}},
+    {"TEXTURES", {"Textures", "Texturen", "Texturas", "Texture", "Текстуры"}},
     {"THE GAME'S SILVER WEAPONS REWARD: MAGAZINES REFILL, 999 SHOWN.", {"", "", "", "", "Награда игры «серебряное оружие»: магазин пополняется, показано 999."}},
     {"THIS DISC HAS ENGLISH ONLY. THE EUROPEAN DISC ADDS FOUR LANGUAGES.", {"", "", "", "", "На этом диске только английский. На европейском есть ещё четыре языка."}},
     {"THIS GAME REVISION HAS NO VERIFIED ADDRESSES. MODS STAY OFF.", {"", "", "", "", "Для этой версии игры нет проверенных адресов. Моды выключены."}},
@@ -196,5 +199,6 @@ static const BlackMenuText black_menu_text[] = {
     {"WAIT", {"Patienter", "Warten", "Espera", "Attendi", "Ждите"}},
     {"WALK", {"Marcher", "Gehen", "Caminar", "Cammina", "Шаг"}},
     {"WALK SPEED", {"Vitesse de marche", "Gehgeschwindigkeit", "Velocidad al caminar", "Velocità di camminata", "Скорость шага"}},
+    {"YOUR BLACK HD REIMAGINED PACK IN APPLICATION SUPPORT/BLACK/TEXTURES/REPLACEMENT.", {"", "", "", "", "Ваш пак BLACK HD Reimagined в Application Support/BLACK/Textures/replacement."}},
 };
 #endif

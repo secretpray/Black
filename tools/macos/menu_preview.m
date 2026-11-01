@@ -124,7 +124,14 @@ int main(int argc, char **argv)
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-ru.png"]);
         key(window, 12, @"q");
         snapshot(window, [output stringByAppendingPathComponent:@"mods-ru.png"]);
-        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to Menu Language */
+        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to Texture Replacement */
+        if (black_SettingsTextureReplacement()) return 84;
+        key(window, 36, @"\r");
+        if (!black_SettingsTextureReplacement()) return 85;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-textures-ru.png"]);
+        key(window, 123, @"\uF702");
+        if (black_SettingsTextureReplacement()) return 86;
+        key(window, 126, @"\uF700"); /* Menu Language */
         key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
         if (black_SettingsMenuLanguage() != 4 || black_SettingsRenderScale() != 2) return 83;
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-es.png"]);

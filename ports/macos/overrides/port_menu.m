@@ -194,7 +194,7 @@ static NSString *T(NSString *english)
 }
 
 /* TGP's centered settings panel: supported recomp groups and controller page. */
-enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG,
+enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
        ROW_HID, ROW_MEASURE, ROW_RESET,
@@ -205,7 +205,7 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, 
 enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 198 };
 static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER", @"MODS"};
 static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X, ROW_INTROS};
-static const int tab_rows[MENU_TABS] = {8, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
+static const int tab_rows[MENU_TABS] = {9, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
 static int tab_of(int row) { return row >= ROW_INTROS ? 3 : row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
 static int is_binding(int row) { return row >= ROW_BIND_FIRST && row <= ROW_BIND_LAST; }
 static int group_of(int row)
@@ -218,6 +218,7 @@ static int group_of(int row)
     if (row <= ROW_FPS) return 0;
     if (row <= ROW_AF) return 1;
     if (row <= ROW_MENU_LANG) return 2;
+    if (row == ROW_TEXTURES) return 14;
     if (row <= ROW_INVERT_X) return 3;
     if (row <= ROW_AIM_ASSIST) return 4;
     if (row <= ROW_TRIGGER_DZ) return 5;
@@ -227,7 +228,7 @@ static int group_of(int row)
 }
 static NSString *group_name(int group)
 { return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS",
-    @"FILMS", @"PLAYER", @"UNLOCKS"])[group]; }
+    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES"])[group]; }
 static int visible_start(int selected)
 { return MAX(tab_first[tab_of(selected)], selected - MENU_TAB_MAX_ROWS + 1); }
 static CGFloat row_y(int row, int selected)
@@ -242,7 +243,7 @@ static CGFloat row_y(int row, int selected)
 }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement",
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
@@ -368,6 +369,7 @@ static NSTimeInterval transition, last_draw;
             @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
             @"Text of the game itself from your disc's string banks. Applied next launch.",
             @"Language of this settings panel. Auto follows the game language. Live.",
+            @"HD textures from your own BLACK HD Reimagined pack, found through portingpete's map. Live.",
             @"Horizontal look speed after the game's stick curve. Live.", @"Vertical look speed. Live.",
             @"Horizontal look speed while aiming or scoped. Live.", @"Vertical look speed while aiming or scoped. Live.",
             @"Invert the controller's horizontal look axis. Live. Invert Y is in the game's own options.",
@@ -441,6 +443,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
     [rows[ROW_MENU_LANG] setAccessibilityValue:menu_language_names[black_SettingsMenuLanguage()].capitalizedString];
     [rows[ROW_FPS] setAccessibilityValue:black_SettingsFpsCounter() ? @"On" : @"Off"];
+    [rows[ROW_TEXTURES] setAccessibilityValue:black_SettingsTextureReplacement() ? @"On" : @"Off"];
     [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
     [rows[ROW_AA] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", aa_name(black_SettingsAntiAliasing())]];
     [rows[ROW_AF] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", af_name(black_SettingsAniso())]];
@@ -476,6 +479,7 @@ static NSTimeInterval transition, last_draw;
     else {
         black_SettingsSetRenderScale(2); black_SettingsSetUpscaler(1); black_SettingsSetFov(70);
         black_SettingsSetAntiAliasing(2); black_SettingsSetAniso(0); black_SettingsSetFpsCounter(0);
+        black_SettingsSetTextureReplacement(0);
     }
     changed = CACurrentMediaTime(); [self refreshValues]; [self setNeedsDisplay:YES];
 }
@@ -635,6 +639,10 @@ static NSTimeInterval transition, last_draw;
         int current = black_SettingsFpsCounter(), value = cycle ? !current : direction > 0;
         if (value == current) return;
         black_SettingsSetFpsCounter(value);
+    } else if (selected == ROW_TEXTURES) {
+        int current = black_SettingsTextureReplacement(), value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        black_SettingsSetTextureReplacement(value);
     } else if (selected == ROW_AA) {
         int current = black_SettingsAntiAliasing(), value = current + direction;
         if (cycle && value > 2) value = 0;
@@ -747,6 +755,7 @@ static NSTimeInterval transition, last_draw;
             index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
             index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
             index == ROW_FPS ? (black_SettingsFpsCounter() ? @"ON" : @"OFF") :
+            index == ROW_TEXTURES ? (black_SettingsTextureReplacement() ? @"ON" : @"OFF") :
             index == ROW_GAME_LANG ? game_language_names[black_SettingsGameLanguage()] :
             index == ROW_MENU_LANG ? menu_language_names[black_SettingsMenuLanguage()] :
             index == ROW_AA ? aa_name(black_SettingsAntiAliasing()) :
@@ -833,6 +842,9 @@ static NSTimeInterval transition, last_draw;
     } else if (selected == ROW_MENU_LANG) {
         help = @"LANGUAGE OF THIS SETTINGS PANEL. AUTO FOLLOWS THE GAME LANGUAGE.";
         detail = @"LIVE. RUSSIAN IS FOR THIS PANEL ONLY: THE GAME HAS NO RUSSIAN TEXT.";
+    } else if (selected == ROW_TEXTURES) {
+        help = @"YOUR BLACK HD REIMAGINED PACK IN APPLICATION SUPPORT/BLACK/TEXTURES/REPLACEMENT.";
+        detail = @"LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.";
     } else if (selected == ROW_FPS) {
         help = @"DISPLAYS THE FRAME RATE ON SCREEN, IN THE GAME'S OWN FONT.";
         detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN.";

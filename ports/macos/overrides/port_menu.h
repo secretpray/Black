@@ -27,6 +27,9 @@ int black_SettingsMenuLanguage(void);
 int black_SettingsSetMenuLanguage(int language);
 int black_SettingsFpsCounter(void);
 int black_SettingsSetFpsCounter(int enabled);
+/* HD texture replacement (texture_pack.h): off by default, live. */
+int black_SettingsTextureReplacement(void);
+int black_SettingsSetTextureReplacement(int enabled);
 int black_SettingsSaveFailed(void);
 int black_MenuIsOpen(void);
 void black_MenuSetOpen(int open);

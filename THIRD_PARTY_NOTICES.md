@@ -45,6 +45,13 @@ are adapted from the MIT-licensed
 [portingpete/Black-2006-Recomp manual source](https://github.com/portingpete/Black-2006-Recomp/blob/2041e5a97f1300dca128d51fc06e1ae32cea9f21/src/recomp_manual.c).
 Copyright (c) 2026 portingpete and sp00nz; the complete
 [MIT permission notice](ports/macos/licenses/portingpete-MIT.txt) is retained.
+`resources/textures/black-hd-reimagined.map`, shipped in the app's Resources,
+is portingpete's map from Xbox textures to the files of the PCSX2
+"BLACK HD Reimagined" pack, copied unchanged from
+[the same commit](https://github.com/portingpete/Black-2006-Recomp/blob/2041e5a97f1300dca128d51fc06e1ae32cea9f21/textures/black-hd-reimagined.map)
+under that MIT notice; the texture key in `texture_pack.c` follows its
+`third_party/xboxrecomp/src/nv2a/kelvin/kelvin_gpu.c`. The pack itself is the
+work of its authors and is neither included nor redistributed.
 The nonblocking POSIX HAL dispatch guard uses the existing pinned runtime lock;
 its ownership policy follows the runtime donor above without replacing its ABI.
 The optional real DSP engine reuses the pinned runtime's xemu DSP adapter

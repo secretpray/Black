@@ -83,6 +83,7 @@ RU = {
     "RENDER SCALE": "Масштаб рендера", "UPSCALING": "Апскейлинг", "FIELD OF VIEW": "Угол обзора",
     "FPS COUNTER": "Счётчик FPS", "ANTI-ALIASING": "Сглаживание", "ANISOTROPIC FILTERING": "Анизотропная фильтрация",
     "GAME LANGUAGE": "Язык игры", "MENU LANGUAGE": "Язык меню",
+    "TEXTURES": "Текстуры", "TEXTURE REPLACEMENT": "Замена текстур",
     "HORIZONTAL SENSITIVITY": "Чувствительность по горизонтали", "VERTICAL SENSITIVITY": "Чувствительность по вертикали",
     "AIM HORIZONTAL SENSITIVITY": "Прицел: по горизонтали", "AIM VERTICAL SENSITIVITY": "Прицел: по вертикали",
     "INVERT X AXIS": "Инверсия оси X", "HOLD TO AIM": "Прицел при удержании", "AIM ASSIST": "Помощь в прицеливании",
@@ -192,6 +193,8 @@ RU = {
     "THIS DISC HAS ENGLISH ONLY. THE EUROPEAN DISC ADDS FOUR LANGUAGES.": "На этом диске только английский. На европейском есть ещё четыре языка.",
     "LANGUAGE OF THIS SETTINGS PANEL. AUTO FOLLOWS THE GAME LANGUAGE.": "Язык этой панели настроек. «Авто» — как язык игры.",
     "LIVE. RUSSIAN IS FOR THIS PANEL ONLY: THE GAME HAS NO RUSSIAN TEXT.": "Сразу. Русский — только для этой панели: в игре нет русского текста.",
+    "YOUR BLACK HD REIMAGINED PACK IN APPLICATION SUPPORT/BLACK/TEXTURES/REPLACEMENT.": "Ваш пак BLACK HD Reimagined в Application Support/BLACK/Textures/replacement.",
+    "LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.": "Сразу. Файлы находит таблица portingpete; без файла остаётся текстура игры.",
     "RAW %+.0f / %+.0f%%": "Сырое %+.0f / %+.0f%%", "OUT %+.0f / %+.0f%%": "Выход %+.0f / %+.0f%%",
 }
 

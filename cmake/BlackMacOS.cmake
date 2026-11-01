@@ -44,6 +44,12 @@ add_library(black-port-ui STATIC
 target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
+# HD texture replacement: map, pack index, DDS/PNG and loader threads; the
+# renderer side is texture_pack_gl.inc in the texture.c overlay.
+add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_pack.c")
+target_compile_options(black-texture-pack PRIVATE -Wall -Wextra)
+target_link_libraries(black-texture-pack PUBLIC black-port-ui
+    "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackRuntimeOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackAPUOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackInterruptOverlay.cmake")
@@ -319,6 +325,11 @@ add_test(NAME macos_metalfx COMMAND black-upscale-test)
 set_tests_properties(macos_metalfx PROPERTIES SKIP_RETURN_CODE 77)
 add_executable(black-texture-filter tools/macos/texture_filter_test.c)
 add_test(NAME macos_texture_filter COMMAND black-texture-filter)
+add_executable(black-texture-pack-test tools/macos/texture_pack_test.c)
+target_link_libraries(black-texture-pack-test PRIVATE black-texture-pack)
+target_compile_definitions(black-texture-pack-test PRIVATE
+    BLACK_TEXTURE_MAP_FILE="${CMAKE_SOURCE_DIR}/resources/textures/black-hd-reimagined.map")
+add_test(NAME macos_texture_pack COMMAND black-texture-pack-test)
 # The upstream test links platform alone, but ReadFile now calls the dirty
 # tracker. Link the real implementation, rather than replacing it with a stub.
 add_executable(black-guest-layout

@@ -86,6 +86,49 @@ the installed game has the bank. The game then loads the bank itself.
   translations; their help lines stay English.
 - 102 CTest and 30 Python checks passed, including language persistence.
 
+## HD texture replacement (in development)
+
+Not in the 0.2.0 download. **Recomp Settings → Textures → Texture Replacement**
+(off by default, saved as `texture_replacement` in settings.ini, applied live)
+replaces game textures with files from your own copy of the PCSX2
+"BLACK HD Reimagined" pack. Its files are named by PS2 hashes; portingpete's
+map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
+
+- The key follows portingpete's renderer exactly: 64-bit FNV-1a with each
+  little-endian 64-bit word of the top level, as stored in guest memory, as one
+  step (DXT unswizzled as on Xbox, the I8 palette texture still swizzled, the
+  palette itself excluded). Width, height and the NV2A colour format are
+  separate lookup fields, not hashed.
+- The pinned xemu `gl/texture.c` is patched at configure time through four
+  checked anchors; the submodule is unchanged. A texture is first made from the
+  game's data, its pack file is read and decoded on a loader thread, and a new
+  GL texture takes its place only after an error-free upload. A missing file,
+  a decoding failure, an unsupported format or a GL error keeps the original.
+- Pack files are found by bare name anywhere under
+  `~/Library/Application Support/BLACK/Textures/replacement/`, also through a
+  folder link to another volume. DDS BC1–BC3/BC7 upload compressed; PNG is
+  decoded through ImageIO without premultiplication and gets a mip chain.
+- A new unit test checks the key against reference values, map parsing, the
+  shipped map (1161 entries, 1007 files), DDS/PNG decoding and name lookup in a
+  PCSX2-style folder layout. **103 CTest checks**, **30 Python checks** and the
+  native menu preview, including the new row in Russian, passed.
+- The user's copy of the pack (1324 files, all 1007 mapped files present), in
+  three bounded, muted, scripted first-mission runs with the same input script:
+  - Off: no texture-pack activity in the log.
+  - On: of 191 eligible textures, 111 were replaced and 80 had no map entry;
+    no failures; 382 MB of HD textures resident after loading the level. The
+    game's own 30.0 FPS was unchanged. The single level-load frame took 211 ms
+    (181 ms with the option off).
+  - On, with an empty folder: the log reports that replacement stays off and the
+    level loads normally.
+  All three stopped at their time limit without a forced kill. Window captures
+  from the same frame show HD concrete, wood and floor art from the pack where
+  the original textures were.
+- Not checked: other missions, long sessions, GPU memory on 8 GB Macs, and every
+  mapped texture by eye. The map's pairs were matched by portingpete. Texture
+  dumping is not implemented. The pack is never included in the repository or
+  in downloads.
+
 ## Open work
 
 - Longer combat/death/retry stress, additional missions and a complete playthrough.

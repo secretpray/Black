@@ -40,6 +40,16 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
         black_trace_replace(content "        glTexParameterf(binding->gl_target, GL_TEXTURE_MAX_ANISOTROPY_EXT,\n                        max_anisotropy);"
             "        glTexParameterf(binding->gl_target, GL_TEXTURE_MAX_ANISOTROPY_EXT,\n                        black_anisotropy(max_anisotropy));")
         string(PREPEND content "#include \"texture_filter.h\"\n")
+        # HD texture replacement (texture_pack_gl.inc): checked once per draw,
+        # tried for each texture made from guest memory, forgotten on destroy.
+        black_trace_replace(content "static void texture_binding_destroy(gpointer data);\n"
+            "static void texture_binding_destroy(gpointer data);\n#include \"texture_pack_gl.inc\"\n")
+        black_trace_replace(content "    NV2A_GL_DGROUP_BEGIN(\"%s\", __func__);\n\n    for (i=0; i<NV2A_MAX_TEXTURES; i++) {"
+            "    NV2A_GL_DGROUP_BEGIN(\"%s\", __func__);\n    black_tp_poll(d);\n\n    for (i=0; i<NV2A_MAX_TEXTURES; i++) {")
+        black_trace_replace(content "            key_out->binding = generate_texture(state, texture_data, palette_data);\n"
+            "            key_out->binding = generate_texture(state, texture_data, palette_data);\n            if (!surf_to_tex)\n                black_tp_created(key_out->binding, state, texture_data, length);\n")
+        black_trace_replace(content "        glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);"
+            "        black_tp_forget(binding);\n        glDeleteTextures(1, &binding->gl_texture);\n        g_free(binding);")
     else()
         black_trace_replace(content "void pgraph_gl_bind_shaders(PGRAPHState *pg)\n{"
             "void pgraph_gl_bind_shaders(PGRAPHState *pg)\n{\n#ifdef XBOXRECOMP_ANGLE\n    /* GLES has no GL_BGRA vertex size. The existing GLSL path must undo\n     * D3DCOLOR's BGRA byte order before both FF and programmable shaders. */\n    pg->swizzle_attrs = 0;\n    for (unsigned i = 0; i < NV2A_VERTEXSHADER_ATTRIBUTES; ++i)\n        if (pg->vertex_attributes[i].count &&\n            pg->vertex_attributes[i].format == NV097_SET_VERTEX_DATA_ARRAY_FORMAT_TYPE_UB_D3D)\n            pg->swizzle_attrs |= 1u << i;\n#endif")
@@ -63,7 +73,7 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
     target_include_directories(xemu_nv2a PRIVATE "${source_dir}" "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${trace_root}/${relative}")
 endforeach()
-target_link_libraries(xemu_nv2a PUBLIC black-port-ui)
+target_link_libraries(xemu_nv2a PUBLIC black-port-ui black-texture-pack)
 
 file(READ "${BLACK_MAC_RUNTIME}/src/video/fb_present_posix.m" presenter)
 black_trace_replace(presenter "            if (s_hr_texture && now_ms() - s_hr_up_ms < 250)\n                source = s_hr_texture;"
