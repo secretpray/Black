@@ -23,6 +23,9 @@
   opaque and foliage keeps its cut-outs. **HD Texture Size** (1024, 2048 or
   4096, default 2048) caps the largest side to save memory. The pack is not
   included.
+- `tools/macos/russian_font.py` rebuilds the game font of a Russian fan
+  translation you own: real digits 3, 4 and 6, the missing Й Э Щ Ъ Ё, and a З
+  that no longer reads as Э. No translation or font is included.
 
 ## 0.2.0 — 2026-11-01
 

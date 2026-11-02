@@ -60,6 +60,22 @@ Bound automated runs and retain their unique log/outcome. A timeout is a stop
 condition, not gameplay acceptance. Muted/dummy audio does not qualify real audio;
 scripted input does not qualify a physical controller or rumble/hotplug.
 
+## Russian game font
+
+Russian fan translations paint Cyrillic over the Latin and digit cells of
+`language/fonts/Big.bin` and `Small.bin`, so they lack Й Э Щ Ъ Ё and draw З Ч Б
+in place of 3 4 6. `russian_font.py` rebuilds such a font from your own copy,
+taking the digits from the game's English font, and keeps the file layout:
+
+```sh
+python3 tools/macos/russian_font.py <translation>/language/fonts \
+  out/macos/normalized-game/language/fonts out/macos/russian-font
+```
+
+Text for the rebuilt font must use its cells (`russian_font.encode`): Й Э Щ Ъ Ё
+and the moved З Ч Б sit on lowercase `j e w q y z c b`. No translation or font
+is part of this repository.
+
 ## App and DMG
 
 ```sh
