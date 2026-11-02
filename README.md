@@ -10,7 +10,9 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.2.0 is an experimental macOS release** that adds a Mods page and an FPS counter.
+> **0.3.0 is an experimental macOS release** that adds optional HD texture replacement,
+> game and menu languages, and new Mods (Infinite Ammo, Rapid Fire, No Recoil,
+> One-Hit Kill, Game Speed).
 > Combat, menus and profile saving have been exercised on the development Mac. A complete
 > playthrough, all runtime races, audio quality and controller calibration are not yet
 > qualified. [Validation](docs/VALIDATION.md).
@@ -35,11 +37,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.2.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.2.0)**
+**[BLACK 0.3.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.3.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.2.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.3.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -78,9 +80,11 @@ PS2 and Xbox 360 files are not supported.
 - A TGP-inspired panel with **Recomp Settings**, **Mouse and Keyboard**,
   **Controller** and **Mods** pages, using fonts from your own game.
 - An optional **FPS counter** showing the game's own frame rate.
-- In development, after 0.2.0: optional **HD texture replacement** from your own
-  copy of the PCSX2 "BLACK HD Reimagined" pack, through portingpete's map.
-- In development, after 0.2.0: game text in English, French, German, Spanish or
+- Optional **HD texture replacement** from your own copy of the PCSX2 "BLACK HD
+  Reimagined" pack, through portingpete's map: put the pack's files under
+  `~/Library/Application Support/BLACK/Textures/replacement/` and turn on
+  **Recomp Settings → Textures**. The pack is not included.
+- Game text in English, French, German, Spanish or
   Italian from your disc, and the settings panel in those languages or Russian.
 - Separate stick/trigger deadzones, explicit drift measurement, live axes,
   normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.

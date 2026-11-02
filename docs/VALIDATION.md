@@ -1,6 +1,6 @@
 # Release validation and current limits
 
-Candidate: **BLACK 0.2.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Candidate: **BLACK 0.3.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
 ## Evidence
@@ -69,7 +69,7 @@ revision. An unknown executable shows `MODS OFF` and nothing is written.
   Always Silenced and the BFG were not exercised in combat. The trainer's weapon
   swap and faster game speed were not ported.
 
-## Mods from TGP482/BLACK-XBERecomp PR 141 (in development)
+## Mods from TGP482/BLACK-XBERecomp PR 141 (0.3.0)
 
 PR 141 (ported there from Black-Android) adds cheats as TGP C++ hooks. The same
 USA addresses are used here through the native-C overlay: the bullet hit
@@ -94,9 +94,9 @@ spawner were not ported (ImGui drawing, other levels' assets).
 - Not checked: other weapons and missions, Rapid Fire with the under-barrel
   launcher, Game Speed above 100% in heavy scenes.
 
-## Languages (in development)
+## Languages (0.3.0)
 
-Not in the 0.2.0 download. The USA executable picks its string bank
+The USA executable picks its string bank
 `Language/Strings/Main%s.bin` from a suffix table indexed by a language word
 that its start-up fixes at US. The build overlay replaces that constant (two
 verified stores at 0x1F8100) with the saved Game Language, offered only when
@@ -111,9 +111,9 @@ the installed game has the bank. The game then loads the bank itself.
   translations; their help lines stay English.
 - 102 CTest and 30 Python checks passed, including language persistence.
 
-## HD texture replacement (in development)
+## HD texture replacement (0.3.0)
 
-Not in the 0.2.0 download. **Recomp Settings → Textures → Texture Replacement**
+**Recomp Settings → Textures → Texture Replacement**
 (off by default, saved as `texture_replacement` in settings.ini, applied live)
 replaces game textures with files from your own copy of the PCSX2
 "BLACK HD Reimagined" pack. Its files are named by PS2 hashes; portingpete's
