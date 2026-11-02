@@ -103,15 +103,23 @@ The **Mods** page collects cheats and modifications, all **off by default**:
 | Group | Mod | What it does |
 | --- | --- | --- |
 | Films | Skip Intro Movies / Skip Mission Intros | Skips the startup films and mission briefings |
-| Player | God Mode | Refills your health every frame; one hit above the maximum can still kill |
+| Player | God Mode | Refills your health and holds the game's own invulnerability flag, so no hit gets through |
 | Player | Infinite Medkits / Infinite Grenades | Keeps three medkits (the game's limit) and nine grenades |
-| Player | Infinite Ammo (Silver Weapons) | The game's own Silver Weapons reward: magazines refill, 999 shown |
+| Player | Infinite Ammo | Your magazine and reserve never go down, with any weapon you hold |
+| Player | Silver Weapons | The game's own Silver Weapons reward: magazines refill, 999 shown |
+| Player | Rapid Fire | Your weapon fires 2, 3 or 4 times as fast (at most one shot a frame) |
+| Player | No Recoil | Your shots no longer kick the view up |
+| Player | One-Hit Kill | Any hit of your bullets kills a soldier |
+| Player | Game Speed | 50%, 75%, 150% or 200% of the game's pace in play; menus and films keep theirs |
 | Player | Always Silenced | Fits a silencer everywhere the old +9 trainer did (experimental) |
 | Unlocks | Unlock All Missions / Unlock Black Ops Difficulty | Opens every mission and the Black Ops difficulty |
 | Unlocks | M16A2 at Mission Start | The Black Ops reward rifle as your starting weapon |
-| Unlocks | BFG (M249) Code | The same as a `XXXX-XXXX-XXXX-XXXX` profile name: an M249 in the first mission |
+| Unlocks | M249 in the First Mission | The developers' code, the same as a `XXXX-XXXX-XXXX-XXXX` profile name: an M249 with 600 rounds instead of the first mission's rifle; the gun has no texture there |
 
-Infinite Ammo and the M16A2 apply from the next mission start or restart. Unlocks are
+Rapid Fire, One-Hit Kill, No Recoil, Game Speed and the stronger God Mode
+come from [TGP482/BLACK-XBERecomp#141](https://github.com/TGP482/BLACK-XBERecomp/pull/141)
+(ported there from Black-Android). Silver Weapons and the M16A2 apply from the
+next mission start or restart. Unlocks are
 saved into your profile, and turning a mod off never relocks earned progress.
 Addresses are kept per game revision; the page shows the detected one, and an
 unrecognised executable leaves every mod off.

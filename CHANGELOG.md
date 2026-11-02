@@ -23,6 +23,12 @@
   opaque and foliage keeps its cut-outs. **HD Texture Size** (1024, 2048 or
   4096, default 2048) caps the largest side to save memory. The pack is not
   included.
+- Mods page: **Infinite Ammo** for any weapon you hold, **Rapid Fire** (2-4X),
+  **No Recoil**, **One-Hit Kill** and **Game Speed** (50-200%), from
+  TGP482/BLACK-XBERecomp PR 141. God Mode now also holds the game's own
+  invulnerability flag, so a single huge hit no longer kills. The old
+  "Infinite Ammo (Silver Weapons)" is now **Silver Weapons**, and the "BFG
+  (M249) Code" is **M249 in the First Mission**, which is all it does.
 - `tools/macos/russian_font.py` rebuilds the game font of a Russian fan
   translation you own: real digits 3, 4 and 6, the missing Й Э Щ Ъ Ё, and a З
   that no longer reads as Э. No translation or font is included.

@@ -64,10 +64,11 @@ int black_SettingsAimAssist(void);
 int black_SettingsSetAimAssist(int enabled);
 int black_ControllerAimAssist(void);
 void black_MenuPollHost(void);
-/* Mods page flags (game_mods.h order), live and saved. The game reports the
- * XBE revision it found; "DETECTING" until then. */
+/* Mods page values (game_mods.h order), live and saved: 0 off, 1 on, or a
+ * level up to black_mod_info[].levels. The game reports the XBE revision it
+ * found; "DETECTING" until then. */
 int black_SettingsMod(int mod);
-int black_SettingsSetMod(int mod, int enabled);
+int black_SettingsSetMod(int mod, int value);
 int black_SettingsResetMods(void);
 void black_ModsSetRevision(const char *name, int supported);
 const char *black_ModsRevision(void);

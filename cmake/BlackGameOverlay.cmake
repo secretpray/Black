@@ -6,7 +6,9 @@ set(BLACK_RENAMED
     "sub_000D99A0|black_Original2DBegin" "sub_000D3740|black_Original2DEnd"
     "sub_000D6C00|black_OriginalQuads" "sub_000D6AA0|black_OriginalSolidQuads"
     "sub_000D6850|black_OriginalStrip" "sub_001217C0|black_OriginalFilmDraw"
-    "sub_000DA4B0|black_OriginalListDraw")
+    "sub_000DA4B0|black_OriginalListDraw"
+    # Mods page (ports/macos/overrides/game_mods.c): bullet hit, weapon update
+    "sub_001E74B0|black_OriginalBulletHit" "sub_001EEFD0|black_OriginalWeaponUpdate")
 foreach(pair IN LISTS BLACK_RENAMED)
     string(REPLACE "|" ";" symbols "${pair}")
     list(GET symbols 0 old)
@@ -19,7 +21,7 @@ set(BLACK_FOUND_STICK_LOOK 0)
 set(BLACK_FOUND_MOUSE_LOOK 0)
 set(BLACK_FOUND_FLASH_MENU 0)
 set(BLACK_FOUND_FLASH_NAME 0)
-foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER)
+foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER MOD_RECOIL)
     set(BLACK_FOUND_${point} 0)
 endforeach()
 set(BLACK_FOUND_LANGUAGE 0)
@@ -84,9 +86,14 @@ foreach(source IN LISTS BLACK_GENERATED)
         endif()
     endforeach()
     # Mods page (ports/macos/overrides/game_mods.c): the spawn point after the
-    # title derived silver/M16A2 from progress, and the +9 trainer's silencer point.
-    foreach(point MOD_SPAWN MOD_SILENCER)
-        if(point STREQUAL "MOD_SPAWN")
+    # title derived silver/M16A2 from progress, the +9 trainer's silencer point
+    # and TGP's RecoilDecay point 0x1E5FB7 (the view kick's decay factor).
+    foreach(point MOD_SPAWN MOD_SILENCER MOD_RECOIL)
+        if(point STREQUAL "MOD_RECOIL")
+            set(mod_anchor "    xmm0 = XMM_SCALAR(MEMF(ebx + 0x4C8)); /* movss */\n    xmm0.f[0] = xmm0.f[0] * MEMF(ebx + 0x4C4); /* mulss */\n")
+            set(mod_insert "    xmm0 = XMM_SCALAR(MEMF(ebx + 0x4C8)); /* movss */\n    xmm0.f[0] = black_ModsRecoilDecay(ebx, xmm0.f[0]);\n    xmm0.f[0] = xmm0.f[0] * MEMF(ebx + 0x4C4); /* mulss */\n")
+            set(mod_declaration "float black_ModsRecoilDecay(uint32_t, float);")
+        elseif(point STREQUAL "MOD_SPAWN")
             set(mod_anchor "loc_001EE1FF: ;\n    ecx = 0; /* xor self */\n")
             set(mod_insert "loc_001EE1FF: ;\n    black_ModsSpawn(ebp);\n    ecx = 0; /* xor self */\n")
             set(mod_declaration "void black_ModsSpawn(uint32_t);")
@@ -213,9 +220,9 @@ endforeach()
 if(NOT BLACK_FOUND_LANGUAGE EQUAL 2)
     message(FATAL_ERROR "Expected the USA start-up 0x1F8100 to store the language word twice")
 endif()
-foreach(point MOD_SPAWN MOD_SILENCER)
+foreach(point MOD_SPAWN MOD_SILENCER MOD_RECOIL)
     if(NOT BLACK_FOUND_${point} EQUAL 1)
-        message(FATAL_ERROR "Expected exactly one verified USA ${point} hook (0x1EE1FF / 0x1E61BF)")
+        message(FATAL_ERROR "Expected exactly one verified USA ${point} hook (0x1EE1FF / 0x1E61BF / 0x1E5FB7)")
     endif()
 endforeach()
 if(NOT BLACK_FOUND_STICK_LOOK EQUAL 1)

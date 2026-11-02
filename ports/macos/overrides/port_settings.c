@@ -107,8 +107,10 @@ static void load_settings(void)
             for (int i = 0; i < BLACK_MOD_COUNT; ++i) {
                 char format[96]; snprintf(format, sizeof format, " %s = %%15s %%c", black_mod_info[i].key);
                 if (sscanf(line, format, value, &extra) == 1) {
-                    if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&mods[i], 1);
-                    else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&mods[i], 0);
+                    long n = strtol(value, &end, 10);
+                    if (!strcmp(value, "true")) atomic_store(&mods[i], 1);
+                    else if (!strcmp(value, "false")) atomic_store(&mods[i], 0);
+                    else if (*value && !*end && n >= 0 && n <= black_mod_info[i].levels) atomic_store(&mods[i], (int)n);
                 }
             }
             if (sscanf(line, " render_scale = %15s %c", value, &extra) == 1) {
@@ -242,7 +244,7 @@ static int save_setting(atomic_int *setting, int value)
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
-                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off\n",
+                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
                     atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language),
                     atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
@@ -403,12 +405,14 @@ int black_SettingsResetKeyboard(void)
 }
 
 int black_SettingsMod(int mod)
-{ pthread_once(&initialized, load_settings); return mod >= 0 && mod < BLACK_MOD_COUNT && atomic_load(&mods[mod]); }
-int black_SettingsSetMod(int mod, int enabled)
+{ pthread_once(&initialized, load_settings); return mod >= 0 && mod < BLACK_MOD_COUNT ? atomic_load(&mods[mod]) : 0; }
+int black_SettingsSetMod(int mod, int value)
 {
     if (mod < 0 || mod >= BLACK_MOD_COUNT) return 0;
-    int success = save_setting(&mods[mod], !!enabled);
-    fprintf(stderr, "[MODS] %s=%d\n", black_mod_info[mod].key, !!enabled);
+    int levels = black_mod_info[mod].levels;
+    value = levels == 1 ? !!value : value < 0 ? 0 : value > levels ? levels : value;
+    int success = save_setting(&mods[mod], value);
+    fprintf(stderr, "[MODS] %s=%d\n", black_mod_info[mod].key, value);
     return success;
 }
 int black_SettingsResetMods(void)

@@ -13,6 +13,7 @@
 #include <errno.h>
 
 extern void black_OriginalTimerStep(void);
+int black_ModsGameSpeed(void);
 static BlackGameClock clock_state;
 static pthread_mutex_t clock_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Thread_local BlackConsolePacer console_pacer;
@@ -77,7 +78,20 @@ void sub_000BE3F0(void)
         if (wait) {
             black_frame_wait(wait, getenv("BLACK_LEGACY_WORLD_WAIT") != NULL);
         }
+        /* Game Speed (Mods page): the pace stays one step a frame, each step
+         * takes that share of the step the game was made for, as TGP's
+         * variable frame time does. */
+        int speed = black_ModsGameSpeed();
+        double before = timer_steps(timer);
+        float before_time = MEMF(timer + 0x20);
         black_OriginalTimerStep();
+        if (speed != 100) {
+            uint32_t divisor = MEM32(timer + 0x18);
+            if (!divisor) divisor = 1;
+            float delta = step * (float)speed / 100.0f;
+            MEMF(timer + 0x1C) = delta / divisor;
+            MEMF(timer + 0x20) = before_time + (float)((timer_steps(timer) - before) * delta);
+        }
         black_trace(BLACK_TRACE_WORLD, MEM32(0x2F4368), trace_start, black_trace_ns(), wait, 0);
         return;
     }

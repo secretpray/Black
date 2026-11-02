@@ -69,6 +69,31 @@ revision. An unknown executable shows `MODS OFF` and nothing is written.
   Always Silenced and the BFG were not exercised in combat. The trainer's weapon
   swap and faster game speed were not ported.
 
+## Mods from TGP482/BLACK-XBERecomp PR 141 (in development)
+
+PR 141 (ported there from Black-Android) adds cheats as TGP C++ hooks. The same
+USA addresses are used here through the native-C overlay: the bullet hit
+0x1E74B0 and the weapon update 0x1EEFD0 are renamed and wrapped, and TGP's
+RecoilDecay point 0x1E5FB7 is a verified anchor. ESP, the aimbot and the weapon
+spawner were not ported (ImGui drawing, other levels' assets).
+
+| Mod | Evidence (first mission, Normal, Metal, `--state-log`; runs under the worktree's `out/macos/user`) |
+| --- | --- |
+| Infinite Ammo | Fire held: off, the magazine went 15 to 0 and reloaded; on, 90 shots with the magazine at 15 throughout (`run-7czmr2hl`) |
+| Rapid Fire 4X | A pistol shot every 10 frames off, every 3 on (one shot a frame is the ceiling at 30 fps, so 3X and 4X match on it; `run-7czmr2hl`) |
+| No Recoil | M249 fire held: off, the view kick added up 2.4 to 7.6; on, each step started from 0 (`run-zn2kgcwv`) |
+| God Mode | Own grenade at the feet: off, health 1200 to 908.8; on, 1200 throughout with the invulnerability byte set (`run-en78c3gh`) |
+| One-Hit Kill | Played by hand: 8 soldiers, each `health 100.0 -> 0.0 dying=1` after one pistol shot (`run-mw8kcox1`) |
+| Game Speed | 30 fps held; a shot every 18 / 10 / 5 frames at 50 / 100 / 200%; a 1.2 s walk covered 2.59 / 5.08 units at 50 / 100% (`run-3byu5png`, `run-8o6ovkx8`) |
+| M249 in the First Mission | The developers' code (0x2D12AD) gave `BG1_HVY` with 600 rounds in mission 1; the gun has no texture there (`run-jriqm4ya`) |
+
+- The game's scripts set the invulnerability byte (0x8F2 on the actor) during
+  the mission intro; God Mode clears only the byte it set itself.
+- New unit checks cover God Mode's byte, One-Hit Kill and its refund, ammo,
+  Rapid Fire, No Recoil and the value steps; 103 CTest checks passed.
+- Not checked: other weapons and missions, Rapid Fire with the under-barrel
+  launcher, Game Speed above 100% in heavy scenes.
+
 ## Languages (in development)
 
 Not in the 0.2.0 download. The USA executable picks its string bank
