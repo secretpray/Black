@@ -23,6 +23,16 @@
   opaque and foliage keeps its cut-outs. **HD Texture Size** (1024, 2048 or
   4096, default 2048) caps the largest side to save memory. The pack is not
   included.
+- A malformed texture mode no longer aborts the game: a PROJECT2D texture that
+  reports no dimension is sampled as 2D, as the sampler already chose. A long
+  fourth-mission session had ended with SIGABRT on that shader.
+- Four more HD texture matches (the Boxes01 atlas, the Recon_Secret screen, a
+  first-aid label and door 1212) in `black-hd-reimagined-extra.map`, shipped
+  beside portingpete's map, whose entries take precedence.
+- Developer options for `black.py run`: `--texture-audit` (unique texture keys
+  and map matches, no pixels), `--texture-dump` (original top levels into the
+  run folder), `--subtitle-dir` (experimental SRT captions for cutscenes) and
+  `--test-game-view` (a separate validated game folder for isolated checks).
 - Mods page: **Infinite Ammo** for any weapon you hold, **Rapid Fire** (2-4X),
   **No Recoil**, **One-Hit Kill** and **Game Speed** (50-200%), from
   TGP482/BLACK-XBERecomp PR 141. God Mode now also holds the game's own

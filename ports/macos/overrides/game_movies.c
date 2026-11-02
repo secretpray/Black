@@ -4,6 +4,7 @@
 #include "recomp_types.h"
 #include "film_policy.h"
 #include "port_menu.h"
+#include "subtitles.h"
 #include <stdlib.h>
 #include <stdio.h>
 extern void black_OriginalFilmTick(void);
@@ -50,6 +51,8 @@ void sub_00209DC0(void)
         for (int i = 0; i < 8; ++i) name[i] = MEM8(player + 0x84 + i);
         uint32_t film = MEM32(game + 0x2042C);
         int background = film < 27 ? MEM8(0x29D9C0 + film * 12 + 8) : 1;
+        uint32_t state = MEM32(player + 0x1A8);
+        black_SubtitleFilm(film, MEM32(player), name, !background && state >= 4 && state <= 0x1C && !MEM8(player + 0x1B9));
         if (getenv("BLACK_FILM_LOG")) {
             static uint32_t previous_movie, previous_state, previous_film;
             uint32_t movie = MEM32(player), state = MEM32(player + 0x1A8);
@@ -64,6 +67,6 @@ void sub_00209DC0(void)
             MEM8(player + 0x1B9) = 1;
             fprintf(stderr, "[FILM] %s: ordinary completion requested after 3 playing polls\n", name);
         }
-    }
+    } else black_SubtitleFilm(0, 0, "", 0);
     black_OriginalFilmTick();
 }

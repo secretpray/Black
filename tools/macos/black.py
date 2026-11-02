@@ -400,6 +400,13 @@ def play(args):
     if args.gpu_readback == "on-demand" and args.scale == 1:
         raise ValueError("On-demand readback currently requires --scale 2 or higher (the native-size presenter reads guest RAM)")
     data = provenance()
+    if args.test_game_view:
+        if args.dev_unlock_levels is None or not args.smoke_seconds:
+            raise ValueError("--test-game-view requires --dev-unlock-levels and --smoke-seconds")
+        test_view = Path(args.test_game_view).expanduser().resolve(strict=True)
+        if validate_xbe(test_view / "default.xbe") != data["xbe_sha256"]:
+            raise ValueError("Test view executable does not match generated code")
+        data = {**data, "game_dir": str(test_view)}
     name = preset(args)
     binary = ROOT / "out/build" / name / "black-recomp"
     if not binary.is_file():
@@ -426,6 +433,14 @@ def play_locked(args, settings_path, data, name, binary, state):
     """Keep save backup, child lifetime and final inventory under one run lock."""
     run_dir = Path(tempfile.mkdtemp(prefix="run-", dir=state))
     env = {k: v for k, v in os.environ.items() if not k.startswith(("RECOMP_", "BLACK_"))}
+    if args.texture_audit:
+        env["BLACK_TEXTURE_AUDIT"] = str(run_dir / "texture-audit.csv")
+    if args.subtitle_dir:
+        env["BLACK_SUBTITLE_DIR"] = str(Path(args.subtitle_dir).expanduser().resolve(strict=True))
+    if args.texture_dump:
+        dump_dir = run_dir / "texture-dumps"
+        dump_dir.mkdir(mode=0o700)
+        env["BLACK_TEXTURE_DUMP_DIR"] = str(dump_dir)
     # The pinned host passes save_dir=NULL. Give its XDG fallback a BLACK-only
     # root instead of sharing ~/.local/share/xboxrecomp with other titles.
     dev = args.dev_unlock_levels is not None
@@ -623,6 +638,10 @@ def main():
             sub.add_argument("--open-settings", action="store_true", help="Open the built-in recomp settings menu at launch")
             sub.add_argument("--settings-file", help="Use an explicit settings file (separate profiles or isolated developer checks)")
             sub.add_argument("--texture-dir", help="Folder holding replacement/ with your own HD texture pack (default: ~/Library/Application Support/BLACK/Textures)")
+            sub.add_argument("--texture-audit", action="store_true", help="Record unique texture keys and map matches in this run's texture-audit.csv; no pixels")
+            sub.add_argument("--texture-dump", action="store_true", help="Dump original top-level textures to this run's private folder (DDS or PNG)")
+            sub.add_argument("--subtitle-dir", help="Experimental: use SRT files from this folder for cutscenes")
+            sub.add_argument("--test-game-view", help="Use a validated separate game view for a bounded isolated developer run")
             sub.add_argument("--headless", action="store_true", help="Bounded muted GPU validation without opening the game window")
             sub.add_argument("--pad-deadzone", type=int, choices=range(0, 16001), help="Override both saved stick deadzones until edited in Input; 0 keeps the original 20-percent response, nonzero is an exact SDL-count threshold")
             sub.add_argument("--input-device", choices=("auto", "gamepad", "keyboard"), default="auto", help="Exclusive gameplay input; auto ignores mouse motion while the pad owns control, a deliberate key/button switches back after the pad settles")

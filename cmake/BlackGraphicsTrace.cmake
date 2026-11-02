@@ -73,6 +73,28 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
     target_include_directories(xemu_nv2a PRIVATE "${source_dir}" "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${trace_root}/${relative}")
 endforeach()
+# A malformed guest texture format can report PROJECT2D with dimension 0.
+# The pinned sampler selector already falls back to sampler2D; keep the shader
+# body consistent instead of emitting no t-register in release builds.
+set(black_psh_source "${trace_root}/hw/xbox/nv2a/pgraph/glsl/psh.c")
+file(READ "${black_psh_source}" black_psh)
+black_trace_replace(black_psh
+    "                        assert(!\"Unhandled texture dimensions\");\n                    }\n                }\n            }\n            break;\n        }\n        case PS_TEXTUREMODES_PROJECT3D:"
+    "                        mstring_append_fmt(vars, \"vec4 t%d = textureProj(texSamp%d, %s(pT%d.xyw));\\n\",\n                                           i, i, tex_remap, i);\n                    }\n                }\n            }\n            break;\n        }\n        case PS_TEXTUREMODES_PROJECT3D:")
+set(black_psh_overlay "${CMAKE_BINARY_DIR}/graphics-overlay/psh.c")
+set(black_psh_previous "")
+if(EXISTS "${black_psh_overlay}")
+    file(READ "${black_psh_overlay}" black_psh_previous)
+endif()
+if(NOT black_psh_previous STREQUAL black_psh)
+    file(WRITE "${black_psh_overlay}" "${black_psh}")
+endif()
+get_target_property(black_psh_sources xemu_nv2a SOURCES)
+list(REMOVE_ITEM black_psh_sources "${black_psh_source}")
+set_property(TARGET xemu_nv2a PROPERTY SOURCES ${black_psh_sources} "${black_psh_overlay}")
+target_include_directories(xemu_nv2a PRIVATE "${trace_root}/hw/xbox/nv2a/pgraph/glsl")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${black_psh_source}")
+
 target_link_libraries(xemu_nv2a PUBLIC black-port-ui black-texture-pack)
 
 file(READ "${BLACK_MAC_RUNTIME}/src/video/fb_present_posix.m" presenter)

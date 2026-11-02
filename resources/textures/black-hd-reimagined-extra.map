@@ -1,0 +1,9 @@
+# Additional matches checked against decoded Xbox disc textures and HD atlas layout.
+# Boxes01: same atlas as mapped aa5d7c230b3fa053 (different compressed bytes).
+4160da9c65b4885f 128 128 0c 3c85e9fa4b1a6c0f-6f2825f427fa0509-00001dd4.dds
+# Recon_Secret: same screen and UV layout as mapped b7f9150d282baae9 (I8 vs DXT1).
+bf615d5ccf705cf3 128 128 0c 3585e61c9daec191-8ab86645ccd167ee-00001dd4.dds
+# bp1_med_sml: first-aid label and cross; atlas layout checked against disc.
+4231fc99b888f29e 64 64 0e 559b885df4b40c2c-821eed60d64cc231-00001994.dds
+# MS_door1: door 1212 and latch placement checked against Xbox source.
+3544b460c5a342cf 128 128 0c 8e56c5a300106e24-c01840fe10a70e66-00001dd4.dds

@@ -8,6 +8,7 @@
 #include "keyboard_mouse.h"
 #include "game_mods.h"
 #include "game_language.h"
+#include "subtitles.h"
 #include "menu_text.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -1021,6 +1022,7 @@ void black_MenuAttach(void *window, void (*capture)(int))
     fps_view.hidden = YES;
     [container addSubview:fps_view];
     [container addSubview:menu_view];
+    black_SubtitleAttach(container);
     [menu_window makeFirstResponder:game_view];
     event_monitor = [[NSEvent addLocalMonitorForEventsMatchingMask:
         NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged | NSEventMaskLeftMouseDown |

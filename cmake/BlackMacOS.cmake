@@ -40,13 +40,14 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_settings.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_install.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_bootstrap.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
 target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
 # HD texture replacement: map, pack index, DDS/PNG and loader threads; the
 # renderer side is texture_pack_gl.inc in the texture.c overlay.
-add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_pack.c")
+add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_pack.c" "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_dump.c")
 target_compile_options(black-texture-pack PRIVATE -Wall -Wextra)
 target_link_libraries(black-texture-pack PUBLIC black-port-ui
     "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
@@ -83,6 +84,15 @@ add_custom_target(black-runtime-check ALL DEPENDS
     xbox_apu xbox_nv2a xbox_video xemu_nv2a)
 
 enable_testing()
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(BLACK_GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+add_executable(black-psh-regression tools/macos/psh_regression_test.c
+    "${black_psh_overlay}" "${trace_root}/hw/xbox/nv2a/pgraph/glsl/common.c")
+target_include_directories(black-psh-regression PRIVATE $<TARGET_PROPERTY:xemu_nv2a,INCLUDE_DIRECTORIES>)
+target_compile_options(black-psh-regression PRIVATE -ffunction-sections)
+target_link_options(black-psh-regression PRIVATE -Wl,-dead_strip)
+target_link_libraries(black-psh-regression PRIVATE PkgConfig::BLACK_GLIB)
+add_test(NAME macos_psh_regression COMMAND black-psh-regression)
 find_package(Threads REQUIRED)
 include("${CMAKE_SOURCE_DIR}/cmake/BlackInterruptTests.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackVoiceLockTests.cmake")
@@ -330,6 +340,9 @@ target_link_libraries(black-texture-pack-test PRIVATE black-texture-pack)
 target_compile_definitions(black-texture-pack-test PRIVATE
     BLACK_TEXTURE_MAP_FILE="${CMAKE_SOURCE_DIR}/resources/textures/black-hd-reimagined.map")
 add_test(NAME macos_texture_pack COMMAND black-texture-pack-test)
+add_executable(black-texture-dump-test tools/macos/texture_dump_test.c)
+target_link_libraries(black-texture-dump-test PRIVATE black-texture-pack)
+add_test(NAME macos_texture_dump COMMAND black-texture-dump-test)
 # The upstream test links platform alone, but ReadFile now calls the dirty
 # tracker. Link the real implementation, rather than replacing it with a stub.
 add_executable(black-guest-layout

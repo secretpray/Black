@@ -227,15 +227,21 @@ int main(void)
         "00000000000000bb 256 256 0b cccc-dddd-00006213.png\n"
         "00000000000000cc 64 64 0f not-in-this-pack.dds\n";
     if (!write_file(map_path, lines, strlen(lines))) return 18;
+    char extra_path[1024];
+    snprintf(extra_path, sizeof extra_path, "%s/black-hd-reimagined-extra.map", root);
+    const char *extra = "00000000000000dd 128 128 0c aaaa-bbbb-00001dd4.dds\n"
+                        "00000000000000aa 128 128 0c cccc-dddd-00006213.png\n";
+    if (!write_file(extra_path, extra, strlen(extra))) return 18;
     snprintf(path, sizeof path, "%s/replacement", root);
     BlackTexturePack *pack = black_TexturePackOpen(path, map_path);
-    if (!pack || black_TexturePackFiles(pack) != 2 || black_TexturePackMapped(pack) != 2 ||
+    if (!pack || black_TexturePackFiles(pack) != 2 || black_TexturePackMapped(pack) != 3 ||
         black_TexturePackMissing(pack) != 1)
         return 20;
     int dxt = black_TexturePackFind(pack, 0xaa, 128, 128, 0x0c), png = black_TexturePackFind(pack, 0xbb, 256, 256, 0x0b);
     if (dxt < 0 || png < 0 || !strstr(black_TexturePackPath(pack, dxt), "/hd/SLUS-21376/replacements/aaaa") ||
         !strstr(black_TexturePackPath(pack, png), "CCCC-DDDD"))
         return 21;
+    if (black_TexturePackFind(pack, 0xdd, 128, 128, 0x0c) != dxt) return 27;
     /* Size and format are part of the lookup; a missing file finds nothing. */
     if (black_TexturePackFind(pack, 0xaa, 64, 128, 0x0c) >= 0 || black_TexturePackFind(pack, 0xaa, 128, 128, 0x0f) >= 0 ||
         black_TexturePackFind(pack, 0xcc, 64, 64, 0x0f) >= 0 || black_TexturePackFind(pack, 0xab, 128, 128, 0x0c) >= 0)

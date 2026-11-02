@@ -169,23 +169,88 @@ map, shipped unchanged under MIT, names the pack file for 1161 Xbox textures.
   All runs stopped at their time limit without a forced kill. Window captures
   from the same frame show HD concrete, wood and floor art from the pack where
   the original textures were.
-- Coverage differs by mission. The log's counts include every time the game
-  remakes a texture; counted once per texture, the map named 50 of 94 eligible
-  textures in a second-mission run. The rest keep the game's own textures.
-- **HD Texture Size** (Recomp Settings → Textures; 1024, 2048 or 4096, default
-  2048, saved as `texture_max_size`, applied live) caps the largest side: block
-  files lose their top levels on the loader thread, PNG pictures are halved.
-  Each pack file stays on the GPU once used, and unused ones are kept up to
-  1 GB, so a level holds 300–900 MB at 2048. The same 170-second first-mission
-  run held 448 MB at 2048 and 313 MB at 1024 (1,469 replacements from 128 file
-  reads, 30 FPS). In a manual fourth-mission session, reaching the level's next
-  part loaded 63 more files (621 to 880 MB) as the frame rate fell to about
-  12–16; the cause is not established and needs the same scene measured with
-  the option on, off and at 1024.
+- The old progress counters count texture creations, including repeated
+  creations of the same content. They are not a percentage of unique textures
+  covered by the map. A second-mission audit found **94 unique keys: 50 mapped,
+  44 unmapped**, despite the progress log reporting 1,208 creations and 1,158
+  misses. Of those 44 unmapped keys, 38 exactly match original top-level bytes
+  on the disc but have no map entry; the other six are outside the inspector's
+  serialized top-level inventory and remain unidentified. No observed mapped
+  key was lost at lookup. Files existing in a PS2 pack do not establish a
+  corresponding Xbox map entry.
+- A read-only inspection of the disc found 218 unique eligible top levels in
+  the second mission's serialized files, of which 112 have map entries. These
+  are file inventory counts, not a claim that every texture was drawn. All
+  **1,007 distinct mapped pack files** decoded and uploaded through the
+  production upload function in an ANGLE/Metal probe without failures. This
+  checks file decoding and GPU acceptance, not every replacement's appearance.
+- HD Texture Size limits replacements to 1024, 2048 or 4096 pixels (default
+  2048), applied on the loader thread and on live setting changes. The option
+  and its tests were integrated from the separate development worktree; a
+  single-level compressed texture cannot discard a top mip and is unchanged.
+- `black.py run --texture-audit` writes unique keys, dimensions, format and
+  matched file name to that run's `texture-audit.csv`, without pixels. The
+  diagnostic is off by default. The bounded second-mission audit quit normally
+  with code 0 before its limit; 103 CTest checks, GPU probes and 30 Python checks
+  passed. Each pack file stays on the GPU once used, so a level can hold
+  300–800 MB of replacements.
 - Not checked: the grenade crate after the alpha fix, missions after the second,
   long sessions, GPU memory on 8 GB Macs, and every mapped texture by eye. The
-  map's pairs were matched by portingpete. Texture dumping is not implemented.
-  The pack is never included in the repository or in downloads.
+  map's pairs were matched by portingpete. The opt-in `--texture-dump` captures
+  original top-level textures in the run's ignored output directory; it is
+  bounded and is not enabled in normal play. The pack is never included in the
+  repository or in downloads.
+- Four additional Xbox keys are in `black-hd-reimagined-extra.map`: alternate
+  encodings of the Boxes01 atlas and Recon_Secret screen. Their decoded disc
+  textures were compared with the already mapped originals and HD layouts;
+  the latter HD screen contains Russian text. A first-aid label, including the
+  red cross, was matched from a key observed in a longer fourth-mission run.
+  A door marked 1212 and its latch were matched to the same layout in the pack.
+  These matches still need observation as rendered objects in gameplay. The
+  extra file is loaded beside the chosen map; an available
+  entry in the main map takes precedence. The upstream map is unchanged.
+
+## Fourth-mission fixed-camera comparison
+
+The separately developed HD size limit was incorporated before these runs.
+With the same starting camera, 2× render scale, SMAA and MetalFX, scripted
+muted runs on ANGLE/Metal measured 30.0 FPS without HD, 30.0 FPS at 1024
+(118 MiB resident), and 29.7 FPS at 2048 (410 MiB resident). The 3× render
+scale without HD measured 20.9 FPS at the same camera. Each run measures
+about 26 seconds after initialization and exits normally. The native OpenGL
+backend was 17.2 FPS in the same scene without HD (`run-nzbvhudr`); a process
+sample found substantial time in GL draw and vertex buffer calls. The user's
+long session above used OpenGL, but none of these tests reproduces its later
+location; that location still needs a matched comparison.
+
+## Fourth-mission later scene: live A/B
+
+In a manual ANGLE/Metal run, the user reached the later location and kept the
+same camera position and direction for approximately 14–15 seconds per
+setting at render scale 2. Frame counts from the state trace give 28.5 FPS
+with HD off, 30.0 at 2048 and 28.4 at 1024. After live toggling reloaded the
+currently used pack textures, residency was about 316 MiB at 2048 and 105 MiB
+at 1024; the initial 839 MiB at 2048 also included earlier areas. These are
+short sequential measurements, not evidence that HD increases FPS. The
+original 15 FPS was not reproduced on Metal at this view. An audit logged
+map hits for Boxes01, the first-aid label, and door 1212; it does not prove
+that each was visible or visually correct. The user subsequently exited normally
+(exit 0, no timeout).
+
+## Fourth-mission long session
+
+- The user session recorded 324 unique eligible keys, 202 with map entries.
+  `Boxes01` was resolved through the additional map. An audit hit identifies
+  a lookup, not proof that an object was visible or looked correct.
+- Game frame reports declined from about 30 FPS to 12–16 FPS around a rise in
+  replacement residency from 621 to 880 MiB. This is a correlation; the log
+  does not separate scene complexity, rendering, CPU, or memory pressure.
+- The session ended with SIGABRT, not a timeout. Invalid GPU command data
+  preceded a PROJECT2D texture with dimension 0, and its generated shader used
+  an undeclared `t2`. A checked build overlay now emits the 2D fallback already
+  selected by the sampler logic. A generator regression and GPU compilation of
+  the captured shader with that declaration pass; this does not establish the
+  cause of the invalid command data or validate the exact gameplay scene.
 
 ## Open work
 

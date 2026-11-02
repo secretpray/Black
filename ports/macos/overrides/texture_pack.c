@@ -22,6 +22,7 @@
 _Static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "the map's key reads little-endian words");
 
 #define MAP_NAME "black-hd-reimagined.map"
+#define EXTRA_MAP_NAME "black-hd-reimagined-extra.map"
 
 size_t black_TexturePackTopBytes(unsigned format, unsigned width, unsigned height)
 {
@@ -516,21 +517,41 @@ BlackTexturePack *black_TexturePackOpen(const char *replacement, const char *map
     FILE *map = pack->count ? fopen(map_path, "r") : NULL;
     if (!map) { black_TexturePackClose(pack); return NULL; }
     qsort(pack->files, pack->count, sizeof *pack->files, file_order);
-    char line[512];
-    BlackTextureMapEntry entry;
-    while (fgets(line, sizeof line, map)) {
-        if (!black_TexturePackParseMapLine(line, &entry)) continue;
-        int file = find_name(pack, entry.file);
-        if (file < 0) { pack->missing++; continue; }
-        if (pack->mapped == map_capacity) {
-            unsigned grown = map_capacity ? map_capacity * 2 : 1024;
-            PackEntry *entries = realloc(pack->map, grown * sizeof *entries);
-            if (!entries) break;
-            pack->map = entries; map_capacity = grown;
+    /* The optional sibling extends the chosen map. Existing entries win,
+     * including when a user supplies their own map. */
+    char extra_path[PATH_MAX];
+    const char *slash = strrchr(map_path, '/');
+    int n = slash ? snprintf(extra_path, sizeof extra_path, "%.*s/" EXTRA_MAP_NAME,
+                             (int)(slash - map_path), map_path)
+                  : snprintf(extra_path, sizeof extra_path, EXTRA_MAP_NAME);
+    for (int pass = 0; pass < 2; ++pass) {
+        if (pass) map = n > 0 && (size_t)n < sizeof extra_path ? fopen(extra_path, "r") : NULL;
+        if (!map) break;
+        char line[512];
+        BlackTextureMapEntry entry;
+        while (fgets(line, sizeof line, map)) {
+            if (!black_TexturePackParseMapLine(line, &entry)) continue;
+            int duplicate = 0;
+            if (pass) for (unsigned i = 0; i < pack->mapped; ++i) {
+                PackEntry *e = &pack->map[i];
+                if (e->key == entry.key && e->width == entry.width &&
+                    e->height == entry.height && e->format == entry.format) {
+                    duplicate = 1; break;
+                }
+            }
+            if (duplicate) continue;
+            int file = find_name(pack, entry.file);
+            if (file < 0) { pack->missing++; continue; }
+            if (pack->mapped == map_capacity) {
+                unsigned grown = map_capacity ? map_capacity * 2 : 1024;
+                PackEntry *entries = realloc(pack->map, grown * sizeof *entries);
+                if (!entries) break;
+                pack->map = entries; map_capacity = grown;
+            }
+            pack->map[pack->mapped++] = (PackEntry){entry.key, entry.width, entry.height, entry.format, file};
         }
-        pack->map[pack->mapped++] = (PackEntry){entry.key, entry.width, entry.height, entry.format, file};
+        fclose(map);
     }
-    fclose(map);
     if (pack->mapped) qsort(pack->map, pack->mapped, sizeof *pack->map, entry_order);
     return pack;
 }

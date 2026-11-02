@@ -10,6 +10,7 @@
  * the game's highest, so a file has an opaque and a see-through GL texture. Any
  * miss or failure keeps the game's own texture. */
 #include "texture_pack.h"
+#include "texture_dump.h"
 
 #define BLACK_TP_GL_BC1 0x83F1  /* COMPRESSED_RGBA_S3TC_DXT1_EXT */
 #define BLACK_TP_GL_BC2 0x83F2  /* COMPRESSED_RGBA_S3TC_DXT3_EXT */
@@ -35,6 +36,45 @@ static struct {
     size_t resident;
     struct timespec summary_at;
 } black_tp;
+
+/* Opt-in, metadata-only audit. A new path per run avoids overwriting evidence;
+ * no pixels or pack contents are written. Counts above include repeated binds,
+ * whereas this records each (key, size, format) once. */
+static void black_tp_audit(uint64_t key, TextureShape s, int file)
+{
+    enum { AUDIT_SLOTS = 16384 };
+    typedef struct { uint64_t key; unsigned width, height, format; } Seen;
+    static bool started;
+    static FILE *out;
+    static Seen *seen;
+    if (!started) {
+        started = true;
+        const char *path = getenv("BLACK_TEXTURE_AUDIT");
+        if (!path || !*path) return;
+        out = fopen(path, "wx");
+        if (!out || !(seen = calloc(AUDIT_SLOTS, sizeof *seen))) {
+            if (out) fclose(out);
+            out = NULL;
+            fprintf(stderr, "[TEXPACK] cannot create texture audit %s\n", path);
+            return;
+        }
+        setvbuf(out, NULL, _IOLBF, 0);
+        fprintf(out, "key,width,height,format,file\n");
+    }
+    if (!out) return;
+    unsigned slot = (unsigned)(key ^ (key >> 32) ^ s.width ^ (s.height << 12) ^ s.color_format);
+    for (unsigned probe = 0; probe < AUDIT_SLOTS; ++probe) {
+        Seen *p = &seen[(slot + probe) % AUDIT_SLOTS];
+        if (!p->width) {
+            *p = (Seen){key, s.width, s.height, s.color_format};
+            fprintf(out, "%016llx,%u,%u,%02x,%s\n", (unsigned long long)key,
+                    s.width, s.height, s.color_format, file >= 0 ? black_TexturePackName(file) : "");
+            return;
+        }
+        if (p->key == key && p->width == s.width && p->height == s.height && p->format == s.color_format)
+            return;
+    }
+}
 
 static void black_tp_summary(const char *why)
 {
@@ -240,13 +280,17 @@ static void black_tp_complete(unsigned index)
 static void black_tp_created(TextureBinding *binding, TextureShape s, const uint8_t *data, size_t length,
                              const uint8_t *palette, size_t palette_length)
 {
-    if (!black_tp.generation || s.cubemap || s.dimensionality != 2 || s.border ||
+    if (s.cubemap || s.dimensionality != 2 || s.border ||
         binding->gl_target != GL_TEXTURE_2D)
         return;
+    black_TextureDump(s.color_format, s.width, s.height, data, length, palette, palette_length);
+    if (!black_tp.generation) return;
     size_t top = black_TexturePackTopBytes(s.color_format, s.width, s.height);
     if (!top || top > length) return;
     black_tp.eligible++;
-    int file = black_TexturePackLookup(black_TexturePackKey(data, top), s.width, s.height, s.color_format);
+    uint64_t key = black_TexturePackKey(data, top);
+    int file = black_TexturePackLookup(key, s.width, s.height, s.color_format);
+    black_tp_audit(key, s, file);
     if (file < 0) { black_tp.misses++; return; }
     unsigned low = 0, high = 0;
     bool known = black_TextureTopAlpha(s.color_format, s.width, s.height, data, palette, palette_length, &low, &high);

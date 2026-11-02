@@ -47,6 +47,7 @@ def build(binary, output, version):
         shutil.copy2(ROOT / "src/common/europe.patch", resources)
         # portingpete's map (MIT, notices below); the HD pack itself is never shipped.
         shutil.copy2(ROOT / "resources/textures/black-hd-reimagined.map", resources)
+        shutil.copy2(ROOT / "resources/textures/black-hd-reimagined-extra.map", resources)
         sources, pending, mapped = {}, [binary], {}
         search = [ROOT / "out/macos/angle/lib", Path("/opt/homebrew/lib")]
         while pending:
