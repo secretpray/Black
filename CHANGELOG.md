@@ -8,6 +8,9 @@
 - **Menu Language** for the settings panel: Auto (follows the game), English,
   French, German, Spanish, Italian or Russian. Labels are translated in every
   language, help lines in Russian; the game itself has no Russian text.
+- `black.py build` and `run` now use the ANGLE Metal renderer by default;
+  `--opengl` keeps the slower legacy OpenGL path for comparisons. A run started
+  without `--metal` had silently used OpenGL (17 FPS where Metal held 30).
 - Quitting no longer clicks in the speakers: game audio fades out over 20 ms
   and the device closes before the app exits.
 - **Texture Replacement** in Recomp Settings → Textures, off by default: HD

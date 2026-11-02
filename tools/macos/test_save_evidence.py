@@ -100,7 +100,8 @@ class SaveEvidence(unittest.TestCase):
             return 0
 
         process.wait.side_effect = wait
-        arguments = ["black.py", "run", "--windowed", "--backup-saves", "--smoke-seconds", "10"]
+        # The synthetic root has no ANGLE build; the renderer is not under test.
+        arguments = ["black.py", "run", "--opengl", "--windowed", "--backup-saves", "--smoke-seconds", "10"]
         if dev:
             arguments += ["--dev-unlock-levels", "0"]
         with contextlib.ExitStack() as stack:

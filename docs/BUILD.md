@@ -19,9 +19,13 @@ python3 tools/macos/black.py doctor
 python3 tools/macos/black.py check --graphics
 python3 tools/macos/black.py generate "/path/to/your/BLACK.iso"
 python3 tools/macos/build_angle.py
-python3 tools/macos/black.py build --metal --real-dsp
-python3 tools/macos/black.py run --game-mode --metal --audio-engine dsp --dsp-headroom 6
+python3 tools/macos/black.py build --real-dsp
+python3 tools/macos/black.py run --game-mode --audio-engine dsp --dsp-headroom 6
 ```
+
+`build` and `run` use the ANGLE Metal renderer by default (`--metal` is still
+accepted). `--opengl` selects the legacy OpenGL build in `out/build/macos-arm64`
+for comparisons only: in the same scene it ran at 17 FPS where Metal held 30.
 
 An extracted disc directory can replace the ISO argument. The launcher checks
 the XBE revision, preserves the original and normalizes the supported European
@@ -48,7 +52,7 @@ No source disc/XBE is patched in place. Build products live under ignored `out/`
 ```sh
 python3 tools/macos/black.py check --graphics
 python3 -m unittest discover -s tools/macos -p 'test_*.py' -v
-python3 tools/macos/black.py run --metal --windowed --mute \
+python3 tools/macos/black.py run --windowed --mute \
   --test-quit-after 30 --smoke-seconds 45 --backup-saves
 ```
 

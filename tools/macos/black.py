@@ -296,11 +296,21 @@ def provenance():
     return data
 
 
+def add_renderer(sub):
+    """ANGLE Metal unless --opengl: the OpenGL path measured 17 FPS where
+    Metal held 30 in the same scene, so it is only for comparisons."""
+    renderer = sub.add_mutually_exclusive_group()
+    renderer.add_argument("--metal", dest="metal", action="store_true", default=True,
+                          help="ANGLE Metal renderer (the default; kept for existing scripts)")
+    renderer.add_argument("--opengl", dest="metal", action="store_false",
+                          help="Legacy OpenGL renderer for comparisons; much slower in heavy scenes")
+
+
 def preset(args):
     if args.metal:
         folder = os.environ.get("BLACK_ANGLE_LIB_DIR") or str(WORK / "angle/lib")
         if any(not (Path(folder) / lib).is_file() for lib in ("libEGL.dylib", "libGLESv2.dylib")):
-            raise ValueError("Build ANGLE with python3 tools/macos/build_angle.py, or set BLACK_ANGLE_LIB_DIR to your arm64 libEGL.dylib/libGLESv2.dylib")
+            raise ValueError("Build ANGLE with python3 tools/macos/build_angle.py, or set BLACK_ANGLE_LIB_DIR to your arm64 libEGL.dylib/libGLESv2.dylib; --opengl uses the slower legacy renderer")
         os.environ["BLACK_ANGLE_LIB_DIR"] = str(Path(folder).resolve())
         return "macos-metal"
     return "macos-arm64"
@@ -397,8 +407,8 @@ def play(args):
     if args.audio_engine == "dsp":
         cache = binary.parent / "CMakeCache.txt"
         if not cache.is_file() or "BLACK_ENABLE_REAL_DSP:BOOL=ON" not in cache.read_text():
-            metal = " --metal" if args.metal else ""
-            raise ValueError(f"DSP is not built for {name}; run python3 tools/macos/black.py build{metal} --real-dsp")
+            opengl = "" if args.metal else " --opengl"
+            raise ValueError(f"DSP is not built for {name}; run python3 tools/macos/black.py build{opengl} --real-dsp")
     # Separate local saves from source/game data and the TGP Windows build.
     state = WORK / "user"
     state.mkdir(parents=True, exist_ok=True)
@@ -552,6 +562,8 @@ def play_locked(args, settings_path, data, name, binary, state):
         print(f"Verified save backup: {run_dir / 'saves-before.tar.gz'}", flush=True)
     (run_dir / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")
     print(f"Log: {log_path}\nCmd+Return: fullscreen; Esc: pause/release mouse", flush=True)
+    if not args.metal:
+        print("Renderer: legacy OpenGL (--opengl), for comparisons only; Metal is the default and much faster in heavy scenes.", flush=True)
     if args.game_clock == "console":
         print("Gameplay: original fixed step, paced at about 30 fps; FMV timing stays original.", flush=True)
     if args.script_only:
@@ -595,7 +607,7 @@ def main():
         if name == "check":
             sub.add_argument("--graphics", action="store_true", help="Also test a real GPU context (requires a desktop session)")
         if name in ("build", "run"):
-            sub.add_argument("--metal", action="store_true", help="Use your ANGLE Metal libraries")
+            add_renderer(sub)
         if name == "run":
             sub.add_argument("--backup-saves", action="store_true", help="Verify a compressed backup of the entire save root before launch; record file hashes/changes after exit (no restore or progress edits)")
             sub.add_argument("--scale", type=int, choices=range(1, 7), help="Override saved render scale (default 2)")

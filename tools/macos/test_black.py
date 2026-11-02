@@ -22,6 +22,27 @@ def synthetic_xbe(title=0x45410083, entry=0x25A3F):
     return data
 
 
+class Renderer(unittest.TestCase):
+    def parse(self, *argv):
+        import argparse
+        parser = argparse.ArgumentParser()
+        black.add_renderer(parser)
+        return parser.parse_args(list(argv))
+
+    def test_metal_is_the_default_and_opengl_is_explicit(self):
+        self.assertTrue(self.parse().metal)
+        self.assertTrue(self.parse("--metal").metal)
+        self.assertFalse(self.parse("--opengl").metal)
+        with self.assertRaises(SystemExit), patch("sys.stderr", io.StringIO()):
+            self.parse("--metal", "--opengl")
+
+    def test_missing_angle_names_the_opengl_fallback(self):
+        with tempfile.TemporaryDirectory() as empty, patch.dict("os.environ", {"BLACK_ANGLE_LIB_DIR": empty}):
+            with self.assertRaisesRegex(ValueError, "--opengl"):
+                black.preset(self.parse())
+        self.assertEqual(black.preset(self.parse("--opengl")), "macos-arm64")
+
+
 class DiscGuards(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

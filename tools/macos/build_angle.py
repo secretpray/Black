@@ -83,7 +83,7 @@ def main():
               "angle_revision": ANGLE_REVISION, "depot_tools_revision": DEPOT_REVISION,
               "gn_args": ARGS, "compiler": metal.stdout.strip(), "libraries": hashes}
     (dest.parent / "provenance.json").write_text(json.dumps(record, indent=2) + "\n")
-    print(f"Built local Metal libraries: {dest}\nBuild BLACK with: python3 tools/macos/black.py build --metal")
+    print(f"Built local Metal libraries: {dest}\nBuild BLACK with: python3 tools/macos/black.py build")
 
 
 if __name__ == "__main__":
