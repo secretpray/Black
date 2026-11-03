@@ -57,9 +57,13 @@ are source snapshots, not playable apps.
 
 1. Open the DMG and drag **BLACK.app** to **Applications**.
 2. Open **BLACK** from Applications or your app launcher.
-3. Choose your own **Original Xbox BLACK ISO/XISO** or extracted disc folder.
-   The app validates the revision and copies files into your Library. Your source
-   stays unchanged. The supported European executable is normalized in that private copy.
+3. First-time setup, drawn like the game's own menus, asks for your own
+   **Original Xbox BLACK ISO/XISO** or extracted disc folder: choose it or drop it
+   onto the window. It shows the release, languages and size before copying,
+   then copies into your Library with progress; **Stop** keeps what was copied and
+   the next install carries on from there. Your source stays unchanged. The
+   supported European executable is normalized in that private copy. Mouse,
+   keyboard and controller all work.
 4. **F1/F10**, **Cmd+,** or **Back + Start** opens recomp settings.
 
 The app is **ad-hoc signed, not notarized**. If macOS blocks it, use

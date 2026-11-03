@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #include "port_menu.h"
+#import "black_ui.h"
 #include "controller_monitor.h"
 #include "controller_axes.h"
 #include "keyboard_mouse.h"
@@ -14,146 +15,23 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct {
-    CGImageRef image[256]; /* Latin-1: the game's fonts carry its accented letters */
-    float width[256], height[256], left[256], top[256], advance[256];
-    float cap;
-} BlackMenuFont;
-static BlackMenuFont big_font, small_font;
-static uint32_t read32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
-static float read_float(const uint8_t *p) { float v; memcpy(&v, p, 4); return v; }
-
-static void free_font(BlackMenuFont *font)
+static BlackUIFont big_font, small_font;
+static void load_font(BlackUIFont *font, NSString *path)
 {
-    for (int i = 0; i < 256; ++i) if (font->image[i]) CGImageRelease(font->image[i]);
-    memset(font, 0, sizeof *font);
+    black_ui_load_font(font, [NSData dataWithContentsOfFile:path]);
+    if (font->cap > 0) fprintf(stderr, "[MENU] local font %s: %ux%u DXT3, cap %.0f\n", path.lastPathComponent.UTF8String,
+        font->atlas_width, font->atlas_height, font->cap);
 }
-
-static void load_font(BlackMenuFont *font, NSString *path)
-{
-    NSData *data = [NSData dataWithContentsOfFile:path];
-    if (data.length < 0x220) return;
-    const uint8_t *b = data.bytes;
-    if (memcmp(b, "4.1v", 4)) return;
-    uint32_t texture = read32(b + 4);
-    if ((uint64_t)texture + 128 > data.length) return;
-    uint32_t format = read32(b + texture + 12);
-    unsigned width = 1u << ((format >> 20) & 15), height = 1u << ((format >> 24) & 15);
-    if (((format >> 8) & 0xFF) != 0x0E || width < 4 || height < 4 ||
-        width > 1024 || height > 1024 || (uint64_t)texture + 128 + width * height > data.length) return;
-    /* Xbox DXT3 blocks: explicit 4-bit alpha followed by the color block.
-     * The original glyph atlas is white; only alpha is needed for tinting. */
-    NSMutableData *alpha = [NSMutableData dataWithLength:width * height * 4];
-    uint8_t *pixels = alpha.mutableBytes;
-    const uint8_t *blocks = b + texture + 128;
-    for (unsigned by = 0; by < height / 4; ++by)
-        for (unsigned bx = 0; bx < width / 4; ++bx) {
-            const uint8_t *block = blocks + (by * (width / 4) + bx) * 16;
-            for (unsigned i = 0; i < 16; ++i) {
-                unsigned pixel = ((by * 4 + i / 4) * width + bx * 4 + i % 4) * 4;
-                pixels[pixel] = pixels[pixel + 1] = pixels[pixel + 2] = 255;
-                pixels[pixel + 3] = ((block[i / 2] >> ((i & 1) * 4)) & 15) * 17;
-            }
-        }
-    CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)alpha);
-    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGImageRef atlas = CGImageCreate(width, height, 8, 32, width * 4, space,
-        (CGBitmapInfo)kCGImageAlphaLast, provider, NULL, false, kCGRenderingIntentDefault);
-    CGColorSpaceRelease(space);
-    CGDataProviderRelease(provider);
-    if (!atlas) return;
-    /* Scan the glyph pool rather than trusting the file's hash-chain offsets. */
-    for (uint32_t at = 0x220; (uint64_t)at + 40 <= texture; at += 40) {
-        uint16_t code; memcpy(&code, b + at + 28, 2);
-        if (code >= 256) continue;
-        float u = read_float(b + at), v = read_float(b + at + 4);
-        float w = read_float(b + at + 8), h = read_float(b + at + 12);
-        float advance = read_float(b + at + 24);
-        if (!isfinite(u) || !isfinite(v) || !isfinite(w) || !isfinite(h) ||
-            !isfinite(advance) || advance < 0 || advance > 1) continue;
-        font->advance[code] = advance * width;
-        font->width[code] = w * width; font->height[code] = h * height;
-        font->left[code] = read_float(b + at + 16) * width;
-        font->top[code] = read_float(b + at + 20) * height;
-        if (w > 0 && h > 0 && u >= 0 && v >= 0 && u + w <= 1.001 && v + h <= 1.001) {
-            if (font->image[code]) CGImageRelease(font->image[code]);
-            font->image[code] = CGImageCreateWithImageInRect(atlas,
-                CGRectMake(round(u * width), round(v * height), round(w * width), round(h * height)));
-        }
-    }
-    font->cap = font->height['A'];
-    CGImageRelease(atlas);
-    fprintf(stderr, "[MENU] local font %s: %ux%u DXT3, cap %.0f\n", path.lastPathComponent.UTF8String,
-        width, height, font->cap);
-}
-
-static NSColor *color(unsigned rgb, CGFloat alpha)
-{
-    return [NSColor colorWithSRGBRed:((rgb >> 16) & 255) / 255.0
-        green:((rgb >> 8) & 255) / 255.0 blue:(rgb & 255) / 255.0 alpha:alpha];
-}
-static void fill(NSRect r, unsigned rgb, CGFloat opacity) { [color(rgb, opacity) setFill]; NSRectFill(r); }
+static void free_font(BlackUIFont *font) { black_ui_free_font(font); }
+static NSColor *color(unsigned rgb, CGFloat alpha) { return black_ui_color(rgb, alpha); }
+static void fill(NSRect r, unsigned rgb, CGFloat opacity) { black_ui_fill(r, rgb, opacity); }
 static void line(CGFloat x, CGFloat y, CGFloat w, unsigned rgb, CGFloat opacity) { fill(NSMakeRect(x, y, w, 1), rgb, opacity); }
-
-/* Text the game's font cannot draw (Cyrillic, or no game font) uses a system
- * font sized so its capitals match `size`, the game font's cap height. */
-static int game_glyphs(BlackMenuFont *font, NSString *value)
-{
-    if (!(font->cap > 0)) return 0;
-    for (NSUInteger i = 0; i < value.length; ++i) {
-        unichar c = [value characterAtIndex:i];
-        if (c >= 256 || (!font->image[c] && c != ' ' && !(font->advance[c] > 0))) return 0;
-    }
-    return 1;
-}
-static NSFont *system_font(CGFloat size, int large)
-{
-    NSFont *probe = [NSFont fontWithName:large ? @"Arial-Black" : @"Arial-BoldMT" size:100] ?: [NSFont boldSystemFontOfSize:100];
-    CGFloat points = size * 100 / (probe.capHeight > 0 ? probe.capHeight : 72);
-    return [NSFont fontWithName:probe.fontName size:points] ?: [NSFont boldSystemFontOfSize:points];
-}
+/* Large text falls back to Arial Black, small text to Arial Bold. */
+static NSString *fallback(int large) { return large ? @"Arial-Black" : @"Arial-BoldMT"; }
 static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
-{
-    BlackMenuFont *font = large ? &big_font : &small_font;
-    if (!game_glyphs(font, value)) {
-        NSFont *fallback = system_font(size, large);
-        /* Flipped view: the line box starts at the ascender; put the capitals' top at y. */
-        [value drawAtPoint:NSMakePoint(x, y - (fallback.ascender - fallback.capHeight)) withAttributes:@{
-            NSFontAttributeName:fallback, NSForegroundColorAttributeName:color(rgb, 1)}];
-        return;
-    }
-    CGContextRef ctx = NSGraphicsContext.currentContext.CGContext;
-    CGFloat scale = size / font->cap;
-    for (NSUInteger i = 0; i < value.length; ++i) {
-        unichar c = [value characterAtIndex:i];
-        if (font->image[c]) {
-            CGRect r = CGRectMake(x + font->left[c] * scale, y + font->top[c] * scale,
-                font->width[c] * scale, font->height[c] * scale);
-            CGContextSaveGState(ctx);
-            CGContextTranslateCTM(ctx, r.origin.x, r.origin.y + r.size.height);
-            CGContextScaleCTM(ctx, 1, -1);
-            CGRect local = CGRectMake(0, 0, r.size.width, r.size.height);
-            CGContextClipToMask(ctx, local, font->image[c]);
-            CGContextSetFillColorWithColor(ctx, color(rgb, 1).CGColor);
-            CGContextFillRect(ctx, local);
-            CGContextRestoreGState(ctx);
-        }
-        x += (font->advance[c] > 0 ? font->advance[c] : font->cap * 0.4) * scale;
-    }
-}
-
+{ black_ui_text(large ? &big_font : &small_font, fallback(large), value, x, y, size, rgb, 1); }
 static CGFloat text_width(NSString *value, CGFloat size, int large)
-{
-    BlackMenuFont *font = large ? &big_font : &small_font;
-    CGFloat advance = 0;
-    if (game_glyphs(font, value)) {
-        for (NSUInteger i = 0; i < value.length; ++i) {
-            unichar c = [value characterAtIndex:i];
-            advance += (font->advance[c] > 0 ? font->advance[c] : font->cap * .4) * size / font->cap;
-        }
-    } else advance = [value sizeWithAttributes:@{NSFontAttributeName:system_font(size, large)}].width;
-    return advance;
-}
+{ return black_ui_text_width(large ? &big_font : &small_font, fallback(large), value, size); }
 static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGFloat width, unsigned rgb, int large)
 {
     CGFloat advance = text_width(value, size, large);
@@ -256,9 +134,10 @@ static NSArray *row_labels(void)
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
     return labels;
 }
-/* sRGB values from TGP menu.cpp: panel, border, text, selected row, heading, dim. */
-enum { PANEL = 0x090806, BORDER = 0xb8944d, TEXT = 0xe6e0d6, HIGHLIGHT = 0x4d3b1a,
-       HEADING = 0xdbb057, DIM = 0x9e9480, TAB = 0x1f1a12, BUTTON = 0x2b2414 };
+/* BLACK's own menu palette (black_ui.h): grey text on the selected row, green-grey
+ * rows, light rails; TGP's layout and rows are kept, its gold palette is not. */
+enum { TEXT = BLACK_UI_TEXT, DIM = BLACK_UI_ROW, HEADING = BLACK_UI_RAIL, HIGHLIGHT = BLACK_UI_TICK,
+       TAB = BLACK_UI_BAR, BUTTON = BLACK_UI_BAR, WARN = BLACK_UI_WARN };
 static const int aniso_levels[] = {0, 2, 4, 8, 16};
 static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
 static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
@@ -699,30 +578,28 @@ static NSTimeInterval transition, last_draw;
 {
     (void)dirty;
     NSSize size = self.bounds.size;
-    fill(self.bounds, 0x000000, .35);
+    fill(self.bounds, BLACK_UI_BACKDROP, .9);
     [NSGraphicsContext saveGraphicsState];
-    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
+    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0), ox = (size.width - 960 * scale) / 2, oy = (size.height - 600 * scale) / 2;
     NSAffineTransform *transform = [NSAffineTransform transform];
-    [transform translateXBy:(size.width - 960 * scale) / 2 yBy:(size.height - 600 * scale) / 2];
+    [transform translateXBy:ox yBy:oy];
     [transform scaleBy:scale]; [transform concat];
-    fill(NSMakeRect(60, 24, 840, 552), PANEL, .94);
-    [color(BORDER, .85) setStroke];
-    NSBezierPath *border = [NSBezierPath bezierPathWithRect:NSMakeRect(61, 25, 838, 550)];
-    border.lineWidth = 2; [border stroke];
-    /* Center the heading using native text metrics; local font proportions are retained. */
-    centered_text(T(@"SETTINGS"), 480, 45, 22, TEXT);
+    /* The game's page: rails on the left, heading in its large font, rows to the right. */
+    BOOL still = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+    black_ui_rails(30, -oy / scale, 600 + oy / scale, still ? -1 : fmod(CACurrentMediaTime() / 7, 1) * 1.3 - .15);
+    CGFloat rail = 76, edge = 960 + ox / scale;
+    text(T(@"SETTINGS"), 96, 38, 24, TEXT, 1);
     int tab = tab_of(selected);
     for (int i = 0; i < MENU_TABS; ++i) {
         NSString *name = T(tab_names[i]);
         CGFloat x = 84 + i * TAB_WIDTH, w = text_width(name, 14, 0), size = MIN(14, 14 * (TAB_WIDTH - 16) / w);
-        fill(NSMakeRect(x, 82, TAB_WIDTH, 38), i == tab ? HIGHLIGHT : TAB, 1);
-        if (i == tab) line(x, 118, TAB_WIDTH, HEADING, .85);
+        if (i == tab) { fill(NSMakeRect(x, 82, TAB_WIDTH, 38), BLACK_UI_BAR, .88); line(x + 12, 116, TAB_WIDTH - 24, TEXT, .9); }
         centered_text(name, x + TAB_WIDTH / 2, 95 + (14 - size) / 2, size, i == tab ? TEXT : DIM);
     }
     if (tab == 3) {
         int supported = black_ModsSupported();
         text([NSString stringWithFormat:T(@"GAME: %s%@"), black_ModsRevision(),
-            supported > 0 ? T(@" XBE") : supported < 0 ? @"" : T(@" - MODS OFF")], 96, 130, 10, supported ? DIM : 0xe5a06d, 0);
+            supported > 0 ? T(@" XBE") : supported < 0 ? @"" : T(@" - MODS OFF")], 96, 130, 10, supported ? DIM : WARN, 0);
     }
     text([NSString stringWithFormat:@"%02d / %02d", selected - tab_first[tab] + 1, tab_rows[tab]],
         820, 130, 10, DIM, 0);
@@ -731,22 +608,23 @@ static NSTimeInterval transition, last_draw;
     for (int index = start; index < end; ++index) {
         CGFloat y = row_y(index, selected);
         if (index == start || group_of(index) != group_of(index - 1)) {
-            text(T(group_name(group_of(index))), 96, y - 17, 10, HEADING, 0);
-            line(96, y - 3, width - 24, HEADING, .35);
+            text(T(group_name(group_of(index))), 96, y - 17, 10, DIM, 0);
+            line(96, y - 3, width - 24, HIGHLIGHT, 1);
         }
         BOOL focus = selected == index;
-        if (focus) fill(NSMakeRect(84, y, width, 38), HIGHLIGHT, 1);
+        /* The live sticks sit right of the controller rows: the line stops at their divider. */
+        if (focus) black_ui_selector(NSMakeRect(84, y, width, 38), rail, tab == 2 ? 700 : edge);
         fitted_text(T([row_labels()[index] uppercaseString]), 96, y + 13, 13,
             is_binding(index) ? 490 : left - 108, focus ? TEXT : DIM, 0);
         if (is_binding(index)) {
             for (int slot = 0; slot < 2; ++slot) {
                 CGFloat x = 600 + slot * 138;
                 BOOL active = focus && slot == binding_slot;
-                fill(NSMakeRect(x,y+6,132,26),active ? HIGHLIGHT : BUTTON,1);
-                if (active) line(x,y+31,132,HEADING,1);
+                fill(NSMakeRect(x,y+6,132,26),BUTTON,.9);
+                if (active) line(x+6,y+29,120,TEXT,.9);
                 NSString *key = active && binding_capture ? @"PRESS A KEY" :
                     [NSString stringWithUTF8String:black_KeyName(black_SettingsBinding(index-ROW_BIND_FIRST,slot))];
-                fitted_text(T(key.uppercaseString),x+8,y+13,11,116,active ? HEADING : TEXT,0);
+                fitted_text(T(key.uppercaseString),x+8,y+13,11,116,active ? TEXT : DIM,0);
             }
             continue;
         }
@@ -782,10 +660,8 @@ static NSTimeInterval transition, last_draw;
             index == ROW_MISSIONS ? (black_SettingsSkipMissionIntros() ? @"ON" : @"OFF") :
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
         if (index != ROW_MEASURE && index != ROW_RESET) {
-            fill(NSMakeRect(left, y + 6, 26, 26), BUTTON, 1);
-            fill(NSMakeRect(left + 96, y + 6, 26, 26), BUTTON, 1);
-            text(@"<", left + 9, y + 13, 13, HEADING, 0);
-            text(@">", left + 105, y + 13, 13, HEADING, 0);
+            text(@"<", left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
+            text(@">", left + 105, y + 13, 13, focus ? TEXT : DIM, 0);
         }
         fitted_text(T(value), left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
     }
@@ -893,7 +769,7 @@ static NSTimeInterval transition, last_draw;
         help = selected == ROW_MISSIONS ? @"SKIP THE BRIEFING FILM BEFORE EACH MISSION." : @"SKIP EA, CRITERION AND STARTUP FILMS.";
         detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." : @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
-    line(84, 430, 792, HEADING, .35);
+    line(84, 430, 792, HIGHLIGHT, 1);
     fitted_text(T(help), 96, 443, 11, 768, TEXT, 0);
     fitted_text(T(detail), 96, 464, 10, 768, DIM, 0);
     if (tab == 2) {
@@ -921,12 +797,12 @@ static NSTimeInterval transition, last_draw;
     }
     BOOL failed = black_SettingsSaveFailed();
     fitted_text(T(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"CHANGES ARE SAVED AUTOMATICALLY."),
-        96, 490, 10, 400, failed ? 0xe5a06d : DIM, 0);
+        96, 490, 10, 400, failed ? WARN : DIM, 0);
     fitted_text(T(@"Q / E, LB / RB: PAGE     UP / DOWN: SELECT"), 480, 490, 9, 396, DIM, 0);
-    line(84, 514, 792, HEADING, .35);
-    fill(NSMakeRect(84, 526, 126, 30), BUTTON, 1);
+    line(84, 514, 792, HIGHLIGHT, 1);
+    fill(NSMakeRect(84, 526, 126, 30), BUTTON, .88); line(96, 553, 102, DIM, 1);
     centered_text(T(@"BACK"), 147, 536, 12, TEXT);
-    fill(NSMakeRect(738, 526, 138, 30), BUTTON, 1);
+    fill(NSMakeRect(738, 526, 138, 30), BUTTON, .88); line(750, 553, 114, DIM, 1);
     { NSString *label = T(@"DEFAULTS"); CGFloat w = text_width(label, 12, 0);
       text(label, 807 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }
     fitted_text(T(@"LEFT / RIGHT: ADJUST    ENTER / A: CHANGE    ESC / B: BACK"), 232, 538, 10, 494, DIM, 0);

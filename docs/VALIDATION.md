@@ -94,6 +94,22 @@ spawner were not ported (ImGui drawing, other levels' assets).
 - Not checked: other weapons and missions, Rapid Fire with the under-barrel
   launcher, Game Speed above 100% in heavy scenes.
 
+## First-time setup (after 0.3.0)
+
+`black-setup-preview` with the extracted European folder, the European ISO and
+the USA ISO: each was inspected (Europe 685 files / 2.21 GB with five language
+banks; USA 574 files / 1.69 GB, English), stopped at a third of the copy with
+the partial files kept and no `Game` folder, then resumed through the setup's own
+flow and validated (USA executable hash). Both ISO SHA-256 values were unchanged
+afterwards. The keyboard moved the selection; every page was drawn to PNG.
+
+The real binary with an empty data folder and `BLACK_TEST_SETUP_SOURCE` set ran
+the setup unattended (check, copy, Play), then started the game, which quit
+normally at its test time with exit code 0 and no process left. A person has not
+yet used the setup with a mouse or a physical controller, or dropped a file on it.
+105 CTest checks passed. The settings panel kept its layout and every preview page;
+its colours changed.
+
 ## Languages (0.3.0)
 
 The USA executable picks its string bank

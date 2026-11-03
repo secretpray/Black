@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **First-time setup** in the look of BLACK's own menu pages: rails, the heading
+  typed in, green-grey rows and the selector bar, the game's fonts read from your
+  disc. Choose or drop an ISO/XISO or folder, review the release, languages, size
+  and free space, then copy with progress, speed and time left. **Stop** keeps
+  the copied files and the next install carries on from them.
+- **Recomp settings** now use the game's menu palette and rails instead of the
+  gold palette carried over from TGP's other ports. Layout and controls are unchanged.
+
 ## 0.3.0 — 2026-11-02
 
 - **Game Language** in Recomp Settings → General: English, French, German,

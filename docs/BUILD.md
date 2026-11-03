@@ -94,10 +94,17 @@ The app bundles transitive non-system dylibs, rewrites load paths, includes
 SDL2-compat's loader-relative SDL3 alias, checks arm64/minimum OS, and signs
 the libraries and app ad-hoc. It is not notarized.
 
-The app's first-run installer copies an owned disc into Library data, validates
+The app's first-run setup (`app_setup.m`) copies an owned disc into Library data, validates
 the original/normalized executable hashes and checks the European patch hash.
 It rejects unsafe/cyclic XDVDFS structures and never replaces an existing install.
-The source ISO/folder is opened for reading only. Failed staging is removed.
+The source ISO/folder is opened for reading only. A stopped copy stays in
+`.install-partial` beside `Game`, marked with the source, its executable hash and
+file list, and is reused only for that same source; each file is written through
+a `.part` file, so a complete name is a complete file. Other failures remove it.
+
+`black-setup-preview <disc folder or image> <output>` draws every setup page to
+PNG, checks keyboard selection, then stops a real copy of your disc at a third
+and resumes it through the setup's own flow into `<output>/data`.
 
 The optional source archive includes exact runtime/game-host/DSP source snapshots,
 local overlays, library source archives and Homebrew recipes. ANGLE's official

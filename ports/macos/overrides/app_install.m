@@ -83,51 +83,143 @@ static BOOL supported(NSData *xbe)
 {return xbe&&xbe.length<=16*1024*1024&&([hash(xbe,NO)isEqual:usa]||[hash(xbe,YES)isEqual:europe]);}
 BOOL black_ValidateInstalledGame(NSURL *root,NSError **e)
 {NSData *xbe=[NSData dataWithContentsOfURL:xbeAt(root) options:0 error:e];if(!xbe)return NO;if(![hash(xbe,NO)isEqual:usa])return fail(e,@"BLACK requires the supported USA or European Original Xbox disc revision.");return YES;}
-BOOL black_InstallGame(NSURL *source,NSURL *destination,NSURL *patch,NSError **e)
+@implementation BlackInstallProgress
+@synthesize bytesDone,bytesTotal,filesDone,filesTotal,currentFile,cancelled;
+- (void)dealloc{[currentFile release];[super dealloc];}
+@end
+@implementation BlackDiscInfo
+@synthesize source,directory,base,files,totalBytes,region,languages,bigFont,smallFont,original;
+- (void)dealloc{[source release];[files release];[region release];[languages release];[bigFont release];[smallFont release];[original release];[super dealloc];}
+@end
+static NSDictionary *entryNamed(NSArray *files,NSString *path)
+{for(NSDictionary *f in files)if([f[@"path"] caseInsensitiveCompare:path]==NSOrderedSame)return f;return nil;}
+/* One file's bytes from the image or the folder, for files the setup reads before copying. */
+static NSData *readEntry(BlackDiscInfo *info,NSFileHandle *image,NSDictionary *entry,NSUInteger limit,NSError **e)
+{
+    if(!entry||[entry[@"size"] unsignedLongLongValue]>limit)return nil;
+    if(info.directory)return [NSData dataWithContentsOfURL:[info.source URLByAppendingPathComponent:entry[@"path"]] options:0 error:e];
+    return readAt(image,info.base+[entry[@"sector"] unsignedLongLongValue]*2048,[entry[@"size"] unsignedIntegerValue],e);
+}
+BlackDiscInfo *black_InspectDisc(NSURL *source,NSError **e)
 {
     NSFileManager *fm=NSFileManager.defaultManager;BOOL directory=NO;
-    if(![fm fileExistsAtPath:source.path isDirectory:&directory])return fail(e,@"The selected game source is unavailable.");
-    if(directory&&[[destination.URLByStandardizingPath.path stringByAppendingString:@"/"] hasPrefix:[source.URLByStandardizingPath.path stringByAppendingString:@"/"]])return fail(e,@"The installation folder must be outside the source game folder.");
-    if([fm fileExistsAtPath:destination.path])return fail(e,@"A game is already installed here. Existing data was preserved.");
-    NSURL *stage=[destination.URLByDeletingLastPathComponent URLByAppendingPathComponent:[@".install-" stringByAppendingString:NSUUID.UUID.UUIDString]];
-    NSFileHandle *file=nil;NSArray *entries=nil;uint64_t base=0;NSData *original=nil;BOOL ok=NO;
-    if(directory)original=[NSData dataWithContentsOfURL:xbeAt(source) options:0 error:e];
-    else{
-        file=[NSFileHandle fileHandleForReadingFromURL:source error:e];if(!file)return NO;
-        entries=black_DiscFiles(file,&base,e);if(!entries)goto done;
-        for(NSDictionary *entry in entries)if([entry[@"path"] caseInsensitiveCompare:@"default.xbe"]==NSOrderedSame){
-            NSUInteger n=[entry[@"size"] unsignedIntegerValue];if(n<=16*1024*1024)original=readAt(file,base+[entry[@"sector"] unsignedLongLongValue]*2048,n,e);break;}
-    }
-    if(!supported(original)){fail(e,@"Unsupported game revision. Select your own USA or supported European Original Xbox BLACK disc.");goto done;}
-    if(![fm createDirectoryAtURL:stage.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:e])goto done;
+    if(![fm fileExistsAtPath:source.path isDirectory:&directory]){fail(e,@"The selected game source is unavailable.");return nil;}
+    BlackDiscInfo *info=[[[BlackDiscInfo alloc]init]autorelease];info.source=source.URLByStandardizingPath;info.directory=directory;
+    NSFileHandle *image=nil;NSMutableArray *files=[NSMutableArray array];
     if(directory){
-        /* Copy into private app data; normalization never writes to the source.
-         * Reject symlinks so a copied install never points back into the source. */
-        NSDirectoryEnumerator *walk=[fm enumeratorAtURL:source includingPropertiesForKeys:@[NSURLIsSymbolicLinkKey] options:0 errorHandler:nil];
-        for(NSURL *p in walk){NSNumber *link=nil;if(![p getResourceValue:&link forKey:NSURLIsSymbolicLinkKey error:e])goto done;if(link.boolValue){fail(e,@"Select an extracted disc folder containing regular files, without symbolic links.");goto done;}}
-        if(![fm copyItemAtURL:source toURL:stage error:e])goto done;
-    }else{
-        if(![fm createDirectoryAtURL:stage withIntermediateDirectories:NO attributes:nil error:e])goto done;
-        for(NSDictionary *entry in entries){
-            NSURL *target=[stage URLByAppendingPathComponent:entry[@"path"]];
-            if(![fm createDirectoryAtURL:target.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:e])goto done;
-            if(![fm createFileAtPath:target.path contents:nil attributes:nil]){fail(e,@"Cannot create an installed game file.");goto done;}
-            NSFileHandle *out=[NSFileHandle fileHandleForWritingToURL:target error:e];if(!out)goto done;
-            uint64_t at=base+[entry[@"sector"] unsignedLongLongValue]*2048,left=[entry[@"size"] unsignedLongLongValue];
-            while(left){NSUInteger n=(NSUInteger)MIN(left,1024*1024);NSData *chunk=readAt(file,at,n,e);if(!chunk||![out writeData:chunk error:e]){[out closeFile];goto done;}at+=n;left-=n;}[out closeFile];
+        /* Reject symlinks so a copied install never points back into the source. */
+        NSString *root=[info.source.path stringByAppendingString:@"/"];
+        NSDirectoryEnumerator *walk=[fm enumeratorAtURL:info.source includingPropertiesForKeys:@[NSURLIsSymbolicLinkKey,NSURLIsRegularFileKey,NSURLFileSizeKey] options:0 errorHandler:nil];
+        for(NSURL *p in walk){
+            NSNumber *link=nil,*regular=nil,*size=nil;
+            if(![p getResourceValue:&link forKey:NSURLIsSymbolicLinkKey error:e]||![p getResourceValue:&regular forKey:NSURLIsRegularFileKey error:e])return nil;
+            if(link.boolValue){fail(e,@"Select an extracted disc folder containing regular files, without symbolic links.");return nil;}
+            if(!regular.boolValue)continue;
+            NSString *path=p.URLByStandardizingPath.path;
+            if(![path hasPrefix:root]||files.count>=100000||![p getResourceValue:&size forKey:NSURLFileSizeKey error:e]){fail(e,@"The game folder could not be listed.");return nil;}
+            [files addObject:@{@"path":[path substringFromIndex:root.length],@"size":size}];
         }
+    }else{
+        image=[NSFileHandle fileHandleForReadingFromURL:info.source error:e];if(!image)return nil;
+        uint64_t base=0;NSArray *entries=black_DiscFiles(image,&base,e);if(!entries){[image closeFile];return nil;}
+        info.base=base;[files addObjectsFromArray:entries];
     }
-    if([hash(original,YES)isEqual:europe]){
+    info.files=files;
+    uint64_t total=0;NSMutableArray *languages=[NSMutableArray array];
+    for(NSDictionary *f in files){
+        total+=[f[@"size"] unsignedLongLongValue];
+        NSString *path=f[@"path"],*name=path.lastPathComponent;
+        if([path.stringByDeletingLastPathComponent caseInsensitiveCompare:@"language/strings"]==NSOrderedSame&&name.length==10&&
+           [name.lowercaseString hasPrefix:@"main"]&&[name.lowercaseString hasSuffix:@".bin"])[languages addObject:[name substringWithRange:NSMakeRange(4,2)]];
+    }
+    info.totalBytes=total;info.languages=[languages sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
+    info.original=readEntry(info,image,entryNamed(files,@"default.xbe"),16*1024*1024,e);
+    if(!supported(info.original)){[image closeFile];fail(e,@"Unsupported game revision. Select your own USA or supported European Original Xbox BLACK disc.");return nil;}
+    info.region=[hash(info.original,NO)isEqual:usa]?@"USA":@"Europe";
+    info.bigFont=readEntry(info,image,entryNamed(files,@"language/fonts/Big.bin"),4*1024*1024,nil);
+    info.smallFont=readEntry(info,image,entryNamed(files,@"language/fonts/Small.bin"),4*1024*1024,nil);
+    [image closeFile];return info;
+}
+uint64_t black_FreeSpace(NSURL *folder)
+{
+    for(NSURL *at=folder;at.path.length>1;at=at.URLByDeletingLastPathComponent){
+        NSNumber *n=nil;if([at getResourceValue:&n forKey:NSURLVolumeAvailableCapacityForImportantUsageKey error:nil]&&n)return n.unsignedLongLongValue;
+    }
+    return 0;
+}
+/* Copies one file to `target` through a .part file, so a file with the final
+ * name is always complete; stops between 1 MiB chunks when cancelled. */
+static BOOL copyEntry(BlackDiscInfo *info,NSFileHandle *image,NSDictionary *entry,NSURL *target,BlackInstallProgress *progress,NSError **e)
+{
+    NSFileManager *fm=NSFileManager.defaultManager;NSURL *part=[target URLByAppendingPathExtension:@"part"];
+    [fm removeItemAtURL:part error:nil];
+    if(![fm createDirectoryAtURL:target.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:e])return NO;
+    if(![fm createFileAtPath:part.path contents:nil attributes:nil])return fail(e,@"Cannot create an installed game file.");
+    NSFileHandle *out=[NSFileHandle fileHandleForWritingToURL:part error:e],*in=image;if(!out)return NO;
+    uint64_t at=info.base+[entry[@"sector"] unsignedLongLongValue]*2048,left=[entry[@"size"] unsignedLongLongValue];BOOL ok=YES;
+    if(info.directory){in=[NSFileHandle fileHandleForReadingFromURL:[info.source URLByAppendingPathComponent:entry[@"path"]] error:e];at=0;if(!in){[out closeFile];return NO;}}
+    while(left&&ok){
+        if(progress.cancelled){ok=NO;if(e)*e=[NSError errorWithDomain:@"BLACK.Install" code:BLACK_INSTALL_CANCELLED userInfo:@{NSLocalizedDescriptionKey:@"Copying stopped. What was copied is kept."}];break;}
+        NSUInteger n=(NSUInteger)MIN(left,1024*1024);NSData *chunk=readAt(in,at,n,e);
+        if(!chunk||![out writeData:chunk error:e]){ok=NO;break;}
+        at+=n;left-=n;progress.bytesDone+=n;
+    }
+    [out closeFile];if(in!=image)[in closeFile];
+    if(!ok)return NO;
+    [fm removeItemAtURL:target error:nil];return [fm moveItemAtURL:part toURL:target error:e];
+}
+static NSString *const stageMarker=@".black-install.json";
+static NSDictionary *stageIdentity(BlackDiscInfo *info)
+{return @{@"source":info.source.path,@"xbe_sha1":hash(info.original,YES),@"files":@(info.files.count),@"bytes":@(info.totalBytes)};}
+uint64_t black_PartialBytes(BlackDiscInfo *info,NSURL *destination)
+{
+    NSURL *stage=[destination.URLByDeletingLastPathComponent URLByAppendingPathComponent:@".install-partial"];
+    NSData *old=[NSData dataWithContentsOfURL:[stage URLByAppendingPathComponent:stageMarker]];
+    if(!old||![[NSJSONSerialization JSONObjectWithData:old options:0 error:nil] isEqual:stageIdentity(info)])return 0;
+    uint64_t done=0;
+    for(NSDictionary *entry in info.files){NSNumber *size=nil;
+        if([[stage URLByAppendingPathComponent:entry[@"path"]] getResourceValue:&size forKey:NSURLFileSizeKey error:nil]&&[size isEqual:entry[@"size"]])done+=size.unsignedLongLongValue;}
+    return done;
+}
+BOOL black_InstallDisc(BlackDiscInfo *info,NSURL *destination,NSURL *patch,BlackInstallProgress *progress,NSError **e)
+{
+    NSFileManager *fm=NSFileManager.defaultManager;
+    if(info.directory&&[[destination.URLByStandardizingPath.path stringByAppendingString:@"/"] hasPrefix:[info.source.path stringByAppendingString:@"/"]])return fail(e,@"The installation folder must be outside the source game folder.");
+    if([fm fileExistsAtPath:destination.path])return fail(e,@"A game is already installed here. Existing data was preserved.");
+    /* One partial copy beside the destination, reused only for the same source and revision. */
+    NSURL *stage=[destination.URLByDeletingLastPathComponent URLByAppendingPathComponent:@".install-partial"],*marker=[stage URLByAppendingPathComponent:stageMarker];
+    NSDictionary *identity=stageIdentity(info);
+    NSData *old=[NSData dataWithContentsOfURL:marker];NSDictionary *seen=old?[NSJSONSerialization JSONObjectWithData:old options:0 error:nil]:nil;
+    if([fm fileExistsAtPath:stage.path]&&![seen isEqual:identity]&&![fm removeItemAtURL:stage error:e])return NO;
+    if(![fm createDirectoryAtURL:stage withIntermediateDirectories:YES attributes:nil error:e])return NO;
+    if(![[NSJSONSerialization dataWithJSONObject:identity options:0 error:e] writeToURL:marker options:NSDataWritingAtomic error:e])return NO;
+    progress.bytesTotal=info.totalBytes;progress.filesTotal=info.files.count;progress.bytesDone=0;progress.filesDone=0;
+    NSFileHandle *image=info.directory?nil:[NSFileHandle fileHandleForReadingFromURL:info.source error:e];
+    BOOL ok=NO,keep=NO;if(!info.directory&&!image)goto done;
+    for(NSDictionary *entry in info.files){
+        NSURL *target=[stage URLByAppendingPathComponent:entry[@"path"]];NSNumber *size=nil;
+        progress.currentFile=entry[@"path"];
+        if([target getResourceValue:&size forKey:NSURLFileSizeKey error:nil]&&[size isEqual:entry[@"size"]])progress.bytesDone+=size.unsignedLongLongValue;
+        else if(!copyEntry(info,image,entry,target,progress,e)){keep=progress.cancelled;goto done;}
+        progress.filesDone+=1;
+    }
+    if([hash(info.original,YES)isEqual:europe]){
         NSData *patchData=[NSData dataWithContentsOfURL:patch options:0 error:e];
         if(!patchData||![hash(patchData,NO)isEqual:patchHash]){fail(e,@"The packaged Europe patch failed its integrity check.");goto done;}
-        NSData *normalized=black_EuropePatch(original,patchData,e);if(!normalized)goto done;
+        NSData *normalized=black_EuropePatch(info.original,patchData,e);if(!normalized)goto done;
         if(![hash(normalized,NO)isEqual:usa]){fail(e,@"The normalized executable failed its integrity check.");goto done;}
         if(![normalized writeToURL:xbeAt(stage) options:NSDataWritingAtomic error:e])goto done;
         NSURL *strings=[stage URLByAppendingPathComponent:@"language/strings"],*alias=[strings URLByAppendingPathComponent:@"MainUS.bin"];
         if(![fm fileExistsAtPath:alias.path]&&![fm copyItemAtURL:[strings URLByAppendingPathComponent:@"MainUK.bin"] toURL:alias error:e])goto done;
     }
-    if(!black_ValidateInstalledGame(stage,e))goto done;
+    if(!black_ValidateInstalledGame(stage,e)||![fm removeItemAtURL:marker error:e])goto done;
     ok=[fm moveItemAtURL:stage toURL:destination error:e];
 done:
-    [file closeFile];if(!ok)[fm removeItemAtURL:stage error:nil];return ok;
+    [image closeFile];if(!ok&&!keep)[fm removeItemAtURL:stage error:nil];return ok;
+}
+BOOL black_InstallGame(NSURL *source,NSURL *destination,NSURL *patch,NSError **e)
+{
+    BlackDiscInfo *info=black_InspectDisc(source,e);if(!info)return NO;
+    BlackInstallProgress *progress=[[[BlackInstallProgress alloc]init]autorelease];
+    return black_InstallDisc(info,destination,patch,progress,e);
 }

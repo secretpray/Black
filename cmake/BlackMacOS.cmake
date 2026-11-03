@@ -40,9 +40,11 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_settings.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_install.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_bootstrap.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_setup.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_ui.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
-target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore")
+target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
 # HD texture replacement: map, pack index, DDS/PNG and loader threads; the
@@ -108,6 +110,9 @@ add_executable(black-app-install tools/macos/app_install_test.m ports/macos/over
 target_link_libraries(black-app-install PRIVATE "-framework Foundation")
 add_test(NAME macos_app_install COMMAND black-app-install)
 target_link_libraries(black-menu-preview PRIVATE black-port-ui)
+# Needs your own disc folder or image, so it is run by hand, not by CTest.
+add_executable(black-setup-preview tools/macos/setup_preview.m)
+target_link_libraries(black-setup-preview PRIVATE black-port-ui)
 add_executable(black-controller-axes tools/macos/controller_axes_test.c)
 add_test(NAME macos_controller_axes COMMAND black-controller-axes)
 add_executable(black-controller-monitor tools/macos/controller_monitor_test.c
