@@ -89,8 +89,10 @@ PS2 and Xbox 360 files are not supported.
   Reimagined" pack, through portingpete's map: put the pack's files under
   `~/Library/Application Support/BLACK/Textures/replacement/` and turn on
   **Recomp Settings → Textures**. The pack is not included.
-- Game text in English, French, German, Spanish or
-  Italian from your disc, and the settings panel in those languages or Russian.
+- Game text in English, French, German, Spanish or Italian from your disc, or
+  Russian: the app carries the translation text only and builds the Russian
+  bank and Cyrillic letters into your own installed copy when the game starts.
+  The settings panel speaks those languages or Russian.
 - Separate stick/trigger deadzones, explicit drift measurement, live axes,
   normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.
 - Direct mouse look, two bindings per action, Flash menu cursor navigation

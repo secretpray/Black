@@ -142,7 +142,7 @@ static const int aniso_levels[] = {0, 2, 4, 8, 16};
 static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
 static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
 static int active_hid, launch_language;
-static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO"};
+static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
 static NSString *const menu_language_names[] = {@"AUTO", @"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
 static int language_available(int language) { return black_game_language_available(getenv("BLACK_GAME_DIR"), language); }
 static int languages_on_disc(void)

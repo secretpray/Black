@@ -60,21 +60,25 @@ Bound automated runs and retain their unique log/outcome. A timeout is a stop
 condition, not gameplay acceptance. Muted/dummy audio does not qualify real audio;
 scripted input does not qualify a physical controller or rumble/hotplug.
 
-## Russian game font
+## Russian game text
 
-Russian fan translations paint Cyrillic over the Latin and digit cells of
-`language/fonts/Big.bin` and `Small.bin`, so they lack Й Э Щ Ъ Ё and draw З Ч Б
-in place of 3 4 6. `russian_font.py` rebuilds such a font from your own copy,
-taking the digits from the game's English font, and keeps the file layout:
+`resources/translations/ru/strings.json` holds the Russian text by string ID
+(`null` keeps the game's English string) and ships in the app as
+`russian-strings.json`. Before each start the app (`game_translation.m`)
+prepares the installed copy: it keeps the English bank as `MainEn.bin` and the
+retail fonts as `*.retail.bin`, adds А-Я and Ё to `Big.bin`/`Small.bin` drawn
+from macOS's Impact and Arial Black at the game's capital height and width,
+writes `MainRu.bin`, and makes `MainUS.bin` the Russian or English bank for the
+chosen language. The game runs as English (language word 1).
 
-```sh
-python3 tools/macos/russian_font.py <translation>/language/fonts \
-  out/macos/normalized-game/language/fonts out/macos/russian-font
-```
+The fonts' glyph records before the default glyph (header `0x1C`) are sorted by
+`(code & 127, code)`, and the 128 words at `0x20` point at the first record of
+each bucket or at the default glyph; the game finds glyphs only through them, so
+new records are sorted in and the buckets rebuilt. Only the retail font hashes
+are changed. Outside the app, `BLACK_RUSSIAN_STRINGS` names the JSON.
 
-Text for the rebuilt font must use its cells (`russian_font.encode`): Й Э Щ Ъ Ё
-and the moved З Ч Б sit on lowercase `j e w q y z c b`. No translation or font
-is part of this repository.
+`russian_font.py` is older: it rebuilds a fan translation's own font, which
+paints Cyrillic over Latin cells. The app does not use it.
 
 ## App and DMG
 

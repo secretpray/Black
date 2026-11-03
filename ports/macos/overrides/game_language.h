@@ -2,15 +2,16 @@
  * from its suffix table 0x288318 (0 UK, 1 US, 3 Ge, 4 Fr, 5 Sp, 6 It), indexed
  * by the language word 0x2D0D78, which its start-up 0x1F8100 fixes at 1 (US).
  * The European disc carries the other four banks; the USA disc has only
- * English. */
+ * English. Russian runs as English: the app makes MainUS.bin the Russian bank
+ * it built as MainRu.bin before the game starts (game_translation.h). */
 #ifndef BLACK_GAME_LANGUAGE_H
 #define BLACK_GAME_LANGUAGE_H
 #include <stdio.h>
 #include <unistd.h>
 #include "port_menu.h"
 
-static const int black_game_language_index[BLACK_GAME_LANGUAGES] = {1, 4, 3, 5, 6};
-static const char *const black_game_language_suffix[BLACK_GAME_LANGUAGES] = {"US", "Fr", "Ge", "Sp", "It"};
+static const int black_game_language_index[BLACK_GAME_LANGUAGES] = {1, 4, 3, 5, 6, 1};
+static const char *const black_game_language_suffix[BLACK_GAME_LANGUAGES] = {"US", "Fr", "Ge", "Sp", "It", "Ru"};
 
 /* English always loads (MainUS.bin, the European MainUK.bin alias); another
  * language needs its bank in the installed game. */

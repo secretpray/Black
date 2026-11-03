@@ -27,7 +27,7 @@ static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top 
 static atomic_int texture_replacement;
 /* Largest side of a replacement: 1024, 2048 or 4096; larger files lose top levels. */
 static atomic_int texture_max_size = 2048;
-/* game_language: 0 English, 1 French, 2 German, 3 Spanish, 4 Italian (next launch).
+/* game_language: 0 English, 1 French, 2 German, 3 Spanish, 4 Italian, 5 Russian (next launch).
  * menu_language: 0 follows the game, then English, French, German, Spanish,
  * Italian, Russian. */
 static atomic_int game_language, menu_language;
@@ -127,7 +127,7 @@ static void load_settings(void)
             }
             if (sscanf(line, " game_language = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
-                if (*value && !*end && n >= 0 && n <= 4) atomic_store(&game_language, (int)n);
+                if (*value && !*end && n >= 0 && n < BLACK_GAME_LANGUAGES) atomic_store(&game_language, (int)n);
             }
             if (sscanf(line, " menu_language = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -295,7 +295,7 @@ int black_SettingsSetTextureMaxSize(int size)
 int black_SettingsGameLanguage(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&game_language); }
 int black_SettingsSetGameLanguage(int language)
-{ return language >= 0 && language <= 4 ? save_setting(&game_language, language) : 0; }
+{ return language >= 0 && language < BLACK_GAME_LANGUAGES ? save_setting(&game_language, language) : 0; }
 int black_SettingsMenuLanguage(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&menu_language); }
 int black_SettingsSetMenuLanguage(int language)

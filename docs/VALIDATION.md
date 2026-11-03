@@ -117,6 +117,26 @@ settings file at once. Unattended with German chosen in the setup, the real
 binary installed the European folder and the game opened `MainGe.bin` on its
 first start, then quit normally with exit code 0.
 
+## Russian game text (after 0.3.0)
+
+The fonts were found to keep their glyph records sorted by `(code & 127, code)`
+with 128 bucket words pointing at each run; records placed outside that order
+drew the default box, and appending records without rebuilding the buckets made
+every glyph a box. With records sorted in and the buckets rebuilt, a test bank
+showing А-Я in every string drew all 33 letters in both fonts next to an
+unchanged English string. The full Russian bank then showed the main menu,
+difficulty choice, briefing, mission objectives and pause menu in Russian.
+
+Through the real app with an empty data folder: setup installed the European
+folder with Russian chosen, the start added Cyrillic to both fonts (retail copies
+kept), wrote `MainRu.bin` and made `MainUS.bin` Russian; the game ran in Russian
+into the first mission and quit with exit code 0. Switching the setting to
+English on the same install restored the English `MainUS.bin` without touching
+the fonts again. The USA ISO, whose only bank is `MainUS.bin`, gave the same
+result. 106 CTest checks passed, including `macos_translation` on synthetic
+fonts and banks. Missions after the first, film subtitles and the long credits
+were not checked in Russian.
+
 ## Languages (0.3.0)
 
 The USA executable picks its string bank

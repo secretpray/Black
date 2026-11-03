@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         child(argv[0],"keyboard-defaults",path)||child(argv[0],"filtering",path))return 29;
     if (child(argv[0], "mods-defaults", path)) return 30;
     if (!black_SettingsSetGameLanguage(BLACK_LANG_GERMAN) || !black_SettingsSetMenuLanguage(6) ||
-        black_SettingsSetGameLanguage(5) || black_SettingsSetMenuLanguage(7) || black_SettingsSetGameLanguage(-1) ||
+        black_SettingsSetGameLanguage(BLACK_GAME_LANGUAGES) || black_SettingsSetMenuLanguage(7) || black_SettingsSetGameLanguage(-1) ||
         child(argv[0], "language", path) || !black_SettingsSetGameLanguage(0) || !black_SettingsSetMenuLanguage(0)) return 34;
     if (!black_SettingsSetFpsCounter(1) || child(argv[0], "fps", path) || !black_SettingsSetFpsCounter(0) ||
         !child(argv[0], "fps", path)) return 33;

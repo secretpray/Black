@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import "app_install.h"
 #import "app_setup.h"
+#import "game_translation.h"
 #include "port_menu.h"
 #include <sys/file.h>
 #include <fcntl.h>
@@ -39,6 +40,14 @@ char *black_AppPrepareGame(void)
             if(!patch&&getenv("BLACK_EUROPE_PATCH"))patch=[NSURL fileURLWithPath:@(getenv("BLACK_EUROPE_PATCH"))];
             if(!black_SetupRun(game,patch))return NULL;
         }
+        /* Russian is built into this copy and MainUS.bin set by the chosen language,
+         * every start, so changing it in settings needs nothing else. */
+        NSURL *russian=black_RussianStrings();NSError *issue=nil;
+        BOOL ready=black_PrepareRussian(game,russian,&issue);
+        if(!ready)fprintf(stderr,"[LANG] Russian not prepared: %s\n",issue.localizedDescription.UTF8String);
+        BOOL wants=black_SettingsGameLanguage()==BLACK_LANG_RUSSIAN&&ready&&russian;
+        if(!black_ApplyGameText(game,wants,&issue))fprintf(stderr,"[LANG] game text not set: %s\n",issue.localizedDescription.UTF8String);
+        else fprintf(stderr,"[LANG] MainUS.bin is the %s bank\n",wants?"Russian":"English");
         setenv("XDG_DATA_HOME",[[root URLByAppendingPathComponent:@"Data"].path fileSystemRepresentation],1);
         setenv("BLACK_GAME_DIR",game.path.fileSystemRepresentation,1);
         const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_FULLSCREEN","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};

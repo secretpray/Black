@@ -48,6 +48,8 @@ def build(binary, output, version):
         # portingpete's map (MIT, notices below); the HD pack itself is never shipped.
         shutil.copy2(ROOT / "resources/textures/black-hd-reimagined.map", resources)
         shutil.copy2(ROOT / "resources/textures/black-hd-reimagined-extra.map", resources)
+        # Russian text only; the bank and fonts are built from the player's own copy.
+        shutil.copy2(ROOT / "resources/translations/ru/strings.json", resources / "russian-strings.json")
         sources, pending, mapped = {}, [binary], {}
         search = [ROOT / "out/macos/angle/lib", Path("/opt/homebrew/lib")]
         while pending:

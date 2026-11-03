@@ -41,10 +41,11 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_install.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_bootstrap.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_setup.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_translation.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_ui.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
-target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController")
+target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
 # HD texture replacement: map, pack index, DDS/PNG and loader threads; the
@@ -109,6 +110,9 @@ add_executable(black-menu-preview tools/macos/menu_preview.m)
 add_executable(black-app-install tools/macos/app_install_test.m ports/macos/overrides/app_install.m)
 target_link_libraries(black-app-install PRIVATE "-framework Foundation")
 add_test(NAME macos_app_install COMMAND black-app-install)
+add_executable(black-translation tools/macos/translation_test.m ports/macos/overrides/game_translation.m)
+target_link_libraries(black-translation PRIVATE "-framework Foundation" "-framework CoreText" "-framework CoreGraphics")
+add_test(NAME macos_translation COMMAND black-translation)
 target_link_libraries(black-menu-preview PRIVATE black-port-ui)
 # Needs your own disc folder or image, so it is run by hand, not by CTest.
 add_executable(black-setup-preview tools/macos/setup_preview.m)

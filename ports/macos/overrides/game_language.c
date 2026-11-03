@@ -14,7 +14,8 @@ uint32_t black_GameLanguageIndex(void)
             fprintf(stderr, "[LANG] Main%s.bin is not in the installed game; English\n", black_game_language_suffix[language]);
         language = BLACK_LANG_ENGLISH;
     }
-    fprintf(stderr, "[LANG] game language Main%s.bin (index %d)\n", black_game_language_suffix[language],
+    if (language == BLACK_LANG_RUSSIAN) fprintf(stderr, "[LANG] game language Russian: MainUS.bin from MainRu.bin (index 1)\n");
+    else fprintf(stderr, "[LANG] game language Main%s.bin (index %d)\n", black_game_language_suffix[language],
         black_game_language_index[language]);
     return (uint32_t)black_game_language_index[language];
 }

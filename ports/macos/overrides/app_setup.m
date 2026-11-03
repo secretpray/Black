@@ -7,6 +7,7 @@
 #import "black_ui.h"
 #include "port_menu.h"
 #include "game_language.h"
+#import "game_translation.h"
 #include <sys/sysctl.h>
 #import <GameController/GameController.h>
 #import <QuartzCore/QuartzCore.h>
@@ -51,10 +52,13 @@ static double ease(double t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return 1 - pow(1 -
 static BOOL still(void) { return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion; }
 static const char *const page_names[] = {"Disc", "Checking", "Review", "Copying", "Stopped", "Failed", "Language", "Graphics", "Done"};
 /* Game languages as port_settings numbers them, with each one's string bank suffixes. */
-static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO"};
+static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
 static NSString *const menu_language_names[] = {@"AUTO", @"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
+/* A language the game can show: its bank on the disc, or Russian built from the
+ * disc's English text and the translation the app carries. */
 static BOOL on_disc(BlackDiscInfo *info, int language)
 {
+    if (language == BLACK_LANG_RUSSIAN) return black_RussianStrings() != nil;
     NSArray *suffixes = @[@[@"UK", @"US"], @[@"Fr"], @[@"Ge"], @[@"Sp"], @[@"It"]][language];
     for (NSString *have in info.languages)
         for (NSString *want in suffixes) if ([have caseInsensitiveCompare:want] == NSOrderedSame) return YES;
@@ -158,7 +162,9 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; NSStrin
         r[n++] = (SetupRow){@"QUIT", @"CLOSES SETUP.", nil, @selector(quit:), YES};
         break;
     case BLACK_SETUP_LANGUAGE:
-        r[n++] = (SetupRow){@"GAME TEXT", languages_count(info) > 1 ?
+        r[n++] = (SetupRow){@"GAME TEXT", black_SettingsGameLanguage() == BLACK_LANG_RUSSIAN ?
+            @"RUSSIAN TEXT AND CYRILLIC LETTERS ARE ADDED TO YOUR COPY WHEN THE GAME STARTS. NOTHING TO DO BY HAND." :
+            languages_count(info) > 1 ?
             @"TEXT AND MENUS OF THE GAME ITSELF, FROM YOUR DISC'S STRING BANKS. LEFT / RIGHT CHANGES IT." :
             @"THIS DISC HAS ENGLISH TEXT ONLY. THE EUROPEAN DISC ADDS FRENCH, GERMAN, SPANISH AND ITALIAN.",
             nil, @selector(forward:), YES, game_language_names[black_SettingsGameLanguage()]};
@@ -324,7 +330,7 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; NSStrin
     BOOL fresh = !settings || ![NSFileManager.defaultManager fileExistsAtPath:@(settings)];
     if (!on_disc(info, black_SettingsGameLanguage())) black_SettingsSetGameLanguage(BLACK_LANG_ENGLISH);
     else if (fresh) {
-        NSArray *codes = @[@"en", @"fr", @"de", @"es", @"it"];
+        NSArray *codes = @[@"en", @"fr", @"de", @"es", @"it", @"ru"];
         for (NSString *preferred in NSLocale.preferredLanguages) {
             NSUInteger language = [codes indexOfObject:[preferred substringToIndex:MIN(2u, preferred.length)]];
             if (language != NSNotFound && on_disc(info, (int)language)) { black_SettingsSetGameLanguage((int)language); break; }
@@ -532,7 +538,8 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; NSStrin
         break;
     case BLACK_SETUP_FAILED: intro = message; break;
     case BLACK_SETUP_LANGUAGE:
-        intro = [NSString stringWithFormat:@"THE GAME IS INSTALLED AND CHECKED. YOUR DISC HAS GAME TEXT IN %@. THE MENU LANGUAGE SETS THE RECOMP SETTINGS PANEL.", languages(info)];
+        intro = [NSString stringWithFormat:@"THE GAME IS INSTALLED AND CHECKED. YOUR DISC HAS GAME TEXT IN %@%@. THE MENU LANGUAGE SETS THE RECOMP SETTINGS PANEL.",
+            languages(info), on_disc(info, BLACK_LANG_RUSSIAN) ? @"; RUSSIAN IS BUILT FROM ITS ENGLISH TEXT" : @""];
         break;
     case BLACK_SETUP_GRAPHICS:
         intro = [NSString stringWithFormat:@"THIS MAC: %@. EACH CHANGE IS SAVED AT ONCE.", this_mac()];

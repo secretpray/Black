@@ -72,6 +72,12 @@ Jimenez, Jose I. Echevarria, Belen Masia, Fernando Navarro, Diego Gutierrez;
 MIT, permission notice retained in both headers). `ports/macos/overrides/smaa_metal.m`
 only rewrites the shader text for Metal at run time; it ships no second copy.
 
+The Russian game text in `resources/translations/ru/strings.json` is an edited
+version of an old unofficial fan translation (its credits name MuZa-Games, voice
+KranX); see that folder's README. It contains text only. The Cyrillic letters
+are drawn at run time on the player's Mac from the macOS system fonts Impact and
+Arial Black into the player's own copy of the game font; no font file is shipped.
+
 BLACK is an Electronic Arts / Criterion Games title. This repository does not
 include its disc image, executable, assets or generated game C/C++ sources.
 The metadata archive remains in the original game submodule and contains

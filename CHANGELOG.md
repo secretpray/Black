@@ -10,6 +10,10 @@
   game text from your disc's languages (the Mac's own language first when the
   disc has it), the settings panel's language, and render scale, anti-aliasing,
   upscaling, texture filtering and field of view, or the recommended set.
+- **Russian game text.** The app carries the translation text only. Choosing
+  Russian in setup or settings builds the Russian string bank from your disc's
+  English bank and adds Cyrillic to your own copy of the game's fonts (Latin
+  text in every other language is unchanged), automatically before each start.
 - **Recomp settings** now use the game's menu palette and rails instead of the
   gold palette carried over from TGP's other ports. Layout and controls are unchanged.
 
