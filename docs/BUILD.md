@@ -8,7 +8,7 @@ Do not mix TGP's C++ X86Context hooks with their generated C ABI.
 
 Apple Silicon, a current Xcode installation with the Metal toolchain,
 Homebrew, Python 3.11+, and your own supported Original Xbox BLACK disc.
-The distributed 0.3.0 app requires macOS 27+ because of its actual library
+The distributed 0.4.0 app requires macOS 27+ because of its actual library
 build targets. A deployment-target flag alone does not establish older-OS support.
 
 ```sh
@@ -64,8 +64,8 @@ scripted input does not qualify a physical controller or rumble/hotplug.
 
 `resources/translations/ru/strings.json` holds the Russian text by string ID
 (`null` keeps the game's English string) and ships in the app as
-`russian-strings.json`. Before each start the app (`game_translation.m`)
-prepares the installed copy: it keeps the English bank as `MainEn.bin` and the
+`russian-strings.json`. When Russian is chosen, before each start the app
+(`game_translation.m`) prepares the installed copy: it keeps the English bank as `MainEn.bin` and the
 retail fonts as `*.retail.bin`, adds А-Я and Ё to `Big.bin`/`Small.bin` drawn
 from macOS's Impact and Arial Black at the game's capital height and width,
 writes `MainRu.bin`, and makes `MainUS.bin` the Russian or English bank for the
@@ -85,12 +85,12 @@ paints Cyrillic over Latin cells. The app does not use it.
 ```sh
 python3 tools/macos/make_icon.py
 python3 tools/macos/package_app.py out/build/macos-metal/black-recomp \
-  out/release/0.3.0/BLACK.app --version 0.3.0
+  out/release/0.4.0/BLACK.app --version 0.4.0
 .venv/macos/bin/python3 -m pip install -r tools/macos/requirements-package.txt
 .venv/macos/bin/python3 tools/macos/styled_dmg.py \
-  out/release/0.3.0/BLACK.app out/release/0.3.0/BLACK-0.3.0-macos-arm64.dmg
-python3 tools/macos/package_sources.py out/release/0.3.0/BLACK.app \
-  out/release/0.3.0/optional-library-sources.tar.xz --version 0.3.0
+  out/release/0.4.0/BLACK.app out/release/0.4.0/BLACK-0.4.0-macos-arm64.dmg
+python3 tools/macos/package_sources.py out/release/0.4.0/BLACK.app \
+  out/release/0.4.0/optional-library-sources.tar.xz --version 0.4.0
 ```
 
 Use an unused output path: packaging refuses to overwrite a prior candidate.

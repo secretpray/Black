@@ -10,9 +10,9 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.3.0 is an experimental macOS release** that adds optional HD texture replacement,
-> game and menu languages, and new Mods (Infinite Ammo, Rapid Fire, No Recoil,
-> One-Hit Kill, Game Speed).
+> **0.4.0 is an experimental macOS release** that adds a first-time setup drawn like
+> the game's own menus, Russian game text built into your own copy, and the game's
+> menu look for the settings panel.
 > Combat, menus and profile saving have been exercised on the development Mac. A complete
 > playthrough, all runtime races, audio quality and controller calibration are not yet
 > qualified. [Validation](docs/VALIDATION.md).
@@ -37,11 +37,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.3.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.3.0)**
+**[BLACK 0.4.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.4.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.3.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.4.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -64,7 +64,8 @@ are source snapshots, not playable apps.
    the next install carries on from there. Your source stays unchanged. The
    supported European executable is normalized in that private copy. Then pick
    the game text from your disc's languages and the graphics settings; they
-   apply on the first start. Mouse, keyboard and controller all work.
+   apply on the first start. Use the mouse or keyboard; controller navigation
+   is built in but not yet tested with a physical pad.
 4. **F1/F10**, **Cmd+,** or **Back + Start** opens recomp settings.
 
 The app is **ad-hoc signed, not notarized**. If macOS blocks it, use
@@ -200,9 +201,15 @@ Special thanks to **[TGP482 / BLACK-XBERecomp](https://github.com/TGP482/BLACK-X
 for the Original Xbox BLACK recompilation project, Xbox XBE Recomp tooling,
 settings/menu design, control policies and the checked European revision patch.
 
+Special thanks to **portingpete** and **[Black-2006-Recomp](https://github.com/portingpete/Black-2006-Recomp)**:
+its launcher is the model for this port's first-time setup and its menu look,
+its Xbox-to-pack map drives HD texture replacement, and its notes on the string
+banks, the game fonts and save profiles, its audio completion work and its film
+timing research guided much of the work here. Thanks as well for xboxrecomp.
+
 Thanks to **elpetese** for the [native macOS game host](https://github.com/elpetese/black-macos-recomp)
-and [runtime](https://github.com/elpetese/black-macos-runtime), **sp00nz** and
-**portingpete** for xboxrecomp and BLACK runtime work, the **xemu** team for Xbox
+and [runtime](https://github.com/elpetese/black-macos-runtime), **sp00nz** for
+xboxrecomp and BLACK runtime work, the **xemu** team for Xbox
 hardware/rendering/audio foundations, **Matt Borgerson** for dsp56300, and the
 **ANGLE**, **SDL** and other library contributors.
 

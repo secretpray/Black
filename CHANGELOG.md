@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-03
 
 - **First-time setup** in the look of BLACK's own menu pages: rails, the heading
   typed in, green-grey rows and the selector bar, the game's fonts read from your
@@ -16,6 +16,10 @@
   text in every other language is unchanged), automatically before each start.
 - **Recomp settings** now use the game's menu palette and rails instead of the
   gold palette carried over from TGP's other ports. Layout and controls are unchanged.
+- German, Spanish and Italian game text checked from the menus into the first
+  mission. `tools/macos/check_languages.py` checks that every installed string
+  bank has the English IDs and that the game fonts can draw its letters;
+  `black-setup-preview` draws the setup pages and stops and resumes a real copy.
 
 ## 0.3.0 — 2026-11-02
 

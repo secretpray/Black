@@ -1,6 +1,6 @@
 # Release validation and current limits
 
-Candidate: **BLACK 0.3.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Candidate: **BLACK 0.4.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
 ## Evidence
@@ -94,7 +94,7 @@ spawner were not ported (ImGui drawing, other levels' assets).
 - Not checked: other weapons and missions, Rapid Fire with the under-barrel
   launcher, Game Speed above 100% in heavy scenes.
 
-## First-time setup (after 0.3.0)
+## First-time setup (0.4.0)
 
 `black-setup-preview` with the extracted European folder, the European ISO and
 the USA ISO: each was inspected (Europe 685 files / 2.21 GB with five language
@@ -117,7 +117,7 @@ settings file at once. Unattended with German chosen in the setup, the real
 binary installed the European folder and the game opened `MainGe.bin` on its
 first start, then quit normally with exit code 0.
 
-## Russian game text (after 0.3.0)
+## Russian game text (0.4.0)
 
 The fonts were found to keep their glyph records sorted by `(code & 127, code)`
 with 128 bucket words pointing at each run; records placed outside that order
@@ -137,6 +137,12 @@ result. 106 CTest checks passed, including `macos_translation` on synthetic
 fonts and banks. Missions after the first, film subtitles and the long credits
 were not checked in Russian.
 
+The packaged 0.4.0 app, run from its mounted DMG with the system PATH: setup
+installed the European ISO with English and left both fonts at their retail
+hashes; switching the setting to Russian then built the Russian bank and the
+Cyrillic letters on the next start, and the first mission's objective showed in
+Russian. Both runs quit with exit code 0. Russian is prepared only when chosen.
+
 ## Languages (0.3.0)
 
 The USA executable picks its string bank
@@ -153,7 +159,7 @@ the installed game has the bank. The game then loads the bank itself.
   capital height. French, German, Spanish and Italian labels follow TGP's
   translations; their help lines stay English.
 - 102 CTest and 30 Python checks passed, including language persistence.
-- German, Spanish and Italian (after 0.3.0, same build):
+- German, Spanish and Italian (0.4.0):
   `tools/macos/check_languages.py` found the same 1724 string IDs in all five
   European banks and a Big.bin and Small.bin glyph for every character beyond
   English. Three muted, scripted runs with isolated saves went from the menus
