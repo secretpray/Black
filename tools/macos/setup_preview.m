@@ -102,6 +102,9 @@ int main(int argc, char **argv)
         printf("Settings: scale 2 -> 3 -> recommended 2, game language after right: %s\n",
             [[[NSString stringWithContentsOfFile:settings encoding:NSUTF8StringEncoding error:nil] componentsSeparatedByString:@"\n"]
                 filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF BEGINSWITH 'game_language'"]].firstObject.UTF8String);
+        /* Back past English to the last language: Russian, drawn in the fallback face. */
+        key(window, 123); key(window, 123);
+        snapshot(view, png(@"7-language-russian"));
 
         /* A real install through the setup's flow, stopped part way and resumed. */
         __block BOOL stopped = NO;

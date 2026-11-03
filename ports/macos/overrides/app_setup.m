@@ -12,12 +12,18 @@
 #import <GameController/GameController.h>
 #import <QuartzCore/QuartzCore.h>
 
-static NSString *const stand_in = @"DINCondensed-Bold";
 static BlackUIFont big_font, small_font;
+/* Once the game's fonts are read, text they cannot draw (Cyrillic) falls back to
+ * the settings panel's wide faces, not the narrow stand-in. */
+static NSString *stand_in(int large)
+{
+    if (!((large ? big_font : small_font).cap > 0)) return @"DINCondensed-Bold";
+    return large ? @"Arial-Black" : @"Arial-BoldMT";
+}
 static void text(NSString *s, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, CGFloat alpha, int large)
-{ black_ui_text(large ? &big_font : &small_font, stand_in, s, x, y, size, rgb, alpha); }
+{ black_ui_text(large ? &big_font : &small_font, stand_in(large), s, x, y, size, rgb, alpha); }
 static CGFloat width_of(NSString *s, CGFloat size, int large)
-{ return black_ui_text_width(large ? &big_font : &small_font, stand_in, s, size); }
+{ return black_ui_text_width(large ? &big_font : &small_font, stand_in(large), s, size); }
 static void over(NSRect r, unsigned rgb, CGFloat alpha)
 { [black_ui_color(rgb, alpha) setFill]; NSRectFillUsingOperation(r, NSCompositingOperationSourceOver); }
 static NSArray<NSString *> *wrap(NSString *s, CGFloat width, CGFloat size)
