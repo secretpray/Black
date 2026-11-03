@@ -110,6 +110,15 @@ the installed game has the bank. The game then loads the bank itself.
   capital height. French, German, Spanish and Italian labels follow TGP's
   translations; their help lines stay English.
 - 102 CTest and 30 Python checks passed, including language persistence.
+- German, Spanish and Italian (after 0.3.0, same build):
+  `tools/macos/check_languages.py` found the same 1724 string IDs in all five
+  European banks and a Big.bin and Small.bin glyph for every character beyond
+  English. Three muted, scripted runs with isolated saves went from the menus
+  into the first mission and its pause menu; each opened its own bank, loaded
+  the level and exited normally before the limit. Menus, briefing, mission
+  objectives and the pause menu showed the selected language with readable
+  accents and no clipped text on those screens. Other missions and the longest
+  strings were not checked. 43 Python checks passed.
 
 ## HD texture replacement (0.3.0)
 
