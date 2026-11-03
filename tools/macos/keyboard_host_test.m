@@ -4,6 +4,7 @@
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/flash_menu.h"
+#include "../../ports/macos/overrides/mouse_capture.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -77,6 +78,23 @@ int main(void)
         e->code=53;[view keyDown:e];state();if(analog[1]!=255||start_down)return 18;[view keyUp:e];
         [view mouseDown:e];if(s_mouse_captured||!black_GamePointerIntent())return 19;[view mouseUp:e];
         black_GameMenuState(0,0);unlink(path);
+        /* Pad -> keyboard with no page transition must restore relative look. */
+        BlackMouseCapture capture={0};
+        if(black_mouse_capture(&capture,0,0,0,1,0)!=0)return 20;
+        black_InputSetKeyboardActive(1);
+        xek_capture_mouse(black_mouse_capture(&capture,1,0,0,1,0));
+        now+=10;black_MouseTake(now,0,&x,&y);[view xek_motion:e];
+        if(!s_mouse_captured||!black_MouseTake(now+1,0,&x,&y)||x!=.25f||y!=.75f)return 21;
+        if(black_mouse_capture(&capture,1,0,0,1,0)!=-1)return 22;
+        xek_capture_mouse(NO); /* Escape stays released until a page/device transition. */
+        if(black_mouse_capture(&capture,1,0,0,1,0)!=-1)return 23;
+        if(black_mouse_capture(&capture,0,0,1,1,0)!=0)return 24;
+        if(black_mouse_capture(&capture,1,0,1,1,0)!=0)return 25;
+        if(black_mouse_capture(&capture,1,0,0,1,0)!=1)return 26;
+        if(black_mouse_capture(&capture,0,0,0,1,0)!=0)return 27;
+        if(black_mouse_capture(&capture,1,0,0,0,0)!=-1)return 28;
+        if(black_mouse_capture(&capture,1,1,0,1,0)!=0)return 29;
+        if(black_mouse_capture(&capture,1,0,0,1,1)!=0)return 30;
         puts("Production Cocoa input: physical key release, first click, fractional motion, modifier binding, focus/Escape/Command and scripted gates: PASS");
     }
     return 0;

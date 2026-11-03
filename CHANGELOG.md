@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.0 — 2026-11-03
+
+- Unified **Controls** home puts device and prompt choice first. One binding
+  editor selects keyboard/mouse or gamepad independently of gameplay input.
+  Mouse and gamepad response have their own pages with X/Y pairs; diagnostics
+  and driver settings move under Advanced. Back restores the previous row,
+  and named resets affect only the current page or edited binding list.
+
+- **Skip Intro Movies** keeps working after menu weapon previews. Mag/SMG/MP5
+  films had incorrectly closed the startup phase, leaving the later developer
+  credits (`C_N_US`) and opening film unskipped. Only campaign films now close it.
+
+- Saved **Input Device** selection (Auto, Gamepad, Keyboard) in Controls.
+  An explicit launcher override lasts for that run; editing the option clears it.
+- **Controller Bindings** for 16 Xbox buttons/triggers, with button capture,
+  cancellation, unbinding and reset. Menus retain their physical controls.
+- **Button Prompts**: Auto, Xbox, PlayStation or Keyboard, in the native settings
+  and guest menus/hints. Keyboard hints follow the saved binding. PlayStation
+  button pictures replace plain font symbols: coloured face buttons, shoulders,
+  triggers, sticks, keyboard caps and mouse buttons, shared with native settings.
+  Their host atlas preserves the guest file heap and source game files.
+- Restore relative mouse look when switching from pad to keyboard during
+  gameplay or inside settings. Pad selection, Escape and focus loss release it.
+- README settings captures updated to the current green-grey menu style.
+
 ## 0.4.1 — 2026-11-03
 
 - **Russian film subtitles.** With Russian game text, the mission briefing films

@@ -7,6 +7,8 @@
 #include "controller_monitor.h"
 #include "controller_axes.h"
 #include "keyboard_mouse.h"
+#include "input_profile.h"
+#import "input_glyphs.h"
 #include "game_mods.h"
 #include "game_language.h"
 #include "subtitles.h"
@@ -28,10 +30,41 @@ static void fill(NSRect r, unsigned rgb, CGFloat opacity) { black_ui_fill(r, rgb
 static void line(CGFloat x, CGFloat y, CGFloat w, unsigned rgb, CGFloat opacity) { fill(NSMakeRect(x, y, w, 1), rgb, opacity); }
 /* Large text falls back to Arial Black, small text to Arial Bold. */
 static NSString *fallback(int large) { return large ? @"Arial-Black" : @"Arial-BoldMT"; }
-static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
-{ black_ui_text(large ? &big_font : &small_font, fallback(large), value, x, y, size, rgb, 1); }
+static NSString *icon_string(unsigned code)
+{ unichar c=code;return [NSString stringWithCharacters:&c length:1]; }
+static CGImageRef hint_image(unsigned code)
+{
+    static CGImageRef images[0x400];
+    if(!black_InputGlyphValid(code))return NULL;
+    unsigned slot=code-0xE100;if(!images[slot])images[slot]=black_InputGlyphCreate(code,64);
+    return images[slot];
+}
+static CGFloat icon_width(unsigned code,CGFloat size)
+{ CGImageRef image=hint_image(code);return image?(size*1.5*CGImageGetWidth(image)/CGImageGetHeight(image)+size*.2):0; }
 static CGFloat text_width(NSString *value, CGFloat size, int large)
-{ return black_ui_text_width(large ? &big_font : &small_font, fallback(large), value, size); }
+{
+    CGFloat width=0;NSUInteger start=0;
+    for(NSUInteger i=0;i<value.length;++i)if(black_InputGlyphValid([value characterAtIndex:i])){
+        width+=black_ui_text_width(large?&big_font:&small_font,fallback(large),[value substringWithRange:NSMakeRange(start,i-start)],size);
+        width+=icon_width([value characterAtIndex:i],size);start=i+1;
+    }
+    return width+black_ui_text_width(large?&big_font:&small_font,fallback(large),[value substringFromIndex:start],size);
+}
+static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
+{
+    NSUInteger start=0;
+    for(NSUInteger i=0;i<value.length;++i){unsigned code=[value characterAtIndex:i];if(!black_InputGlyphValid(code))continue;
+        NSString *part=[value substringWithRange:NSMakeRange(start,i-start)];
+        black_ui_text(large?&big_font:&small_font,fallback(large),part,x,y,size,rgb,1);
+        x+=black_ui_text_width(large?&big_font:&small_font,fallback(large),part,size);
+        CGImageRef image=hint_image(code);CGFloat h=size*1.5,w=icon_width(code,size)-size*.2;
+        CGContextRef ctx=NSGraphicsContext.currentContext.CGContext;CGContextSaveGState(ctx);
+        CGContextTranslateCTM(ctx,x,y-size*.25+h);CGContextScaleCTM(ctx,1,-1);
+        CGContextDrawImage(ctx,CGRectMake(0,0,w,h),image);CGContextRestoreGState(ctx);
+        x+=w+size*.2;start=i+1;
+    }
+    black_ui_text(large?&big_font:&small_font,fallback(large),[value substringFromIndex:start],x,y,size,rgb,1);
+}
 static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGFloat width, unsigned rgb, int large)
 {
     CGFloat advance = text_width(value, size, large);
@@ -72,28 +105,21 @@ static NSString *T(NSString *english)
     return tables[language][english] ?: english;
 }
 
-/* TGP's centered settings panel: supported recomp groups and controller page. */
-enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES, ROW_TEXTURE_SIZE,
-       ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
-       ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
-       ROW_HID, ROW_MEASURE, ROW_RESET,
-       ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
-       ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1,
-       ROW_INTROS, ROW_MISSIONS, ROW_MOD_FIRST, ROW_MOD_LAST = ROW_MOD_FIRST + BLACK_MOD_COUNT - 1, MENU_ROWS };
-/* TGP's tab bar: one tab a page, sharing the line equally. */
-enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 198 };
-static NSString *const tab_names[MENU_TABS] = {@"RECOMP SETTINGS", @"MOUSE AND KEYBOARD", @"CONTROLLER", @"MODS"};
-static const int tab_first[MENU_TABS] = {ROW_SCALE, ROW_MOUSE_X, ROW_LOOK_X, ROW_INTROS};
-static const int tab_rows[MENU_TABS] = {10, 8 + BLACK_ACTION_COUNT, 15, 2 + BLACK_MOD_COUNT};
-static int tab_of(int row) { return row >= ROW_INTROS ? 3 : row >= ROW_MOUSE_X ? 1 : row >= ROW_LOOK_X ? 2 : 0; }
-static int is_binding(int row) { return row >= ROW_BIND_FIRST && row <= ROW_BIND_LAST; }
+#include "menu_pages.h"
+static NSString *const tab_names[MENU_TABS]={@"PORT SETTINGS",@"CONTROLS",@"MODS"};
+static NSString *const page_names[MENU_PAGES]={@"PORT SETTINGS",@"CONTROLS",@"BUTTON BINDINGS",@"BUTTON BINDINGS",@"MOUSE AND AIMING",@"GAMEPAD AND VIBRATION",@"ADVANCED GAMEPAD",@"CONTROLLER DIAGNOSTICS",@"MODS"};
+static int is_binding(int row){return row>=ROW_BIND_FIRST&&row<=ROW_BIND_LAST;}
 static int group_of(int row)
 {
+    if(black_menu_pair(row))return 3;
+    if(black_menu_link(row)||row==ROW_EDIT_DEVICE)return 17;
     if (row >= ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS) return 13;
     if (row >= ROW_MOD_FIRST) return 12;
     if (row >= ROW_INTROS) return 11;
     if (row >= ROW_BIND_FIRST) return 10;
     if (row >= ROW_MOUSE_X) return 9;
+    if (row >= ROW_PAD_FIRST) return 16;
+    if (row == ROW_DEVICE || row == ROW_PROMPTS) return 15;
     if (row <= ROW_FPS) return 0;
     if (row <= ROW_AF) return 1;
     if (row <= ROW_MENU_LANG) return 2;
@@ -107,16 +133,17 @@ static int group_of(int row)
 }
 static NSString *group_name(int group)
 { return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS",
-    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES"])[group]; }
-static int visible_start(int selected)
-{ return MAX(tab_first[tab_of(selected)], selected - MENU_TAB_MAX_ROWS + 1); }
-static CGFloat row_y(int row, int selected)
+    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES", @"DEVICE", @"CONTROLLER BINDINGS", @"CONTROLS"])[group]; }
+static int visible_start(int page,int selected)
+{return MAX(0,black_menu_index(page,selected)-MENU_TAB_MAX_ROWS+1);}
+static CGFloat row_y(int page,int row,int selected)
 {
-    int start = visible_start(selected); CGFloat y = 146;
-    for (int i = start; i <= row; ++i) {
-        if (i == start || group_of(i) != group_of(i - 1)) y += 20;
-        if (i == row) return y;
-        y += 40;
+    int start=visible_start(page,selected),at=black_menu_index(page,row);CGFloat y=146;
+    for(int i=start;i<=at;++i){
+        int current=black_menu_row(page,i),previous=black_menu_row(page,i-1);
+        if(page!=PAGE_CONTROLS&&(i==start||group_of(current)!=group_of(previous)))y+=20;
+        else if(page==PAGE_CONTROLS&&i==start)y+=20;
+        if(i==at)return y;y+=40;
     }
     return y;
 }
@@ -126,12 +153,15 @@ static NSArray *row_labels(void)
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
-        @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Reset Input", @"Mouse Horizontal Sensitivity", @"Mouse Vertical Sensitivity",
+        @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Reset Input", @"Input Device", @"Button Prompts"]];
+    for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) [labels addObject:@(black_PadControlLabel(i))];
+    [labels addObjectsFromArray:@[@"Mouse Horizontal Sensitivity", @"Mouse Vertical Sensitivity",
         @"Mouse Aim Horizontal Sensitivity", @"Mouse Aim Vertical Sensitivity", @"Invert Mouse X", @"Invert Mouse Y",
         @"Mouse Hold to Aim", @"Walk Speed"]];
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
     [labels addObjectsFromArray:@[@"Skip Intro Movies", @"Skip Mission Intros"]];
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
+    [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming"]];
     return labels;
 }
 /* BLACK's own menu palette (black_ui.h): grey text on the selected row, green-grey
@@ -184,10 +214,15 @@ static NSString *dz_name(int right)
     NSButton *rows[MENU_ROWS];
     NSButton *categories[MENU_TABS];
     NSButton *back, *defaults;
-    int selected, binding_slot;
+    int selected, binding_slot, page, axis_slot, editor_page;
+    BOOL axis_edit;
     BOOL binding_capture;
+    BOOL pad_capture;
+    BOOL pad_disconnected;
     NSTimeInterval changed;
 }
+- (void)openPage:(int)newPage row:(int)row;
+- (BOOL)navigateBack;
 - (void)changeOption:(id)sender;
 - (void)selectRow:(int)row;
 - (void)stepTab:(int)direction;
@@ -273,8 +308,11 @@ static NSTimeInterval transition, last_draw;
             rows[i].target = self; rows[i].action = @selector(changeOption:);
             rows[i].focusRingType = NSFocusRingTypeNone;
             [rows[i] setAccessibilityLabel:labels[i]];
-            [rows[i] setAccessibilityHelp:i < ROW_MOUSE_X ? help[i] :
-                i >= ROW_INTROS ? (i == ROW_INTROS ? @"Skip startup logos and intro films." :
+            [rows[i] setAccessibilityHelp:black_menu_link(i)?@"Open a controls subpage. Back returns to this row.":
+                black_menu_pair(i)?@"Choose X or Y with Left and Right, press Enter to edit. Back finishes editing.":
+                i==ROW_EDIT_DEVICE?@"Choose the bindings to edit; gameplay device is unchanged.":i <= ROW_RESET ? help[i] : i < ROW_MOUSE_X ?
+                @"Choose the input device and prompt family, or reassign a controller button. Escape cancels capture; Delete clears a binding." :
+                i >= ROW_INTROS && i <= ROW_MOD_LAST ? (i == ROW_INTROS ? @"Skip startup logos and intro films." :
                     i == ROW_MISSIONS ? @"Skip mission briefings." :
                     [mod_help[i - ROW_MOD_FIRST][0] stringByAppendingFormat:@" %@", mod_help[i - ROW_MOD_FIRST][1]].capitalizedString) :
                 is_binding(i) ? @"Two key slots. Left and Right choose a slot. Enter waits for a key or mouse button. Escape cancels, Delete clears." :
@@ -283,7 +321,7 @@ static NSTimeInterval transition, last_draw;
         }
         for (int i = 0; i < MENU_TABS; ++i) {
             categories[i] = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
-            categories[i].title = tab_names[i].capitalizedString; categories[i].tag = tab_first[i];
+            categories[i].title = tab_names[i].capitalizedString; categories[i].tag = black_menu_top(i);
             categories[i].target = self; categories[i].action = @selector(changeCategory:);
             [categories[i] setAccessibilityLabel:categories[i].title];
             [self addSubview:categories[i]]; [categories[i] release];
@@ -295,6 +333,7 @@ static NSTimeInterval transition, last_draw;
         defaults.title = @"Defaults"; defaults.target = self; defaults.action = @selector(restoreDefaults:);
         [defaults setAccessibilityHelp:@"Restore defaults for the selected page only."];
         [self addSubview:defaults]; [defaults release];
+        page=PAGE_PORT;editor_page=PAGE_KEYS;
         [self selectRow:ROW_SCALE];
     }
     return self;
@@ -309,19 +348,28 @@ static NSTimeInterval transition, last_draw;
     NSSize size = self.bounds.size;
     CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
     CGFloat ox = (size.width - 960 * scale) / 2, oy = (size.height - 600 * scale) / 2;
-    int tab = tab_of(selected), start = visible_start(selected);
+    int start = visible_start(page,selected);
     for (int i = 0; i < MENU_ROWS; ++i) {
-        rows[i].hidden = tab_of(i) != tab || i < start || i >= start + MENU_TAB_MAX_ROWS;
-        rows[i].frame = NSMakeRect(ox + 84 * scale, oy + row_y(i, selected) * scale,
-            (tab == 2 ? 600 : 792) * scale, 38 * scale);
+        int index=black_menu_index(page,i);
+        rows[i].hidden=index<start||index>=start+MENU_TAB_MAX_ROWS||index<0;
+        rows[i].frame = NSMakeRect(ox + 84 * scale, oy + row_y(page,i,selected) * scale,
+            (page == PAGE_DIAGNOSTICS ? 600 : 792) * scale, 38 * scale);
     }
     for (int i = 0; i < MENU_TABS; ++i)
         categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * scale, TAB_WIDTH * scale, 38 * scale);
     back.frame = NSMakeRect(ox + 84 * scale, oy + 526 * scale, 126 * scale, 30 * scale);
+    defaults.hidden=page==PAGE_CONTROLS||page==PAGE_DIAGNOSTICS;
     defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
 }
 - (void)refreshValues
 {
+    NSString *reset=page==PAGE_KEYS||page==PAGE_PAD_BINDINGS?@"RESET BINDINGS":page==PAGE_MOUSE?@"RESET MOUSE":page==PAGE_PAD?@"RESET GAMEPAD":page==PAGE_ADVANCED?@"RESET ADVANCED":@"DEFAULTS";
+    [defaults setAccessibilityLabel:T(reset)];
+    [rows[ROW_EDIT_DEVICE] setAccessibilityValue:T(page==PAGE_PAD_BINDINGS?@"GAMEPAD":@"KEYBOARD AND MOUSE")];
+    for(int i=0;i<4;++i){int mouse=i<2,axis=(i%2)*2;
+        [rows[ROW_MOUSE_LOOK_PAIR+i] setAccessibilityValue:[NSString stringWithFormat:@"X %.2f, Y %.2f",(mouse?black_SettingsMouseSpeed(axis):black_SettingsLookSpeed(axis))/50.,(mouse?black_SettingsMouseSpeed(axis+1):black_SettingsLookSpeed(axis+1))/50.]];
+    }
+
     [rows[ROW_INTROS] setAccessibilityValue:black_SettingsSkipIntros() ? @"On" : @"Off"];
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
@@ -353,44 +401,77 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_MOUSE_INVERT_Y] setAccessibilityValue:black_SettingsMouseInvert(1)?@"On":@"Off"];
     [rows[ROW_MOUSE_HOLD] setAccessibilityValue:black_SettingsMouseHoldAim()?@"On":@"Off"];
     [rows[ROW_WALK_SPEED] setAccessibilityValue:[NSString stringWithFormat:@"%d percent",black_SettingsWalkSpeed()]];
+    [rows[ROW_DEVICE] setAccessibilityValue:T((@[@"AUTO",@"GAMEPAD",@"KEYBOARD AND MOUSE"])[black_SettingsInputDevice()])];
+    [rows[ROW_PROMPTS] setAccessibilityValue:T((@[@"AUTO",@"XBOX",@"PLAYSTATION",@"KEYBOARD"])[black_SettingsButtonPrompts()])];
+    for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) [rows[ROW_PAD_FIRST+i] setAccessibilityValue:
+        @(black_PadButtonName(black_SettingsPadBinding(i),black_InputPromptFamily()))];
     [rows[ROW_MEASURE] setAccessibilityValue:[NSString stringWithFormat:@"Measurement state %d", black_ControllerMonitor().calibration]];
 }
 - (void)goBack:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_BACK); }
 - (void)restoreDefaults:(id)sender
 {
-    (void)sender; black_ControllerCancelMeasure();
-    binding_capture = NO;
-    if (tab_of(selected) == 1) black_SettingsResetKeyboard();
-    else if (tab_of(selected) == 2) black_SettingsResetInput();
-    else if (tab_of(selected) == 3) black_SettingsResetMods();
-    else {
-        black_SettingsSetRenderScale(2); black_SettingsSetUpscaler(1); black_SettingsSetFov(70);
-        black_SettingsSetAntiAliasing(2); black_SettingsSetAniso(0); black_SettingsSetFpsCounter(0);
-        black_SettingsSetTextureReplacement(0); black_SettingsSetTextureMaxSize(2048);
+    (void)sender;black_ControllerCancelMeasure();
+    binding_capture=pad_capture=axis_edit=NO;black_PadCaptureCancel();
+    if(page==PAGE_KEYS){
+        for(int i=0;i<BLACK_ACTION_COUNT;++i)for(int slot=0;slot<2;++slot)
+            black_SettingsSetBinding(i,slot,black_KeyActions()[i].keys[slot]);
+    }else if(page==PAGE_PAD_BINDINGS){
+        for(int i=0;i<16;++i)black_SettingsSetPadBinding(i,i);
+    }else if(page==PAGE_MOUSE){
+        for(int i=0;i<4;++i)black_SettingsSetMouseSpeed(i,50);
+        for(int i=0;i<2;++i)black_SettingsSetMouseInvert(i,0);
+        black_SettingsSetMouseHoldAim(1);black_SettingsSetWalkSpeed(50);
+    }else if(page==PAGE_PAD){
+        for(int i=0;i<4;++i)black_SettingsSetLookSpeed(i,50);
+        black_SettingsSetHoldAim(0);black_SettingsSetRumbleIntensity(100);black_SettingsSetVibration(1);
+    }else if(page==PAGE_ADVANCED){
+        black_SettingsSetInvertX(0);black_SettingsSetAimAssist(1);
+        for(int i=0;i<2;++i)black_SettingsSetStickDeadzone(i,-1);
+        black_SettingsSetTriggerDeadzone(0);black_SettingsSetVibration(1);black_SettingsSetDualSenseHid(1);
+    }else if(page==PAGE_MODS)black_SettingsResetMods();
+    else if(page==PAGE_PORT){
+        black_SettingsSetRenderScale(2);black_SettingsSetUpscaler(1);black_SettingsSetFov(70);
+        black_SettingsSetAntiAliasing(2);black_SettingsSetAniso(0);black_SettingsSetFpsCounter(0);
+        black_SettingsSetTextureReplacement(0);black_SettingsSetTextureMaxSize(2048);
     }
-    changed = CACurrentMediaTime(); [self refreshValues]; [self setNeedsDisplay:YES];
+    changed=CACurrentMediaTime();[self refreshValues];[self setNeedsDisplay:YES];
+}
+- (void)openPage:(int)newPage row:(int)row
+{
+    black_ControllerCancelMeasure();page=newPage;
+    if(page==PAGE_KEYS||page==PAGE_PAD_BINDINGS)editor_page=page;
+    [self selectRow:black_menu_index(page,row)>=0?row:black_menu_row(page,0)];
+}
+- (BOOL)navigateBack
+{
+    if(binding_capture){[self captureBinding:-2];return YES;}
+    if(pad_capture){pad_capture=NO;black_PadCaptureCancel();[self setNeedsDisplay:YES];return YES;}
+    if(axis_edit){axis_edit=NO;[self setNeedsDisplay:YES];return YES;}
+    if(page==PAGE_KEYS||page==PAGE_PAD_BINDINGS)[self openPage:PAGE_CONTROLS row:ROW_NAV_BINDINGS];
+    else if(page==PAGE_MOUSE)[self openPage:PAGE_CONTROLS row:ROW_NAV_MOUSE];
+    else if(page==PAGE_PAD)[self openPage:PAGE_CONTROLS row:ROW_NAV_PAD];
+    else if(page==PAGE_ADVANCED)[self openPage:PAGE_PAD row:ROW_NAV_ADVANCED];
+    else if(page==PAGE_DIAGNOSTICS)[self openPage:PAGE_ADVANCED row:ROW_NAV_DIAGNOSTICS];
+    else return NO;
+    return YES;
 }
 - (void)selectRow:(int)row
 {
-    binding_capture = NO;
-    selected = (row + MENU_ROWS) % MENU_ROWS;
+    binding_capture=pad_capture=axis_edit=NO;black_PadCaptureCancel();
+    selected=black_menu_index(page,row)>=0?row:black_menu_row(page,0);axis_slot=0;
     [self layoutRows];
-    for (int i = 0; i < MENU_TABS; ++i)
-        [categories[i] setAccessibilityValue:i == tab_of(selected) ? @"Selected" : @""];
+    for(int i=0;i<MENU_TABS;++i)[categories[i] setAccessibilityValue:i==black_menu_tab(page)?@"Selected":@""];
     [self refreshValues];
-    if (menu_window && black_MenuIsOpen()) [menu_window makeFirstResponder:rows[selected]];
+    if(menu_window&&black_MenuIsOpen())[menu_window makeFirstResponder:rows[selected]];
     [self setNeedsDisplay:YES];
 }
-- (void)changeCategory:(id)sender { [self selectRow:(int)[sender tag]]; }
+- (void)changeCategory:(id)sender{[self openPage:(int)[sender tag] row:-1];}
 - (void)stepTab:(int)direction
-{
-    int tab = (tab_of(selected) + direction + MENU_TABS) % MENU_TABS;
-    [self selectRow:tab_first[tab]];
-}
+{[self openPage:black_menu_top((black_menu_tab(page)+direction+MENU_TABS)%MENU_TABS) row:-1];}
 - (void)stepRow:(int)direction
 {
-    int tab = tab_of(selected), count = tab_rows[tab], row = selected - tab_first[tab];
-    [self selectRow:tab_first[tab] + (row + direction + count) % count];
+    int count=black_menu_count(page),index=black_menu_index(page,selected);
+    [self selectRow:black_menu_row(page,(index+direction+count)%count)];
 }
 - (void)captureBinding:(int)key
 {
@@ -398,7 +479,7 @@ static NSTimeInterval transition, last_draw;
     if (key == -2) binding_capture = NO;
     else if (black_KeyValid(key)) {
         black_SettingsSetBinding(selected - ROW_BIND_FIRST, binding_slot, key);
-        binding_capture = NO; changed = CACurrentMediaTime();
+        binding_capture = NO; pad_capture = NO; black_PadCaptureCancel(); changed = CACurrentMediaTime();
     }
     black_KeyReleaseAll(); [self refreshValues]; [self setNeedsDisplay:YES];
 }
@@ -410,26 +491,73 @@ static NSTimeInterval transition, last_draw;
         CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
         NSPoint point = [self convertPoint:NSApp.currentEvent.locationInWindow fromView:nil];
         CGFloat x = (point.x - (size.width - 960 * scale) / 2) / scale;
+        if (selected >= ROW_PAD_FIRST && selected <= ROW_PAD_LAST) {
+            if (x >= 600 && x < 876) [self adjustOption:1 cycle:YES];
+            return;
+        }
         if (is_binding(selected)) {
             if (x >= 600 && x < 876) {
                 binding_slot = x >= 738; binding_capture = YES; black_KeyReleaseAll(); [self setNeedsDisplay:YES];
             }
             return;
         }
-        CGFloat left = tab_of(selected) == 2 ? 560 : 752;
+        if(black_menu_link(selected)||selected==ROW_EDIT_DEVICE){[self adjustOption:1 cycle:YES];return;}
+        if(black_menu_pair(selected)){
+            if(x>=600&&x<876){axis_slot=x>=738;axis_edit=YES;
+                CGFloat local=x-(axis_slot?738:600);
+                if(local<24)[self adjustOption:-1 cycle:NO];else if(local>108)[self adjustOption:1 cycle:NO];
+                [self setNeedsDisplay:YES];}
+            return;
+        }
+        CGFloat left=selected==ROW_DEVICE||selected==ROW_PROMPTS?500:752;
+        CGFloat selector_width=selected==ROW_DEVICE||selected==ROW_PROMPTS?376:122;
         if (x >= left && x < left + 26) { [self adjustOption:-1 cycle:NO]; return; }
-        if (x >= left + 96 && x < left + 122) { [self adjustOption:1 cycle:NO]; return; }
+        if (x >= left + selector_width - 26 && x < left + selector_width) { [self adjustOption:1 cycle:NO]; return; }
         return;
     }
     [self adjustOption:1 cycle:YES];
 }
 - (void)adjustOption:(int)direction cycle:(BOOL)cycle
 {
-    if (is_binding(selected)) {
+    if(black_menu_link(selected)){
+        if(!cycle)return;
+        int target=selected==ROW_NAV_BINDINGS?editor_page:selected==ROW_NAV_MOUSE?PAGE_MOUSE:
+            selected==ROW_NAV_PAD?PAGE_PAD:selected==ROW_NAV_ADVANCED?PAGE_ADVANCED:PAGE_DIAGNOSTICS;
+        [self openPage:target row:-1];return;
+    }
+    if(selected==ROW_EDIT_DEVICE){
+        int next=cycle?(page==PAGE_KEYS?PAGE_PAD_BINDINGS:PAGE_KEYS):direction>0?PAGE_PAD_BINDINGS:PAGE_KEYS;
+        [self openPage:next row:ROW_EDIT_DEVICE];return;
+    }
+    if(black_menu_pair(selected)){
+        if(cycle){axis_edit=!axis_edit;[self setNeedsDisplay:YES];return;}
+        if(!axis_edit){axis_slot=direction>0;[self setNeedsDisplay:YES];return;}
+        int mouse=selected<=ROW_MOUSE_AIM_PAIR;
+        int axis=((selected-ROW_MOUSE_LOOK_PAIR)%2)*2+axis_slot;
+        int value=(mouse?black_SettingsMouseSpeed(axis):black_SettingsLookSpeed(axis))+direction;
+        if(mouse)black_SettingsSetMouseSpeed(axis,MAX(1,MIN(200,value)));
+        else black_SettingsSetLookSpeed(axis,MAX(1,MIN(200,value)));
+        changed=CACurrentMediaTime();[self refreshValues];[self setNeedsDisplay:YES];return;
+    }
+
+    if (selected >= ROW_PAD_FIRST && selected <= ROW_PAD_LAST) {
+        if (cycle) { pad_capture = YES; pad_disconnected = NO; black_PadCaptureBegin(); }
+        else {
+            pad_capture = NO; black_PadCaptureCancel();
+            int value = black_SettingsPadBinding(selected - ROW_PAD_FIRST) + direction;
+            black_SettingsSetPadBinding(selected - ROW_PAD_FIRST, MAX(-1,MIN(BLACK_PAD_CONTROLS-1,value)));
+        }
+        changed = CACurrentMediaTime(); [self refreshValues]; [self setNeedsDisplay:YES]; return;
+    } else if (selected == ROW_DEVICE || selected == ROW_PROMPTS) {
+        int prompt = selected == ROW_PROMPTS, count = prompt ? 4 : 3;
+        int value = (prompt ? black_SettingsButtonPrompts() : black_SettingsInputDevice()) + direction;
+        value = cycle ? (value + count) % count : MAX(0,MIN(count-1,value));
+        if (prompt) black_SettingsSetButtonPrompts(value); else black_SettingsSetInputDevice(value);
+    } else if (is_binding(selected)) {
         if (cycle) { binding_capture = YES; black_KeyReleaseAll(); }
         else { binding_capture = NO; binding_slot = direction > 0; }
         [self setNeedsDisplay:YES]; return;
-    } else if (selected >= ROW_MOD_FIRST) {
+    } else if (selected >= ROW_MOD_FIRST && selected <= ROW_MOD_LAST) {
         int mod = selected - ROW_MOD_FIRST, current = black_SettingsMod(mod);
         int value = black_mod_step(mod, current, direction, cycle);
         if (value == current) return;
@@ -466,6 +594,7 @@ static NSTimeInterval transition, last_draw;
         int current = black_SettingsRumbleIntensity(), value = current + direction * 10;
         if (cycle && value > 200) value = 0;
         black_SettingsSetRumbleIntensity(MAX(0, MIN(200, value)));
+        black_SettingsSetVibration(value>0);
     } else if (selected == ROW_MEASURE) {
         if (direction < 0) black_ControllerCancelMeasure();
         else black_ControllerMeasure();
@@ -589,33 +718,53 @@ static NSTimeInterval transition, last_draw;
     black_ui_rails(30, -oy / scale, 600 + oy / scale, still ? -1 : fmod(CACurrentMediaTime() / 7, 1) * 1.3 - .15);
     CGFloat rail = 76, edge = 960 + ox / scale;
     text(T(@"SETTINGS"), 96, 38, 24, TEXT, 1);
-    int tab = tab_of(selected);
+    int tab = black_menu_tab(page);
     for (int i = 0; i < MENU_TABS; ++i) {
         NSString *name = T(tab_names[i]);
         CGFloat x = 84 + i * TAB_WIDTH, w = text_width(name, 14, 0), size = MIN(14, 14 * (TAB_WIDTH - 16) / w);
         if (i == tab) { fill(NSMakeRect(x, 82, TAB_WIDTH, 38), BLACK_UI_BAR, .88); line(x + 12, 116, TAB_WIDTH - 24, TEXT, .9); }
         centered_text(name, x + TAB_WIDTH / 2, 95 + (14 - size) / 2, size, i == tab ? TEXT : DIM);
     }
-    if (tab == 3) {
+    if (page == PAGE_MODS) {
         int supported = black_ModsSupported();
         text([NSString stringWithFormat:T(@"GAME: %s%@"), black_ModsRevision(),
             supported > 0 ? T(@" XBE") : supported < 0 ? @"" : T(@" - MODS OFF")], 96, 130, 10, supported ? DIM : WARN, 0);
     }
-    text([NSString stringWithFormat:@"%02d / %02d", selected - tab_first[tab] + 1, tab_rows[tab]],
-        820, 130, 10, DIM, 0);
-    int start = visible_start(selected), end = MIN(start + MENU_TAB_MAX_ROWS, tab_first[tab] + tab_rows[tab]);
-    CGFloat width = tab == 2 ? 600 : 792, left = tab == 2 ? 560 : 752;
-    for (int index = start; index < end; ++index) {
-        CGFloat y = row_y(index, selected);
-        if (index == start || group_of(index) != group_of(index - 1)) {
+    if(tab==1){
+        BlackControllerMonitor monitor=black_ControllerMonitor();
+        NSString *active=black_InputKeyboardActive()?T(@"KEYBOARD AND MOUSE"):
+            monitor.connected?@(monitor.name):T(@"NO CONTROLLER");
+        fitted_text([NSString stringWithFormat:@"%@ · %@",T((@[@"AUTO",@"GAMEPAD",@"KEYBOARD AND MOUSE"])[black_SettingsInputDevice()]),active],96,65,10,780,DIM,0);
+        fitted_text(T(page_names[page]),96,130,10,690,HEADING,0);
+    }
+    text([NSString stringWithFormat:@"%02d / %02d",black_menu_index(page,selected)+1,black_menu_count(page)],820,130,10,DIM,0);
+    int start=visible_start(page,selected),end=MIN(start+MENU_TAB_MAX_ROWS,black_menu_count(page));
+    CGFloat width=page==PAGE_DIAGNOSTICS?600:792,left=752;
+    for(int position=start;position<end;++position){
+        int index=black_menu_row(page,position);
+        CGFloat y=row_y(page,index,selected);
+        if(page!=PAGE_CONTROLS&&(position==start||group_of(index)!=group_of(black_menu_row(page,position-1)))){
             text(T(group_name(group_of(index))), 96, y - 17, 10, DIM, 0);
             line(96, y - 3, width - 24, HIGHLIGHT, 1);
         }
         BOOL focus = selected == index;
         /* The live sticks sit right of the controller rows: the line stops at their divider. */
-        if (focus) black_ui_selector(NSMakeRect(84, y, width, 38), rail, tab == 2 ? 700 : edge);
+        if (focus) black_ui_selector(NSMakeRect(84, y, width, 38), rail, page == PAGE_DIAGNOSTICS ? 700 : edge);
         fitted_text(T([row_labels()[index] uppercaseString]), 96, y + 13, 13,
-            is_binding(index) ? 490 : left - 108, focus ? TEXT : DIM, 0);
+            is_binding(index)||black_menu_pair(index) ? 490 : index==ROW_DEVICE||index==ROW_PROMPTS||index==ROW_EDIT_DEVICE ? 390 : left-108, focus ? TEXT : DIM, 0);
+        if(black_menu_link(index)){
+            text(@">",850,y+13,13,focus?TEXT:DIM,0);continue;
+        }
+        if(black_menu_pair(index)){
+            int mouse=index<=ROW_MOUSE_AIM_PAIR,axis=((index-ROW_MOUSE_LOOK_PAIR)%2)*2;
+            for(int slot=0;slot<2;++slot){CGFloat x=600+slot*138;BOOL active=focus&&axis_slot==slot;
+                fill(NSMakeRect(x,y+6,132,26),BUTTON,.9);
+                if(active)line(x+6,y+29,120,axis_edit?TEXT:HEADING,1);
+                int value=mouse?black_SettingsMouseSpeed(axis+slot):black_SettingsLookSpeed(axis+slot);
+                text(@"<",x+6,y+13,11,active?TEXT:DIM,0);text(@">",x+117,y+13,11,active?TEXT:DIM,0);
+                fitted_text([NSString stringWithFormat:@"%c %.2fX",slot?'Y':'X',value/50.],x+24,y+13,11,84,active?TEXT:DIM,0);
+            }continue;
+        }
         if (is_binding(index)) {
             for (int slot = 0; slot < 2; ++slot) {
                 CGFloat x = 600 + slot * 138;
@@ -623,12 +772,23 @@ static NSTimeInterval transition, last_draw;
                 fill(NSMakeRect(x,y+6,132,26),BUTTON,.9);
                 if (active) line(x+6,y+29,120,TEXT,.9);
                 NSString *key = active && binding_capture ? @"PRESS A KEY" :
-                    [NSString stringWithUTF8String:black_KeyName(black_SettingsBinding(index-ROW_BIND_FIRST,slot))];
+                    icon_string(black_SettingsBinding(index-ROW_BIND_FIRST,slot)<0?0xE1FF:0xE200+black_SettingsBinding(index-ROW_BIND_FIRST,slot));
                 fitted_text(T(key.uppercaseString),x+8,y+13,11,116,active ? TEXT : DIM,0);
             }
             continue;
         }
-        NSString *value = index >= ROW_MOD_FIRST ? mod_value(index - ROW_MOD_FIRST) :
+        if (index >= ROW_PAD_FIRST && index <= ROW_PAD_LAST) {
+            fill(NSMakeRect(600,y+6,276,26),BUTTON,.9);
+            if (focus) line(606,y+29,264,TEXT,.9);
+            NSString *value = focus && pad_capture ? @"PRESS A BUTTON" :
+                icon_string(black_SettingsPadBinding(index-ROW_PAD_FIRST)<0?0xE1FF:0xE100+(black_InputPromptFamily()==BLACK_PROMPTS_PLAYSTATION?16:0)+black_SettingsPadBinding(index-ROW_PAD_FIRST));
+            BOOL symbol = value.length == 1 && [@"×○□△" rangeOfString:value].location != NSNotFound;
+            fitted_text(T(value),608,y+(symbol?8:13),symbol?20:12,260,focus ? TEXT : DIM,0);
+            continue;
+        }
+        NSString *value = index==ROW_EDIT_DEVICE?(page==PAGE_KEYS?@"KEYBOARD AND MOUSE":@"GAMEPAD"):index == ROW_DEVICE ? (@[@"AUTO",@"GAMEPAD",@"KEYBOARD AND MOUSE"])[black_SettingsInputDevice()] :
+            index == ROW_PROMPTS ? (@[@"AUTO",@"XBOX",@"PLAYSTATION",@"KEYBOARD"])[black_SettingsButtonPrompts()] :
+            index >= ROW_MOD_FIRST && index <= ROW_MOD_LAST ? mod_value(index - ROW_MOD_FIRST) :
             index >= ROW_MOUSE_X && index <= ROW_MOUSE_AIM_Y ?
             [NSString stringWithFormat:@"%.2fX",black_SettingsMouseSpeed(index-ROW_MOUSE_X)/50.0] :
             index == ROW_MOUSE_INVERT_X ? (black_SettingsMouseInvert(0) ? @"ON" : @"OFF") :
@@ -640,7 +800,7 @@ static NSTimeInterval transition, last_draw;
             index == ROW_HOLD_AIM ? (black_SettingsHoldAim() ? @"ON" : @"OFF") :
             index == ROW_AIM_ASSIST ? (black_SettingsAimAssist() ? @"ON" : @"OFF") :
             index == ROW_INVERT_X ? (black_SettingsInvertX() ? @"ON" : @"OFF") :
-            index == ROW_RUMBLE ? [NSString stringWithFormat:@"%d%%", black_SettingsRumbleIntensity()] :
+            index == ROW_RUMBLE ? (black_SettingsVibration()?[NSString stringWithFormat:@"%d%%",black_SettingsRumbleIntensity()]:@"OFF") :
             index == ROW_LEFT_DZ ? dz_name(0) : index == ROW_RIGHT_DZ ? dz_name(1) :
             index == ROW_TRIGGER_DZ ? [NSString stringWithFormat:@"%d%%", black_SettingsTriggerDeadzone()] :
             index == ROW_VIBRATION ? (black_SettingsVibration() ? @"ON" : @"OFF") :
@@ -659,14 +819,42 @@ static NSTimeInterval transition, last_draw;
             index == ROW_INTROS ? (black_SettingsSkipIntros() ? @"ON" : @"OFF") :
             index == ROW_MISSIONS ? (black_SettingsSkipMissionIntros() ? @"ON" : @"OFF") :
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
+        CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : left;
+        CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : 122;
         if (index != ROW_MEASURE && index != ROW_RESET) {
-            text(@"<", left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
-            text(@">", left + 105, y + 13, 13, focus ? TEXT : DIM, 0);
+            text(@"<", value_left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
+            text(@">", value_left + value_width - 17, y + 13, 13, focus ? TEXT : DIM, 0);
         }
-        fitted_text(T(value), left + 32, y + 13, 12, 61, focus ? TEXT : DIM, 0);
+        fitted_text(T(value), value_left + 32, y + 13, 12, value_width - 61, focus ? TEXT : DIM, 0);
     }
     NSString *help, *detail;
-    if (selected >= ROW_MOD_FIRST) {
+    if(black_menu_link(selected)){
+        help=selected==ROW_NAV_BINDINGS?@"EDIT KEYBOARD OR GAMEPAD BINDINGS IN ONE PLACE.":
+            selected==ROW_NAV_MOUSE?@"MOUSE LOOK, AIMING AND WALK SPEED.":
+            selected==ROW_NAV_PAD?@"GAMEPAD LOOK, AIMING AND VIBRATION.":
+            selected==ROW_NAV_ADVANCED?@"DEADZONES, AIM ASSIST AND DRIVER OPTIONS.":@"CHECK STICK INPUT AND MEASURE DRIFT.";
+        detail=@"ENTER / A OPENS. BACK RETURNS HERE WITHOUT CHANGING YOUR DEVICE.";
+    }else if(selected==ROW_EDIT_DEVICE){
+        help=@"CHOOSE WHICH BINDINGS TO EDIT. THIS DOES NOT SWITCH GAMEPLAY INPUT.";
+        detail=@"KEYBOARD HAS TWO KEY SLOTS; GAMEPAD USES ITS PHYSICAL BUTTONS.";
+    }else if(black_menu_pair(selected)){
+        help=axis_edit?@"LEFT / RIGHT ADJUST THE SELECTED AXIS. ENTER / BACK FINISHES.":@"LEFT / RIGHT CHOOSE X OR Y. ENTER / A EDITS THAT AXIS.";
+        detail=@"LIVE. X / Y, MOUSE / GAMEPAD AND AIMING KEEP SEPARATE VALUES.";
+    }else if (selected == ROW_DEVICE) {
+        help = @"AUTO FOLLOWS DELIBERATE INPUT. MOUSE MOTION DOES NOT STEAL THE PAD.";
+        detail = black_SettingsInputDevice() == BLACK_INPUT_GAMEPAD && !black_ControllerMonitor().connected ?
+            @"NO GAMEPAD CONNECTED. KEYBOARD STILL OPENS SETTINGS; SELECT AUTO OR KEYBOARD." :
+            [NSString stringWithFormat:T(@"ACTIVE: %@. SETTINGS STAY ACCESSIBLE WITH EITHER DEVICE."),
+                T(black_InputKeyboardActive() ? @"KEYBOARD" : @"GAMEPAD")];
+    } else if (selected == ROW_PROMPTS) {
+        help = @"AUTO FOLLOWS THE ACTIVE DEVICE: XBOX, PLAYSTATION OR KEYBOARD.";
+        detail = @"OVERRIDE THE SYMBOLS WITHOUT CHANGING WHICH DEVICE CONTROLS THE GAME.";
+    } else if (selected >= ROW_PAD_FIRST && selected <= ROW_PAD_LAST) {
+        help = pad_capture ? @"RELEASE ALL BUTTONS, THEN PRESS ONE. ESC CANCELS; DELETE CLEARS." :
+            @"ENTER STARTS CAPTURE. LEFT / RIGHT CHOOSE A BUTTON. DELETE CLEARS.";
+        detail = pad_disconnected ? @"CONTROLLER DISCONNECTED. BINDING KEPT. CONNECT AND TRY AGAIN." :
+            @"DEFAULT GAME SCHEME. MENUS KEEP THEIR PHYSICAL BUTTONS; SAVED IMMEDIATELY.";
+    } else if (selected >= ROW_MOD_FIRST && selected <= ROW_MOD_LAST) {
         help = mod_help[selected - ROW_MOD_FIRST][0];
         detail = black_ModsSupported() == 0 ? @"THIS GAME REVISION HAS NO VERIFIED ADDRESSES. MODS STAY OFF." :
             mod_help[selected - ROW_MOD_FIRST][1];
@@ -772,7 +960,7 @@ static NSTimeInterval transition, last_draw;
     line(84, 430, 792, HIGHLIGHT, 1);
     fitted_text(T(help), 96, 443, 11, 768, TEXT, 0);
     fitted_text(T(detail), 96, 464, 10, 768, DIM, 0);
-    if (tab == 2) {
+    if (page == PAGE_DIAGNOSTICS) {
         BlackControllerMonitor monitor = black_ControllerMonitor();
         fill(NSMakeRect(704, 147, 1, 264), HEADING, .35);
         text(T(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER"), 720, 153, 10, HEADING, 0);
@@ -798,14 +986,18 @@ static NSTimeInterval transition, last_draw;
     BOOL failed = black_SettingsSaveFailed();
     fitted_text(T(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"CHANGES ARE SAVED AUTOMATICALLY."),
         96, 490, 10, 400, failed ? WARN : DIM, 0);
-    fitted_text(T(@"Q / E, LB / RB: PAGE     UP / DOWN: SELECT"), 480, 490, 9, 396, DIM, 0);
+    char prev[32], next[32], accept[32], cancel[32];
+    black_InputGlyphUTF8(black_InputButtonGlyph(5,1),prev,sizeof prev); black_InputGlyphUTF8(black_InputButtonGlyph(4,1),next,sizeof next);
+    black_InputGlyphUTF8(black_InputButtonGlyph(0,1),accept,sizeof accept); black_InputGlyphUTF8(black_InputButtonGlyph(1,1),cancel,sizeof cancel);
+    fitted_text([NSString stringWithFormat:T(@"%@ / %@: PAGE     UP / DOWN: SELECT"),@(prev),@(next)], 480, 490, 9, 396, DIM, 0);
     line(84, 514, 792, HIGHLIGHT, 1);
     fill(NSMakeRect(84, 526, 126, 30), BUTTON, .88); line(96, 553, 102, DIM, 1);
     centered_text(T(@"BACK"), 147, 536, 12, TEXT);
+    if(!defaults.hidden){
     fill(NSMakeRect(738, 526, 138, 30), BUTTON, .88); line(750, 553, 114, DIM, 1);
-    { NSString *label = T(@"DEFAULTS"); CGFloat w = text_width(label, 12, 0);
-      text(label, 807 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }
-    fitted_text(T(@"LEFT / RIGHT: ADJUST    ENTER / A: CHANGE    ESC / B: BACK"), 232, 538, 10, 494, DIM, 0);
+    { NSString *label = T(page==PAGE_KEYS||page==PAGE_PAD_BINDINGS?@"RESET BINDINGS":page==PAGE_MOUSE?@"RESET MOUSE":page==PAGE_PAD?@"RESET GAMEPAD":page==PAGE_ADVANCED?@"RESET ADVANCED":@"DEFAULTS"); CGFloat w = text_width(label, 12, 0);
+      text(label, 807 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }}
+    fitted_text([NSString stringWithFormat:T(@"LEFT / RIGHT: ADJUST    %@: CHANGE    %@: BACK"),@(accept),@(cancel)], 232, 538, 10, 494, DIM, 0);
     [NSGraphicsContext restoreGraphicsState];
 }
 - (void)mouseDown:(NSEvent *)event { (void)event; }
@@ -839,7 +1031,7 @@ static void request_quit(void)
 - (void)windowDidExitFullScreen:(NSNotification *)note
 { (void)note;fprintf(stderr,"[HOST-APP] native_fullscreen=0\n"); }
 - (void)windowDidResignKey:(NSNotification *)note
-{ (void)note; menu_view->binding_capture = NO; black_KeyReleaseAll(); [menu_view setNeedsDisplay:YES]; }
+{ (void)note; menu_view->binding_capture = NO; menu_view->pad_capture = NO; menu_view->axis_edit=NO; black_PadCaptureCancel(); black_ControllerCancelMeasure(); black_KeyReleaseAll(); [menu_view setNeedsDisplay:YES]; }
 @end
 static BlackMenuActions *actions;
 static NSMenuItem *settings_item;
@@ -859,11 +1051,12 @@ static void set_open(int open)
             menu_view.alphaValue = reduced_motion() ? 1 : 0;
             transition = CACurrentMediaTime();
             [menu_view setFrameSize:container.bounds.size];
-            [menu_view selectRow:menu_view->selected];
-            fprintf(stderr, "[MENU] opened %s\n", tab_names[tab_of(menu_view->selected)].UTF8String);
+            if(black_menu_tab(menu_view->page)==1)[menu_view openPage:PAGE_CONTROLS row:ROW_DEVICE];
+            else [menu_view selectRow:menu_view->selected];
+            fprintf(stderr,"[MENU] opened %s\n",page_names[menu_view->page].UTF8String);
         }
     } else if (shown && !closing) {
-        black_ControllerCancelMeasure(); menu_view->binding_capture = NO;
+        black_ControllerCancelMeasure(); menu_view->binding_capture = NO; menu_view->pad_capture = NO; black_PadCaptureCancel();
         closing = 1; transition = CACurrentMediaTime();
     }
 }
@@ -906,7 +1099,13 @@ void black_MenuAttach(void *window, void (*capture)(int))
         if (event.window != menu_window) return event;
         BOOL mouse = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown ||
             event.type == NSEventTypeOtherMouseDown || event.type == NSEventTypeScrollWheel;
+        if (black_MenuIsOpen() && !(event.modifierFlags & NSEventModifierFlagCommand) &&
+            ((event.type == NSEventTypeKeyDown && !event.isARepeat) ||
+             event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown || event.type == NSEventTypeOtherMouseDown ||
+             (event.type == NSEventTypeScrollWheel && event.scrollingDeltaY != 0)))
+            black_InputNoteMenuKeyboard();
         if (mouse) {
+            if (black_MenuIsOpen() && menu_view->pad_capture) return nil;
             if (black_MenuIsOpen() && menu_view->binding_capture) {
                 if (event.type == NSEventTypeScrollWheel) {
                     if (event.scrollingDeltaY != 0) [menu_view captureBinding:event.scrollingDeltaY > 0 ? BLACK_WHEEL_UP : BLACK_WHEEL_DOWN];
@@ -921,6 +1120,14 @@ void black_MenuAttach(void *window, void (*capture)(int))
         BOOL down = event.type == NSEventTypeKeyDown;
         if (code == 12 && (event.modifierFlags & NSEventModifierFlagCommand)) {
             if (down && !event.isARepeat) request_quit();
+            return nil;
+        }
+        if (black_MenuIsOpen() && menu_view->pad_capture) {
+            if (down && !event.isARepeat && (code == 53 || code == 117 || code == 122 || code == 109)) {
+                if (code == 117) black_SettingsSetPadBinding(menu_view->selected - ROW_PAD_FIRST,-1);
+                menu_view->pad_capture = NO; black_PadCaptureCancel();
+                [menu_view refreshValues]; [menu_view setNeedsDisplay:YES];
+            }
             return nil;
         }
         if (black_MenuIsOpen() && menu_view->binding_capture) {
@@ -940,7 +1147,10 @@ void black_MenuAttach(void *window, void (*capture)(int))
         }
         if (!black_MenuIsOpen()) return event;
         if (down && !event.isARepeat) {
-            if (code == 117 && is_binding(menu_view->selected)) {
+            if (code == 117 && menu_view->selected >= ROW_PAD_FIRST && menu_view->selected <= ROW_PAD_LAST) {
+                black_SettingsSetPadBinding(menu_view->selected-ROW_PAD_FIRST,-1);
+                [menu_view refreshValues]; [menu_view setNeedsDisplay:YES];
+            } else if (code == 117 && is_binding(menu_view->selected)) {
                 menu_view->binding_capture = YES; [menu_view captureBinding:-1];
             } else if (code == 53 || code == 11) black_MenuCommand(BLACK_MENU_BACK);
             else if (code == 36 || code == 76 || code == 49) black_MenuCommand(BLACK_MENU_CHANGE);
@@ -1010,10 +1220,21 @@ void black_MenuPump(void)
             fps_view.hidden = NO; [fps_view setNeedsDisplay:YES];
         }
     } else if (!fps_view.hidden) { fps_view.hidden = YES; fps_time = 0; }
+    if (menu_view->pad_capture) {
+        int captured = black_PadCaptureTake();
+        if (captured >= -1) {
+            menu_view->pad_capture = NO; menu_view->pad_disconnected = captured == -1;
+            if (captured >= 0) black_SettingsSetPadBinding(menu_view->selected - ROW_PAD_FIRST,captured);
+            [menu_view refreshValues]; [menu_view setNeedsDisplay:YES];
+        }
+    }
     unsigned command = black_MenuTakeCommands();
+    if(menu_view->pad_capture&&(command&BLACK_MENU_BACK)){
+        menu_view->pad_capture=NO;black_PadCaptureCancel();[menu_view setNeedsDisplay:YES];return;
+    }
     if (command & BLACK_MENU_TOGGLE) set_open(!black_MenuIsOpen());
     else if (command & BLACK_MENU_BACK) {
-        if (menu_view->binding_capture) [menu_view captureBinding:-2]; else set_open(0);
+        if(![menu_view navigateBack])set_open(0);
     }
     else if (black_MenuIsOpen() && !closing) {
         if (command & (BLACK_MENU_UP | BLACK_MENU_DOWN)) {

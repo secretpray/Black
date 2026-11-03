@@ -449,6 +449,7 @@ def play_locked(args, settings_path, data, name, binary, state):
         # Qualification only: never let unlocked progress reach real saves.
         env["BLACK_DEV_UNLOCK_LEVELS"] = str(args.dev_unlock_levels)
     env["BLACK_SETTINGS_FILE"] = str(settings_path)
+    env["BLACK_RUN_DIRECTORY"] = str(run_dir)
     env["BLACK_GAME_DIR"] = data["game_dir"]
     # Texture replacement reads the pack from BLACK_TEXTURE_DIR/replacement
     # (default: ~/Library/Application Support/BLACK/Textures) through this map.
@@ -526,7 +527,8 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["BLACK_AUDIO_FLOAT_DUMP"] = str(run_dir / "audio-mix.f32le")
     if args.audio_stages:
         env["BLACK_AUDIO_STAGES"] = "1"
-    env["BLACK_INPUT_DEVICE"] = args.input_device
+    if args.input_device is not None:
+        env["BLACK_INPUT_DEVICE"] = args.input_device
     env["BLACK_DSP_HEADROOM_DB"] = str(args.dsp_headroom)
     if args.test_quit_after:
         env["BLACK_TEST_QUIT_AFTER"] = str(args.test_quit_after)
@@ -644,7 +646,7 @@ def main():
             sub.add_argument("--test-game-view", help="Use a validated separate game view for a bounded isolated developer run")
             sub.add_argument("--headless", action="store_true", help="Bounded muted GPU validation without opening the game window")
             sub.add_argument("--pad-deadzone", type=int, choices=range(0, 16001), help="Override both saved stick deadzones until edited in Input; 0 keeps the original 20-percent response, nonzero is an exact SDL-count threshold")
-            sub.add_argument("--input-device", choices=("auto", "gamepad", "keyboard"), default="auto", help="Exclusive gameplay input; auto ignores mouse motion while the pad owns control, a deliberate key/button switches back after the pad settles")
+            sub.add_argument("--input-device", choices=("auto", "gamepad", "keyboard"), default=None, help="Exclusive gameplay input; auto ignores mouse motion while the pad owns control, a deliberate key/button switches back after the pad settles")
             sub.add_argument("--game-clock", choices=("console", "original", "realtime"), default="console", help="Console: original world step at its intended rate; original: uncapped legacy; realtime: experimental variable-FPS correction")
             sub.add_argument("--audio-routing", choices=("black", "legacy"), default="black", help="BLACK speaker-bin downmix; legacy sums all bins by parity for A/B checks")
             sub.add_argument("--audio-engine", choices=("dry", "dsp"), default="dry", help="Experimental real GP/EP needs build --real-dsp; dry is the existing speaker downmix")

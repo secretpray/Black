@@ -165,7 +165,8 @@ static void black_MenuCapture(int opening)
         xbox_MouseReleaseAll();
         memset(s_keycode_slot, 0xFF, sizeof s_keycode_slot);
         xek_capture_mouse(NO);
-    } else if (restore_mouse && NSApp.active && s_window.keyWindow) xek_capture_mouse(YES);
+    } else if (restore_mouse && black_InputKeyboardActive() && !black_GameMenuActive() &&
+               NSApp.active && s_window.keyWindow) xek_capture_mouse(YES);
 }
 
 /* GPU flip paths also request lazy window startup. Suppress those in a
@@ -184,16 +185,17 @@ void xbox_FramebufferWindowStop(void)
     black_OriginalFramebufferWindowStop();
 }
 
-/* Main-thread pointer mode follows the guest's actual Flash page. */
+#include "mouse_capture.h"
+/* Main-thread pointer mode follows both the page and the selected device. */
 void black_HostInputPump(void)
 {
     if(!s_window)return;
     static int was_menu;
+    static BlackMouseCapture capture;
     int menu=black_GameMenuActive(),active=NSApp.active&&s_window.keyWindow;
-    if(!black_MenuIsOpen()){
-        if(menu&&s_mouse_captured)xek_capture_mouse(NO);
-        else if(!menu&&was_menu&&active&&black_InputKeyboardActive()&&!getenv("RECOMP_BACKGROUND"))xek_capture_mouse(YES);
-    }
+    int wanted=black_mouse_capture(&capture,black_InputKeyboardActive(),menu,
+        black_MenuIsOpen(),active,getenv("RECOMP_BACKGROUND")!=NULL);
+    if(wanted>=0)xek_capture_mouse(wanted);
     /* Seed a newly entered menu only. Event locations are authoritative:
      * polling the global cursor here can overwrite a queued click before the
      * guest consumes it (remote/assisted pointer events need not warp it). */

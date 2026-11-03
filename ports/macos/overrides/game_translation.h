@@ -24,6 +24,7 @@ NSDictionary<NSString *, id> *black_TranslationLoad(NSURL *json, NSError **error
 NSData *black_TranslatedBank(NSData *english, NSDictionary<NSString *, id> *strings, NSError **error);
 /* The font with А-Я, Ё and their lower case added (the font is capitals only),
  * drawn from `systemFont`; returns the input when it already has them. */
+NSData *black_FontWithInputGlyphs(NSData *font, NSError **error);
 NSData *black_FontWithCyrillic(NSData *font, NSString *systemFont, NSError **error);
 
 /* Idempotent, in the installed game: keeps the English bank as MainEn.bin and

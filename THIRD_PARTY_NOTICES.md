@@ -13,7 +13,8 @@ The experimental macOS build uses these pinned submodules:
 
 The macOS runtime includes code originating in sp00nznet/xboxrecomp and xemu.
 Local native-C adaptations of TGP's BLACK deadzone/timer/speaker policies,
-controller look/rumble, direct mouse look/action bindings, Flash menu cursor/name entry and centered settings layout/palette (`src/common/menu.cpp`,
+controller look/rumble, direct mouse look/action bindings, Flash menu cursor/name entry,
+guest prompt strings/Flash visibility (`src/game/prompts.cpp`) and centered settings layout/palette (`src/common/menu.cpp`,
 `src/game/mouse.cpp`, `src/game/name_entry.cpp`, `src/game/flash.h`, `src/common/mouse_keyboard.cpp`,
 `src/common/game_info.cpp`, same root commit) and
 sp00nznet/xboxrecomp v0.16.0 (`f0f8a461496a4f23d9b0aeaa284b8d70ba7ab82b`)
@@ -43,6 +44,10 @@ xemu LGPL-2.0-or-later terms; the kernel bridge retains its runtime license.
 The game completion guard and embedded-list coalescing in `audio_completion.inc`
 are adapted from the MIT-licensed
 [portingpete/Black-2006-Recomp manual source](https://github.com/portingpete/Black-2006-Recomp/blob/2041e5a97f1300dca128d51fc06e1ae32cea9f21/src/recomp_manual.c).
+The cached HUD prompt adaptation (`hud_prompts.c`) uses the same commit's
+`src/black_hud_input.inc` for HUD ownership, field offsets, pending/active
+handoff and exact native/rendered caption matching. Its Windows register/SEH
+code is not linked into this native-C runtime.
 Copyright (c) 2026 portingpete and sp00nz; the complete
 [MIT permission notice](ports/macos/licenses/portingpete-MIT.txt) is retained.
 `resources/textures/black-hd-reimagined.map`, shipped in the app's Resources,
@@ -77,6 +82,13 @@ version of an old unofficial fan translation (its credits name MuZa-Games, voice
 KranX); see that folder's README. It contains text only. The Cyrillic letters
 are drawn at run time on the player's Mac from the macOS system fonts Impact and
 Arial Black into the player's own copy of the game font; no font file is shipped.
+
+The development input button pictures are original vector artwork, rasterized
+locally by CoreGraphics. Burnout Revenge's input settings and
+[`runtime/gpu/pad_glyphs.cpp`](https://github.com/secretpray/burnout-revenge/blob/0a6751f1ced138a2b2caaa6d51b4e1a891f1ff0d/runtime/gpu/pad_glyphs.cpp)
+were read-only product/visual references. No donor renderer code or atlas is
+copied. Button labels use the Mac's Arial Bold at run time; no system or game
+font file is redistributed. The player's font pixels stay local.
 
 BLACK is an Electronic Arts / Criterion Games title. This repository does not
 include its disc image, executable, assets or generated game C/C++ sources.

@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
+#include "../../ports/macos/overrides/input_profile.h"
 #include "../../ports/macos/overrides/controller_monitor.h"
 #include "../../ports/macos/overrides/game_mods.h"
 #include <unistd.h>
@@ -167,107 +168,96 @@ int main(int argc, char **argv)
         if (black_SettingsMod(BLACK_MOD_GOD_MODE) || black_SettingsMod(BLACK_MOD_UNLOCK_MISSIONS) ||
             black_SettingsSkipIntros() || black_SettingsRenderScale() != 2) return 74;
         black_SettingsSetSkipIntros(1); black_SettingsSetSkipMissionIntros(1);
-        key(window, 14, @"e"); /* back to Recomp Settings, where the next open starts */
-        key(window, 53, @"\e"); if (black_MenuIsOpen()) return 4;
-        key(window, 122, @"\uF704");
-        if (!black_MenuIsOpen() || !black_SettingsSkipIntros()) return 5;
-        key(window, 14, @"e"); key(window, 14, @"e");
-        int raw[6] = {385, -128, -640, 256, 0, 0}, mapped[6] = {385,128,-640,-256,0,0};
-        black_ControllerPublish("Synthetic preview pad", 1, raw, mapped, 0);
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-look.png"]);
-        for (int i = 0; i < 4; ++i) {
-            key(window, 124, @"\uF703");
-            if (black_SettingsLookSpeed(i) != 51) return 50;
-            key(window, 123, @"\uF702"); key(window, 125, @"\uF701");
-        }
-        key(window, 124, @"\uF703");
-        if (!black_SettingsInvertX()) return 51;
-        key(window, 123, @"\uF702"); key(window, 125, @"\uF701");
-        key(window, 124, @"\uF703");
-        if (!black_SettingsHoldAim()) return 59;
-        key(window, 123, @"\uF702"); key(window, 125, @"\uF701");
-        key(window, 123, @"\uF702");
-        if (black_SettingsAimAssist()) return 60;
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-aim.png"]);
-        key(window, 124, @"\uF703"); key(window, 125, @"\uF701");
-        for (int i = 0; i < 12; ++i) key(window, 123, @"\uF702");
-        if (black_SettingsStickDeadzone(0) != 8) return 41;
-        key(window, 125, @"\uF701");
-        for (int i = 0; i < 16; ++i) key(window, 123, @"\uF702");
-        if (black_SettingsStickDeadzone(1) != 4) return 42;
-        key(window, 125, @"\uF701");
-        key(window, 124, @"\uF703"); key(window, 124, @"\uF703");
-        if (black_SettingsTriggerDeadzone() != 2) return 43;
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-deadzones.png"]);
-        [window setContentSize:NSMakeSize(640,480)]; pump(.1);
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-small.png"]);
-        [window setContentSize:NSMakeSize(960,600)]; pump(.1);
-        key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
-        if (black_SettingsVibration()) return 44;
-        key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
-        if (black_SettingsRumbleIntensity() != 90) return 52;
-        key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
-        if (black_SettingsDualSenseHid()) return 45;
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-driver.png"]);
-        key(window, 125, @"\uF701"); key(window, 36, @"\r");
-        if (black_ControllerMonitor().calibration != BLACK_CAL_MEASURING) return 46;
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-measuring.png"]);
-        for (unsigned t = 0; t <= 2100; t += 10) black_ControllerPublish("Synthetic preview pad", 1, raw, mapped, t);
-        pump(.1);
-        if (black_SettingsStickDeadzone(0) != 4 || black_SettingsStickDeadzone(1) != 4) return 47;
-        snapshot(window, [output stringByAppendingPathComponent:@"controller-measured.png"]);
-        black_ControllerPublish(NULL, -1, NULL, NULL, 2200);
-        key(window, 36, @"\r");
-        if (black_ControllerMonitor().calibration != BLACK_CAL_DISCONNECTED || black_SettingsStickDeadzone(0) != 4) return 48;
-        key(window, 125, @"\uF701"); key(window, 36, @"\r");
-        if (black_SettingsStickDeadzone(0) != -1 || black_SettingsStickDeadzone(1) != -1 ||
-            black_SettingsTriggerDeadzone() || !black_SettingsVibration() || !black_SettingsDualSenseHid() ||
-            black_SettingsRumbleIntensity() != 100 || black_SettingsInvertX() ||
-            black_SettingsHoldAim() || !black_SettingsAimAssist() || black_SettingsLookSpeed(0) != 50 ||
-            black_SettingsRenderScale() != 2 || black_SettingsFov() != 70 ||
-            !black_SettingsSkipIntros() || !black_SettingsSkipMissionIntros()) return 49;
-        NSButton *defaults = button(window.contentView, @"Defaults");
-        if (!defaults) return 53;
-        black_SettingsSetStickDeadzone(0, 7);
-        click(window, defaults, defaults.bounds.size.width / 2, defaults.bounds.size.height / 2);
-        if (black_SettingsStickDeadzone(0) != -1 || !black_SettingsSkipIntros()) return 54;
-        key(window, 12, @"q");
-        if (!black_MenuIsOpen() || quit_requests) return 33;
-        NSButton *controller = button(window.contentView, @"Controller");
-        if (!controller) return 55;
-        click(window, controller, controller.bounds.size.width / 2, controller.bounds.size.height / 2);
-        if (button(window.contentView, @"Horizontal Sensitivity").hidden) return 56;
-        NSButton *back = button(window.contentView, @"Back");
-        if (!back) return 57;
-        click(window, back, back.bounds.size.width / 2, back.bounds.size.height / 2);
-        if (black_MenuIsOpen()) return 58;
-        key(window,122,@"\uF704"); key(window,12,@"q"); /* Controller -> Mouse and Keyboard */
-        snapshot(window,[output stringByAppendingPathComponent:@"mouse-settings.png"]);
-        key(window,124,@"\uF703");
-        if (black_SettingsMouseSpeed(0)!=51) return 61;
-        key(window,123,@"\uF702");
-        for(int i=0;i<8;++i) key(window,125,@"\uF701");
-        key(window,124,@"\uF703"); key(window,36,@"\r"); key(window,35,@"p");
-        if (black_SettingsBinding(0,1)!=35 || black_SettingsBinding(0,0)!=13) return 62;
-        snapshot(window,[output stringByAppendingPathComponent:@"keyboard-bindings.png"]);
-        key(window,36,@"\r"); key(window,53,@"\e"); /* cancel, keep binding */
-        if (!black_MenuIsOpen() || black_SettingsBinding(0,1)!=35) return 63;
-        key(window,36,@"\r"); black_MenuCommand(BLACK_MENU_BACK); pump(.1);
-        if (!black_MenuIsOpen() || black_SettingsBinding(0,1)!=35) return 67;
-        key(window,117,@"\uF728");
-        if (black_SettingsBinding(0,1)!=-1) return 64;
-        key(window,36,@"\r");
-        NSEvent *bindMouse=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:NSZeroPoint modifierFlags:0
-            timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
-        [NSApp postEvent:bindMouse atStart:NO]; pump(.1);
-        if (black_SettingsBinding(0,1)!=BLACK_MOUSE_RIGHT) return 65;
-        snapshot(window,[output stringByAppendingPathComponent:@"keyboard-bound-mouse.png"]);
-        [window setContentSize:NSMakeSize(640,480)]; pump(.1);
-        snapshot(window,[output stringByAppendingPathComponent:@"keyboard-small.png"]);
-        [window setContentSize:NSMakeSize(960,600)]; pump(.1);
-        defaults=button(window.contentView,@"Defaults");
+        key(window,14,@"e"); /* Port Settings */
+        key(window,53,@"\e");if(black_MenuIsOpen())return 4;
+        key(window,122,@"\uF704");key(window,14,@"e"); /* Controls */
+        int raw[6]={385,-128,-640,256,0,0},mapped[6]={385,128,-640,-256,0,0};
+        black_ControllerPublish("Synthetic preview pad",1,raw,mapped,0);
+        black_SettingsSetMouseSpeed(0,47);black_SettingsSetMouseSpeed(1,45);
+        black_SettingsSetLookSpeed(0,63);black_SettingsSetLookSpeed(1,41);
+        NSString *rootRows[] = {@"Input Device",@"Button Prompts",@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration"};
+        for(int i=0;i<5;++i)if(button(window.contentView,rootRows[i]).hidden)return 101;
+        if(!button(window.contentView,@"Horizontal Sensitivity").hidden || !button(window.contentView,@"Mouse Look").hidden)return 102;
+        snapshot(window,[output stringByAppendingPathComponent:@"controls-home.png"]);
+        [window setContentSize:NSMakeSize(640,480)];pump(.1);
+        snapshot(window,[output stringByAppendingPathComponent:@"controls-home-small.png"]);
+        [window setContentSize:NSMakeSize(960,600)];pump(.1);
+        key(window,124,@"\uF703");if(black_SettingsInputDevice()!=BLACK_INPUT_GAMEPAD)return 103;
+        key(window,124,@"\uF703");if(black_SettingsInputDevice()!=BLACK_INPUT_KEYBOARD)return 104;
+        key(window,36,@"\r");if(black_SettingsInputDevice()!=BLACK_INPUT_AUTO)return 105;
+        key(window,125,@"\uF701");key(window,36,@"\r");key(window,36,@"\r");
+        if(black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION)return 106;
+        snapshot(window,[output stringByAppendingPathComponent:@"controls-device.png"]);
+        key(window,125,@"\uF701");key(window,36,@"\r"); /* editor */
+        key(window,124,@"\uF703"); /* edit gamepad, no gameplay device change */
+        if(black_SettingsInputDevice()!=BLACK_INPUT_AUTO||button(window.contentView,@"Reload (A)").hidden)return 107;
+        key(window,125,@"\uF701");key(window,36,@"\r");
+        black_PadCapturePoll(1,1,1);pump(.03);if(black_SettingsPadBinding(0)!=0)return 108;
+        black_PadCapturePoll(0,1,1);black_PadCapturePoll(4,1,1);pump(.05);
+        if(black_SettingsPadBinding(0)!=2)return 109;
+        black_PadCapturePoll(0,1,1);
+        snapshot(window,[output stringByAppendingPathComponent:@"controller-bindings.png"]);
+        black_InputSetKeyboardActive(0);pump(.05);black_InputSetKeyboardActive(1);pump(.05);
+        if(button(window.contentView,@"Reload (A)").hidden)return 110; /* no automatic page switch */
+        key(window,36,@"\r");key(window,53,@"\e");if(!black_MenuIsOpen())return 111;
+        key(window,117,@"\uF728");if(black_SettingsPadBinding(0)!=-1)return 112;
+        key(window,36,@"\r");black_PadCapturePoll(0,-1,0);pump(.05);
+        if(black_SettingsPadBinding(0)!=-1)return 113;
+        NSButton *defaults=button(window.contentView,@"Defaults");
         click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
-        if(black_SettingsBinding(0,1)!=-1 || black_SettingsBinding(0,0)!=13 || black_SettingsMouseSpeed(0)!=50 || !black_SettingsSkipIntros()) return 66;
+        if(black_SettingsPadBinding(0)!=0||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION||black_SettingsLookSpeed(0)!=63)return 114;
+        key(window,53,@"\e"); /* root, bindings row restored */
+        if(![[(NSButton *)window.firstResponder title] isEqual:@"Button Bindings"])return 115;
+        key(window,36,@"\r"); /* editor selector */
+        key(window,123,@"\uF702");key(window,125,@"\uF701"); /* keyboard forward */
+        key(window,124,@"\uF703");key(window,36,@"\r");key(window,35,@"p");
+        if(black_SettingsBinding(0,1)!=35||black_SettingsBinding(0,0)!=13)return 116;
+        snapshot(window,[output stringByAppendingPathComponent:@"keyboard-bindings.png"]);
+        key(window,36,@"\r");key(window,53,@"\e");if(black_SettingsBinding(0,1)!=35||!black_MenuIsOpen())return 117;
+        key(window,36,@"\r");black_MenuCommand(BLACK_MENU_BACK);pump(.05);
+        if(black_SettingsBinding(0,1)!=35||button(window.contentView,@"MOVE FORWARD").hidden)return 118;
+        key(window,117,@"\uF728");if(black_SettingsBinding(0,1)!=-1)return 119;
+        key(window,36,@"\r");
+        NSEvent *bindMouse=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+        [NSApp postEvent:bindMouse atStart:NO];pump(.05);if(black_SettingsBinding(0,1)!=BLACK_MOUSE_RIGHT)return 120;
+        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        if(black_SettingsBinding(0,1)!=-1||black_SettingsMouseSpeed(0)!=47||black_SettingsLookSpeed(1)!=41)return 121;
+        key(window,53,@"\e");key(window,125,@"\uF701");key(window,36,@"\r"); /* mouse */
+        if(button(window.contentView,@"Mouse Look").hidden)return 122;
+        key(window,124,@"\uF703"); /* select Y, no change */
+        if(black_SettingsMouseSpeed(0)!=47||black_SettingsMouseSpeed(1)!=45)return 123;
+        key(window,36,@"\r");key(window,124,@"\uF703");
+        if(black_SettingsMouseSpeed(0)!=47||black_SettingsMouseSpeed(1)!=46||black_SettingsLookSpeed(1)!=41)return 124;
+        key(window,53,@"\e");if(button(window.contentView,@"Mouse Look").hidden)return 125; /* finish axis editing */
+        snapshot(window,[output stringByAppendingPathComponent:@"mouse-settings.png"]);
+        [window setContentSize:NSMakeSize(640,480)];pump(.1);snapshot(window,[output stringByAppendingPathComponent:@"mouse-small.png"]);
+        [window setContentSize:NSMakeSize(960,600)];pump(.1);
+        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        if(black_SettingsMouseSpeed(0)!=50||black_SettingsLookSpeed(0)!=63||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION)return 126;
+        key(window,53,@"\e");key(window,125,@"\uF701");key(window,36,@"\r"); /* gamepad */
+        key(window,36,@"\r");key(window,124,@"\uF703");key(window,36,@"\r");
+        if(black_SettingsLookSpeed(0)!=64||black_SettingsLookSpeed(1)!=41||black_SettingsMouseSpeed(0)!=50)return 127;
+        snapshot(window,[output stringByAppendingPathComponent:@"controller-look.png"]);
+        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        if(black_SettingsLookSpeed(0)!=50||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION)return 128;
+        for(int i=0;i<4;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* advanced */
+        key(window,125,@"\uF701");key(window,125,@"\uF701");key(window,124,@"\uF703");
+        if(black_SettingsStickDeadzone(0)!=21)return 129;
+        snapshot(window,[output stringByAppendingPathComponent:@"controller-zones.png"]);
+        black_SettingsSetInputDevice(BLACK_INPUT_KEYBOARD);black_SettingsSetBinding(0,1,35);black_SettingsSetLookSpeed(0,61);
+        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        if(black_SettingsStickDeadzone(0)!=-1||black_SettingsLookSpeed(0)!=61||black_SettingsBinding(0,1)!=35||black_SettingsInputDevice()!=BLACK_INPUT_KEYBOARD)return 136;
+        black_SettingsSetInputDevice(BLACK_INPUT_AUTO);
+        for(int i=0;i<5;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* diagnostics */
+        if(button(window.contentView,@"Measure Stick Drift").hidden)return 130;
+        snapshot(window,[output stringByAppendingPathComponent:@"controller-diagnostics.png"]);
+        key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Controller Diagnostics"])return 131;
+        key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Advanced Gamepad"])return 132;
+        key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Gamepad and Vibration"])return 133;
+        black_SettingsSetMenuLanguage(6);pump(.05);snapshot(window,[output stringByAppendingPathComponent:@"controls-home-ru.png"]);
+        key(window,36,@"\r");snapshot(window,[output stringByAppendingPathComponent:@"controller-look-ru.png"]);
+        black_SettingsSetMenuLanguage(0);key(window,53,@"\e");key(window,53,@"\e");if(black_MenuIsOpen())return 134;
+        key(window,122,@"\uF704");if(button(window.contentView,@"Input Device").hidden)return 135;
         key(window,53,@"\e");
         for (int open = 0; open < 2; ++open) {
             if (open) { key(window, 122, @"\uF704"); }
@@ -283,7 +273,7 @@ int main(int argc, char **argv)
         [window performClose:nil];
         if (quit_requests != 4) return 19;
         black_MenuDetach(); [window close]; [window release];
-        puts("TGP native UI: recomp/controller/mouse/mods pages, FPS counter, dual key slots, capture/cancel/clear/mouse bind/defaults, resize/quit: PASS");
+        puts("Control hub: device/prompts first, editor scope, independent X/Y, scoped resets, capture/cancel/disconnect, back/focus, no auto page switch, RU/resize/quit: PASS");
     }
     return 0;
 }

@@ -9,11 +9,15 @@ typedef struct {
     char name[9];
 } BlackFilmSkip;
 
-static inline int black_film_is_mission(const char name[9])
+static inline int black_film_number(const char name[9])
 {
     const char *p = name[0] == 'F' ? name + 1 : name;
-    if (p[0] < '0' || p[0] > '9' || p[1] < '0' || p[1] > '9' || p[2] != '_') return 0;
-    int number = (p[0] - '0') * 10 + p[1] - '0';
+    if (p[0] < '0' || p[0] > '9' || p[1] < '0' || p[1] > '9' || p[2] != '_') return -1;
+    return (p[0] - '0') * 10 + p[1] - '0';
+}
+static inline int black_film_is_mission(const char name[9])
+{
+    int number = black_film_number(name);
     /* Eight mission briefings in the verified film table. F11 is the
      * alternate fifth briefing. Ending 18/F18 and weapon films are excluded. */
     return number >= 3 && number <= 17 && (number & 1);
@@ -30,7 +34,11 @@ static inline int black_film_skip_policy(BlackFilmSkip *s, uint32_t player, uint
     }
     int intro = !strncmp(name, "LO_", 3) || !strncmp(name, "02_", 3) ||
         !strncmp(name, "F02_", 4) || !strncmp(name, "C_", 2) || !strncmp(name, "Attr_", 5);
-    if (name[0] && !intro && !background && strncmp(name, "AK_", 3) && state == 0x1C)
+    /* Menu weapon films (Mag/SMG/MP5, as well as AK) are foreground videos
+     * too. Only a verified campaign briefing/debrief/ending closes startup;
+     * otherwise visiting a menu disables the later C_/02_ intro skip. */
+    int number = black_film_number(name);
+    if (number >= 3 && number <= 18 && !background && state == 0x1C)
         s->startup_done = 1;
     if (!player || !movie || !name[0] || background || !strncmp(name, "AK_", 3) ||
         state != 0x1C || !(all || (intros && !s->startup_done && intro) ||

@@ -1,6 +1,7 @@
 /* Small persisted port preferences, separate from Xbox saves and game data. */
 #include "port_menu.h"
 #include "keyboard_mouse.h"
+#include "input_profile.h"
 #include "game_mods.h"
 #include <stdatomic.h>
 #include <stdint.h>
@@ -39,6 +40,8 @@ static atomic_int invert_x, rumble_intensity = 100, keyboard_active;
 static atomic_int hold_aim, aim_assist = 1;
 static atomic_int mouse_speed[4] = {50,50,50,50}, mouse_invert[2], mouse_hold_aim = 1, walk_speed = 50;
 static atomic_int bindings[BLACK_ACTION_COUNT][2];
+static atomic_int input_device, input_cli = -1, button_prompts;
+static atomic_int pad_bindings[BLACK_PAD_CONTROLS];
 static atomic_int mods[BLACK_MOD_COUNT], mods_supported = -1;
 static _Atomic(const char *) mods_revision = "DETECTING";
 static atomic_uint menu_commands;
@@ -46,6 +49,7 @@ static char *settings_path;
 
 static void load_settings(void)
 {
+    for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) atomic_store(&pad_bindings[i], i);
     const BlackKeyAction *actions = black_KeyActions();
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i)
         for (int slot = 0; slot < 2; ++slot) atomic_store(&bindings[i][slot], actions[i].keys[slot]);
@@ -94,6 +98,22 @@ static void load_settings(void)
                     long n = strtol(value,&end,10);
                     int low = i < 4 || i == 7 ? 1 : 0, high = i < 4 ? 200 : i == 7 ? 100 : 1;
                     if (*value && !*end && n >= low && n <= high) atomic_store(mouse_fields[i],(int)n);
+                }
+            }
+            const char *input_keys[] = {"input_device", "button_prompts"};
+            atomic_int *input_fields[] = {&input_device, &button_prompts};
+            for (int i = 0; i < 2; ++i) {
+                char format[80]; snprintf(format,sizeof format," %s = %%15s %%c",input_keys[i]);
+                if (sscanf(line,format,value,&extra) == 1) {
+                    long n = strtol(value,&end,10);
+                    if (*value && !*end && n >= 0 && n <= (i ? 3 : 2)) atomic_store(input_fields[i],(int)n);
+                }
+            }
+            for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) {
+                char format[80]; snprintf(format,sizeof format," pad_%s = %%15s %%c",black_PadControlId(i));
+                if (sscanf(line,format,value,&extra) == 1) {
+                    long n = strtol(value,&end,10);
+                    if (*value && !*end && n >= -1 && n < BLACK_PAD_CONTROLS) atomic_store(&pad_bindings[i],(int)n);
                 }
             }
             for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot) {
@@ -156,6 +176,9 @@ static void load_settings(void)
         }
         fclose(file);
     }
+    const char *device = getenv("BLACK_INPUT_DEVICE");
+    if (device && (!strcmp(device,"auto") || !strcmp(device,"gamepad") || !strcmp(device,"keyboard")))
+        atomic_store(&input_cli,!strcmp(device,"gamepad") ? BLACK_INPUT_GAMEPAD : !strcmp(device,"keyboard") ? BLACK_INPUT_KEYBOARD : BLACK_INPUT_AUTO);
     /* CLI override is a starting value for this run. UI edits can turn it off. */
     if (getenv("BLACK_SKIP_INTROS")) atomic_store(&skip_intros, 1);
     const char *pad = getenv("RECOMP_PAD_DEADZONE");
@@ -241,6 +264,9 @@ static int save_setting(atomic_int *setting, int value)
                 written &= fprintf(file, "# Mouse sensitivity units: 50 = 1x\nmouse_sensitivity=%d\nmouse_vertical_sensitivity=%d\naim_horizontal_sensitivity=%d\naim_vertical_sensitivity=%d\ninvert_mouse_x=%d\ninvert_mouse=%d\nhold_aim=%d\nwalk_speed=%d\n",
                     atomic_load(&mouse_speed[0]),atomic_load(&mouse_speed[1]),atomic_load(&mouse_speed[2]),atomic_load(&mouse_speed[3]),
                     atomic_load(&mouse_invert[0]),atomic_load(&mouse_invert[1]),atomic_load(&mouse_hold_aim),atomic_load(&walk_speed)) > 0;
+                written &= fprintf(file,"input_device=%d\nbutton_prompts=%d\n",atomic_load(&input_device),atomic_load(&button_prompts)) > 0;
+                for (int i = 0; i < BLACK_PAD_CONTROLS; ++i)
+                    written &= fprintf(file,"pad_%s=%d\n",black_PadControlId(i),atomic_load(&pad_bindings[i])) > 0;
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
@@ -339,6 +365,8 @@ int black_SettingsResetInput(void)
 {
     pthread_once(&initialized, load_settings);
     for (int i = 0; i < 2; ++i) { atomic_store(&stick_cli[i], -1); atomic_store(&stick_deadzone[i], -1); }
+    atomic_store(&input_device, BLACK_INPUT_AUTO); atomic_store(&input_cli,-1); atomic_store(&button_prompts, BLACK_PROMPTS_AUTO);
+    for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) atomic_store(&pad_bindings[i],i);
     atomic_store(&trigger_deadzone, 0); atomic_store(&vibration, 1);
     for (int i = 0; i < 4; ++i) atomic_store(&look_speed[i], 50);
     atomic_store(&invert_x, 0); atomic_store(&rumble_intensity, 100);
@@ -430,3 +458,20 @@ int black_ModsSupported(void) { return atomic_load(&mods_supported); }
 /* Overridden by the game executable (game_mods.c); tools without game code
  * show no counter. */
 __attribute__((weak)) uint32_t black_GameFrameCount(void) { return 0; }
+
+int black_SettingsInputDevice(void)
+{ pthread_once(&initialized,load_settings); int cli = atomic_load(&input_cli); return cli >= 0 ? cli : atomic_load(&input_device); }
+int black_SettingsSetInputDevice(int policy)
+{
+    if (policy < BLACK_INPUT_AUTO || policy > BLACK_INPUT_KEYBOARD) return 0;
+    pthread_once(&initialized,load_settings); atomic_store(&input_cli,-1);
+    return save_setting(&input_device,policy);
+}
+int black_SettingsButtonPrompts(void)
+{ pthread_once(&initialized,load_settings); return atomic_load(&button_prompts); }
+int black_SettingsSetButtonPrompts(int family)
+{ return family >= 0 && family <= BLACK_PROMPTS_KEYBOARD ? save_setting(&button_prompts,family) : 0; }
+int black_SettingsPadBinding(int target)
+{ pthread_once(&initialized,load_settings); return target >= 0 && target < BLACK_PAD_CONTROLS ? atomic_load(&pad_bindings[target]) : -1; }
+int black_SettingsSetPadBinding(int target,int source)
+{ return target >= 0 && target < BLACK_PAD_CONTROLS && source >= -1 && source < BLACK_PAD_CONTROLS ? save_setting(&pad_bindings[target],source) : 0; }

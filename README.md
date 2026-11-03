@@ -10,12 +10,12 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.4.1 is an experimental macOS release.** 0.4.0 added a first-time setup drawn like
-> the game's own menus, Russian game text built into your own copy, and the game's
-> menu look for the settings panel; 0.4.1 adds Russian subtitles to the briefing films.
-> Combat, menus and profile saving have been exercised on the development Mac. A complete
-> playthrough, all runtime races, audio quality and controller calibration are not yet
-> qualified. [Validation](docs/VALIDATION.md).
+> **0.5.0 is an experimental macOS release.** It adds a unified Controls menu,
+> saved device selection, controller button rebinding and drawn Xbox/PlayStation/
+> keyboard prompts. The first-time setup, Russian game text and film subtitles
+> from 0.4.x remain included. Combat, menus and profile saving have been exercised
+> on the development Mac. A complete playthrough, all runtime races, audio quality
+> and physical input paths are not yet qualified. [Validation](docs/VALIDATION.md).
 
 <p align="center">
   <img src="docs/screenshots/gameplay-firefight.jpg" alt="A firefight on an autumn street: an Uzi fires past a brick wall, leaves and smoke fly, an abandoned yellow car down the road" width="100%">
@@ -37,11 +37,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.4.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.4.1)**
+**[BLACK 0.5.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.4.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.5.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -83,18 +83,20 @@ PS2 and Xbox 360 files are not supported.
 - Native ARM64 game code, NV2A rendering through ANGLE Metal and the DSP audio path.
 - Saved 1–6× render scale, camera FOV, SMAA/FXAA, anisotropic filtering and MetalFX
   spatial upscaling. Graphics changes take effect on the next launch.
-- A TGP-inspired panel with **Recomp Settings**, **Mouse and Keyboard**,
-  **Controller** and **Mods** pages, using fonts from your own game.
+- A panel in the game’s own green-grey menu style, using fonts from your own game.
+  The panel has **Port Settings**, **Controls** and **Mods** tabs,
+  with device selection first and separate input subpages.
 - An optional **FPS counter** showing the game's own frame rate.
 - Optional **HD texture replacement** from your own copy of the PCSX2 "BLACK HD
   Reimagined" pack, through portingpete's map: put the pack's files under
   `~/Library/Application Support/BLACK/Textures/replacement/` and turn on
-  **Recomp Settings → Textures**. The pack is not included.
+  **Port Settings → Textures**. **HD Texture Size** limits the largest side
+  to 1024, 2048 (default) or 4096 pixels. The pack is not included.
 - Game text in English, French, German, Spanish or Italian from your disc, or
   Russian: the app carries the translation text only and builds the Russian
   bank and Cyrillic letters into your own installed copy when the game starts,
   and shows Russian subtitles in the mission briefing films.
-  The settings panel speaks those languages or Russian.
+  The settings panel has English, French, German, Spanish, Italian and Russian.
 - Separate stick/trigger deadzones, explicit drift measurement, live axes,
   normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.
 - Direct mouse look, two bindings per action, Flash menu cursor navigation
@@ -140,7 +142,7 @@ unrecognised executable leaves every mod off.
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/mods-in-game.jpg" alt="In a mission with mods on: three medkits, nine grenades, 999 rounds, the M16A2 and FPS 29.9 in the corner"><br><sub>Mods in play, with the FPS counter.</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings-mods-unlocks.jpg" alt="Mods page scrolled to Infinite Ammo, Always Silenced and Unlock All Missions"><br><sub>Player mods and unlocks.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-mods-unlocks.jpg" alt="Mods page with No Recoil, One-Hit Kill, Game Speed, Always Silenced and Unlock All Missions"><br><sub>Player mods and unlocks.</sub></td>
   </tr>
 </table>
 
@@ -160,16 +162,55 @@ unrecognised executable leaves every mod off.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="Recomp Settings: render scale 2x, MetalFX upscaling, field of view 70, FPS counter and SMAA"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings-controller.jpg" alt="Controller page: look and aim sensitivity with live stick monitors"><br><sub>Controller: sensitivity and live sticks.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="Current game-style Recomp Settings: render scale, MetalFX, field of view, FPS counter and SMAA"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-controller.jpg" alt="Gamepad and Vibration subpage: independent X/Y response, aiming and vibration"><br><sub>Gamepad response on its own page.</sub></td>
   </tr>
 </table>
+
+**New in 0.5.0:** open **Controls**. Device and prompt
+selection are the first two rows, followed by **Button Bindings**, **Mouse and
+Aiming**, and **Gamepad and Vibration**. [Input details and checks](docs/INPUT.md).
+
+| Setting | Behaviour |
+| --- | --- |
+| Input Device | **Auto**, **Gamepad** or **Keyboard**. Auto starts with a connected pad; a deliberate key or mouse button can take over after the pad settles. Mouse motion alone leaves the pad in control. |
+| Button Prompts | **Auto**, **Xbox**, **PlayStation** or **Keyboard**, independent of input selection. Auto follows the active device and SDL's controller family. |
+| Controller Bindings | Reassign the 16 Xbox button/trigger controls. Select a row, press Enter, release all pad buttons, then press one. Escape cancels; Delete clears. Left/right also select a button. |
+
+**Button Bindings → Edit Bindings For** selects Keyboard and Mouse or Gamepad
+without changing gameplay input. Keyboard and mouse actions keep two bindings each.
+Mouse and pad sensitivity live on their own pages as independent Look/Aiming
+X/Y pairs. Deadzones, driver selection and live calibration are under
+**Gamepad and Vibration → Advanced Gamepad**.
+Game hints use the current binding. PlayStation buttons, shoulder/trigger
+buttons, sticks, keyboard caps and mouse buttons use drawn pictures, shared
+with the settings panel. The app prepares them in a private per-run view,
+leaving source fonts intact. Missing font support falls back to button names.
+Switching from pad to keyboard restores mouse look during gameplay. Game menus keep their physical confirm/back
+buttons; gameplay rebinding is for BLACK's default control scheme. Settings
+remain accessible by keyboard even with Gamepad selected and no pad connected.
+Reset buttons affect the current page or binding list, preserving device choice,
+prompt style and other pages. Back returns to the previous page and focus;
+capture or axis editing is cancelled first.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/settings-device.jpg" alt="Controls home: device and button prompts first, then bindings and response subpages"><br><sub>Choose gameplay input and button prompts independently.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-bindings.jpg" alt="Unified button editor set to Gamepad, with drawn PlayStation button pictures"><br><sub>Rebind the pad; prompts follow the selected family.</sub></td>
+  </tr>
+</table>
+
+<sub>Settings captured from the running game window, with its title bar removed,
+resized and compressed. The diagnostic run used scripted input, with no physical
+controller connected; these images do not qualify hardware behaviour.</sub>
 
 Click the game to capture the mouse in play. Escape releases it and pauses;
 game menus release it automatically. Mouse motion alone does not take control
 away from a gamepad. Measure drift with the sticks released, then test the
 smallest comfortable deadzone on your own controller. Physical calibration,
-rumble and hotplug still need broader acceptance testing.
+rumble, hotplug and the new mappings still need physical acceptance testing.
+A manual Gamepad choice selects the controller input path; selecting a particular
+pad among several connected devices is not implemented.
 
 ## Your data and updates
 

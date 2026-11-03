@@ -11,6 +11,7 @@
  * miss or failure keeps the game's own texture. */
 #include "texture_pack.h"
 #include "texture_dump.h"
+#include "input_atlas.h"
 
 #define BLACK_TP_GL_BC1 0x83F1  /* COMPRESSED_RGBA_S3TC_DXT1_EXT */
 #define BLACK_TP_GL_BC2 0x83F2  /* COMPRESSED_RGBA_S3TC_DXT3_EXT */
@@ -283,6 +284,15 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
     if (s.cubemap || s.dimensionality != 2 || s.border ||
         binding->gl_target != GL_TEXTURE_2D)
         return;
+    BlackInputAtlas input;
+    if(black_InputAtlasFind(data,length,s.width,s.height,s.color_format,&input)) {
+        glBindTexture(GL_TEXTURE_2D,binding->gl_texture);
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,input.width,input.height,0,GL_RGBA,GL_UNSIGNED_BYTE,input.rgba);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_BASE_LEVEL,0);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_LEVEL,0);
+        fprintf(stderr,"[PROMPTS] host atlas %ux%u installed (guest %ux%u)\n",input.width,input.height,s.width,s.height);
+        return;
+    }
     black_TextureDump(s.color_format, s.width, s.height, data, length, palette, palette_length);
     if (!black_tp.generation) return;
     size_t top = black_TexturePackTopBytes(s.color_format, s.width, s.height);

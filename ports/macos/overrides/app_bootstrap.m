@@ -56,7 +56,7 @@ char *black_AppPrepareGame(void)
         setenv("BLACK_GAME_DIR",game.path.fileSystemRepresentation,1);
         const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_FULLSCREEN","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};
         for(unsigned i=0;i<sizeof ones/sizeof ones[0];++i)setenv(ones[i],"1",1);
-        setenv("RECOMP_KEYBOARD","0",1);setenv("RECOMP_ASPECT","16:9",1);setenv("BLACK_INPUT_DEVICE","auto",1);setenv("BLACK_DSP_HEADROOM_DB","6",1);
+        setenv("RECOMP_KEYBOARD","0",1);setenv("RECOMP_ASPECT","16:9",1);setenv("BLACK_DSP_HEADROOM_DB","6",1);
         int scale=black_SettingsRenderScale();value("RECOMP_SCALE",scale);value("RECOMP_FOV",black_SettingsFov());value("RECOMP_AF",black_SettingsAniso());
         setenv("RECOMP_AA",(const char*[]){"0","1","smaa"}[black_SettingsAntiAliasing()],1);
         setenv("RECOMP_UPSCALE",black_SettingsUpscaler()?"metalfx":"off",1);if(scale>1)setenv("RECOMP_NO_FLIP_DOWNLOAD","1",1);else unsetenv("RECOMP_NO_FLIP_DOWNLOAD");

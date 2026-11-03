@@ -28,13 +28,15 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 #include "controller_axes.h"
 #include "menu_input.h"
 #include "input_owner.h"
+#include "input_profile.h"
+#include "pad_mapping.h"
 #include <pthread.h>
 
-static void black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
+static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
 {
     if (port) {
         if (black_MenuIsOpen()) memset(&state->Gamepad, 0, sizeof state->Gamepad);
-        return;
+        return black_MenuIsOpen();
     }
     static BlackMenuPad navigation;
     XBOX_GAMEPAD *g = &state->Gamepad;
@@ -58,10 +60,13 @@ static void black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     unsigned command = black_menu_pad(&navigation, down, black_MenuIsOpen(), &capture);
     if (command) black_MenuCommand(command);
     if (capture) memset(g, 0, sizeof *g);
+    return capture;
 }
 
 static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
+    static BlackInputOwner owner;
+    static int owner_instance = -1;
     DWORD result = black_SDLInputGetState(port, state);
     if (result == ERROR_SUCCESS && port < XBOX_MAX_CONTROLLERS &&
         g_controller_connected[port] && g_pads[port]) {
@@ -112,38 +117,60 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
             }
         }
     }
-    if (!port && (!g_controller_connected[0] || !g_pads[0]))
+    int connected = g_controller_connected[0] && g_pads[0] && SDL_GameControllerGetAttached(g_pads[0]);
+    if (!port && !connected) {
+        black_input_owner(&owner,black_SettingsInputDevice(),0,0,0,SDL_GetTicks());
+        owner_instance = -1;
+        black_InputTakeMenuKeyboard();
         black_ControllerPublish(NULL, -1, NULL, NULL, SDL_GetTicks());
+        black_PadCapturePoll(0,-1,0);
+    }
     if (result != ERROR_SUCCESS) return result;
     if (port != 0 || !g_controller_connected[0]) {
-        if (!port) black_InputSetKeyboardActive(1);
+        if (!port) {
+            int keyboard = black_SettingsInputDevice() != BLACK_INPUT_GAMEPAD;
+            black_InputSetKeyboardActive(keyboard);
+            if (!keyboard) memset(&state->Gamepad,0,sizeof state->Gamepad);
+        }
         black_menu_input(port, state);
         return result;
     }
 
     XBOX_GAMEPAD keys = {0};
     xbox_KeyboardMergeState(&keys);
-    static BlackInputOwner owner;
-    static int policy = -1;
-    if (policy < 0) {
-        const char *spec = getenv("BLACK_INPUT_DEVICE");
-        policy = spec && !strcmp(spec, "gamepad") ? BLACK_INPUT_GAMEPAD :
-                 spec && !strcmp(spec, "keyboard") ? BLACK_INPUT_KEYBOARD : BLACK_INPUT_AUTO;
-    }
+    int instance = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_pads[0]));
+    if (instance != owner_instance) { memset(&owner,0,sizeof owner); owner_instance = instance; }
+    int policy = black_SettingsInputDevice();
+    SDL_GameControllerType type = SDL_GameControllerGetType(g_pads[0]);
+    black_InputControllerFamily(type == SDL_CONTROLLER_TYPE_PS3 || type == SDL_CONTROLLER_TYPE_PS4 ||
+        type == SDL_CONTROLLER_TYPE_PS5 ? BLACK_PROMPTS_PLAYSTATION : BLACK_PROMPTS_XBOX);
     XBOX_GAMEPAD *pad = &state->Gamepad;
     int pad_active = pad->wButtons || abs(pad->sThumbLX) > 8000 || abs(pad->sThumbLY) > 8000 ||
         abs(pad->sThumbRX) > 8000 || abs(pad->sThumbRY) > 8000;
     int key_action = keys.wButtons || keys.sThumbLX || keys.sThumbLY || keys.sThumbRX || keys.sThumbRY || black_GamePointerIntent();
+    key_action |= black_InputTakeMenuKeyboard();
     for (unsigned i = 0; i < 8; ++i) {
         if (pad->bAnalogButtons[i] > 30) pad_active = 1;
         if (keys.bAnalogButtons[i]) key_action = 1;
     }
     unsigned selected = black_input_owner(&owner, policy, 1, pad_active, key_action, SDL_GetTicks());
+    if (selected == BLACK_INPUT_KEYBOARD && !black_InputKeyboardActive())
+        SDL_GameControllerRumble(g_pads[0],0,0,0);
     black_InputSetKeyboardActive(selected == BLACK_INPUT_KEYBOARD);
+    XBOX_INPUT_STATE physical = *state;
+    if (black_PadCapturePoll(black_pad_pressed(pad),
+        SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_pads[0])),1)) {
+        memset(&state->Gamepad,0,sizeof state->Gamepad);
+        return result;
+    }
     if (selected == BLACK_INPUT_KEYBOARD) *pad = keys;
+    else if (!black_GameMenuActive()) black_pad_remap(pad);
     /* Mouse deltas are consumed only by the guest MouseLook hook; look keys
      * are deliberate actions, while mouse motion never steals pad ownership. */
-    black_menu_input(port, state);
+    /* Settings always use the physical layout, even after unbinding A/B/Start.
+     * The native menu never injects remapped commands into the game. */
+    int capture = black_menu_input(port, &physical);
+    if (capture || black_MenuIsOpen()) memset(&state->Gamepad,0,sizeof state->Gamepad);
     return result;
 }
 

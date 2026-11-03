@@ -14,11 +14,22 @@
 #include "port_menu.h"
 
 extern char *black_AppPrepareGame(void);
+extern char *black_InputGameView(const char *);
+extern void black_InputGameViewRemove(const char *);
 int main(int argc,char **argv)
 {
-    if(argc>1)return black_OriginalMain(argc,argv);
-    char *game=black_AppPrepareGame();if(!game)return 0;
-    char *args[]={argv[0],game,NULL};int result=black_OriginalMain(2,args);free(game);return result;
+    char *installed = argc > 1 ? NULL : black_AppPrepareGame();
+    if (argc <= 1 && !installed) return 0;
+    const char *game = argc > 1 ? argv[1] : installed;
+    char *view = black_InputGameView(game);
+    char **args = calloc((size_t)(argc > 1 ? argc : 2) + 1,sizeof(char *));
+    if (!args) { black_InputGameViewRemove(view); free(view); free(installed); return 1; }
+    args[0] = argv[0]; args[1] = view ? view : (char *)game;
+    for (int i = 2; i < argc; ++i) args[i] = argv[i];
+    setenv("BLACK_GAME_DIR",args[1],1);
+    int result = black_OriginalMain(argc > 1 ? argc : 2,args);
+    black_InputGameViewRemove(view); free(view); free(args); free(installed);
+    return result;
 }
 
 extern void xbox_PumpMainRunLoop(void);

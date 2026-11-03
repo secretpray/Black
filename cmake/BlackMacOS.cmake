@@ -32,7 +32,10 @@ target_link_libraries(black-smaa PUBLIC "-framework Metal" "-framework MetalFX" 
 add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/flash_input.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/flash_menu.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_prompts.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/hud_prompts.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/keyboard_mouse.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/input_profile.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/controller_look.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/controller_monitor.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_trace.c"
@@ -42,6 +45,8 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_bootstrap.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_setup.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_translation.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/input_fonts.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/input_glyphs.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_ui.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
@@ -103,15 +108,25 @@ add_executable(black-menu-input tools/macos/menu_input_test.c)
 add_test(NAME macos_menu_input COMMAND black-menu-input)
 add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/port_settings.c ports/macos/overrides/keyboard_mouse.c
-    ports/macos/overrides/flash_input.c)
+    ports/macos/overrides/flash_input.c ports/macos/overrides/input_profile.c)
 target_link_libraries(black-port-settings PRIVATE Threads::Threads)
 add_test(NAME macos_port_settings COMMAND black-port-settings)
+add_executable(black-hud-prompts tools/macos/hud_prompts_test.c)
+target_link_libraries(black-hud-prompts PRIVATE black-port-ui)
+add_test(NAME macos_hud_prompts COMMAND black-hud-prompts)
+add_executable(black-game-prompts tools/macos/game_prompts_test.c)
+target_link_libraries(black-game-prompts PRIVATE black-port-ui)
+add_test(NAME macos_game_prompts COMMAND black-game-prompts)
+add_executable(black-input-profile tools/macos/input_profile_test.c)
+target_include_directories(black-input-profile PRIVATE "${BLACK_MAC_RUNTIME}/src")
+target_link_libraries(black-input-profile PRIVATE black-port-ui)
+add_test(NAME macos_input_profile COMMAND black-input-profile)
 add_executable(black-menu-preview tools/macos/menu_preview.m)
 add_executable(black-app-install tools/macos/app_install_test.m ports/macos/overrides/app_install.m)
 target_link_libraries(black-app-install PRIVATE "-framework Foundation")
 add_test(NAME macos_app_install COMMAND black-app-install)
-add_executable(black-translation tools/macos/translation_test.m ports/macos/overrides/game_translation.m)
-target_link_libraries(black-translation PRIVATE "-framework Foundation" "-framework CoreText" "-framework CoreGraphics")
+add_executable(black-translation tools/macos/translation_test.m)
+target_link_libraries(black-translation PRIVATE black-port-ui)
 add_test(NAME macos_translation COMMAND black-translation)
 target_link_libraries(black-menu-preview PRIVATE black-port-ui)
 # Needs your own disc folder or image, so it is run by hand, not by CTest.
@@ -144,16 +159,29 @@ add_test(NAME macos_flash_menu COMMAND black-flash-menu)
 add_executable(black-flash-input tools/macos/flash_input_test.c)
 target_link_libraries(black-flash-input PRIVATE black-port-ui)
 add_test(NAME macos_flash_input COMMAND black-flash-input)
+file(READ "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c" game_flash_source)
+black_apu_extract_function(game_flash_source "void sub_00113BF0(void)\n{" hint_wrapper)
+file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/hint_wrapper_test.inc" "${hint_wrapper}\n")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c")
 add_executable(black-flash-call tools/macos/flash_call_test.c)
+target_compile_definitions(black-flash-call PRIVATE BLACK_HINT_WRAPPER_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/hint_wrapper_test.inc")
 add_test(NAME macos_flash_call COMMAND black-flash-call)
 add_executable(black-flash-menu-asan tools/macos/flash_menu_test.c
     ports/macos/overrides/flash_menu.c ports/macos/overrides/flash_input.c
-    ports/macos/overrides/keyboard_mouse.c ports/macos/overrides/port_settings.c)
+    ports/macos/overrides/keyboard_mouse.c ports/macos/overrides/port_settings.c ports/macos/overrides/input_profile.c)
 target_compile_options(black-flash-menu-asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 target_link_options(black-flash-menu-asan PRIVATE -fsanitize=address)
 target_link_libraries(black-flash-menu-asan PRIVATE Threads::Threads)
 add_test(NAME macos_flash_menu_asan COMMAND black-flash-menu-asan)
 file(READ "${CMAKE_SOURCE_DIR}/ports/macos/overrides/xinput_device.c" input_source)
+black_apu_extract_function(input_source "static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)\n{" input_navigation)
+black_apu_extract_function(input_source "static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)\n{" input_routing)
+file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/input_routing_test.inc" "${input_navigation}\n${input_routing}\n")
+add_executable(black-input-routing tools/macos/input_routing_test.c)
+target_include_directories(black-input-routing PRIVATE "${BLACK_MAC_RUNTIME}/src" "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
+target_compile_definitions(black-input-routing PRIVATE BLACK_INPUT_ROUTING_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/input_routing_test.inc")
+target_link_libraries(black-input-routing PRIVATE black-port-ui SDL2::SDL2 Threads::Threads)
+add_test(NAME macos_input_routing COMMAND black-input-routing)
 black_apu_extract_function(input_source "static SDL_bool black_InputSetHint(const char *name, const char *value)\n{" input_hint)
 black_apu_extract_function(input_source "DWORD xbox_InputSetState(DWORD port, const XBOX_VIBRATION *vibration)\n{" input_rumble)
 file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc" "${input_hint}\n${input_rumble}\n")

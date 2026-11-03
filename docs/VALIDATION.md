@@ -1,7 +1,43 @@
 # Release validation and current limits
 
-Candidate: **BLACK 0.4.1**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+The final 0.5.0 DMG was mounted read-only. The bundled app launched in English
+and Russian with system-only PATH and no DYLD_LIBRARY_PATH, using isolated
+Library data. Both runs opened settings, prepared the host font atlas and exited
+normally with code 0 before their limits. Private font views were removed;
+source fonts, bank, XBE and the user's preferences retained their hashes. The
+arm64 library closure, macOS 27 minimum, app signature and Applications link
+were checked. This is a packaging check on the development Mac, not a clean
+second-machine or physical controller qualification.
+
+## Input and menu changes in 0.5.0
+
+The input UI now has one **Controls** home with five rows. Device and prompt
+selection are visible without scrolling; bindings, mouse response and gamepad
+response open separate pages. The native Cocoa preview exercised independent
+X/Y values, editor selection without a device change, page-scoped resets,
+binding capture/cancel/disconnect, stable focus across input changes, return
+navigation and quit. English/Russian views were inspected at 960×600 and
+640×480. A bounded muted/script-only app run (`run-1uqe0py6`) verified the
+actual menu, produced the updated README captures and exited through Cmd+Q
+with code 0 before its limit, leaving no child. Source fonts, bank and XBE
+hashes were preserved. This does not qualify physical hardware or gameplay.
+
+Version 0.5.0 adds saved input-device selection, controller button bindings
+and Auto/Xbox/PlayStation/Keyboard prompts. The README settings captures come
+from the running build.
+The current source passes **110 CTest checks**, GPU probes and **43 Python tests**.
+The user confirmed physical device/prompt switching. The subsequent mouse-look
+fix is covered by Cocoa event tests; physical reacceptance, controller mapping,
+rumble and hotplug remain open. [Detailed evidence](INPUT.md).
+
+The intro-skip policy now also excludes menu weapon previews from the transition
+that ends startup. A new regression fails on the previous policy and passes on
+the fix: Mag/SMG/MP5 cannot disable the later C_/02_ skip; campaign films still
+end startup. The current user's running session was retained at their request,
+so the exact credits-after-preview sequence still needs a new visual check.
 
 ## Evidence
 
@@ -13,8 +49,7 @@ macOS 27.0.1. This is an experimental release, not a complete-game qualification
 - The user's profile was saved and the next process read the full 6,144-byte
   Profile successfully. Restoring every checkpoint/completed-mission result has
   not been independently qualified.
-- **100 CTest checks**, framebuffer/D3DCOLOR GPU probes and **30 Python checks**
-  passed. These include native-C hook math, register preservation, race negative
+- The initial packaging baseline passed **100 CTest checks**, framebuffer/D3DCOLOR GPU probes and **30 Python checks**. These include native-C hook math, register preservation, race negative
   controls, settings persistence and the disc importer. They are not a substitute
   for a playthrough or physical controller testing.
 - The Flash cursor opened Main → Options → Sound Setup; the wheel selected

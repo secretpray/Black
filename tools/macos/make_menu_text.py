@@ -18,6 +18,13 @@ for english, fr, de, it, es in re.findall(
 
 # english: (fr, de, es, it) for labels TGP does not have; None leaves English.
 LOCAL = {
+    "INPUT DEVICE": ("Périphérique de commande", "Eingabegerät", "Dispositivo de entrada", "Dispositivo di input"),
+    "BUTTON PROMPTS": ("Symboles des touches", "Tastensymbole", "Iconos de botones", "Simboli pulsanti"),
+    "DEVICE": ("Périphérique", "Gerät", "Dispositivo", "Dispositivo"),
+    "CONTROLLER BINDINGS": ("Boutons de la manette", "Controllerbelegung", "Botones del mando", "Pulsanti controller"),
+    "GAMEPAD": ("Manette", "Gamepad", "Mando", "Controller"),
+    "KEYBOARD": ("Clavier", "Tastatur", "Teclado", "Tastiera"),
+    "PRESS A BUTTON": ("Appuyez sur un bouton", "Taste drücken", "Pulsa un botón", "Premi un pulsante"),
     "MODS": ("Mods", "Mods", "Mods", "Mod"),
     "HD TEXTURE SIZE": ("Taille des textures HD", "HD-Texturgröße", "Tamaño de texturas HD", "Dimensione texture HD"),
     "LOOK SENSITIVITY": ("Sensibilité de la vue", "Blickempfindlichkeit", "Sensibilidad de la vista", "Sensibilità visuale"),
@@ -80,6 +87,29 @@ LOCAL = {
 
 # Russian: every string the panel shows. Format specifiers must be kept.
 RU = {
+    "INPUT DEVICE": "Устройство управления",
+    "BUTTON PROMPTS": "Подсказки кнопок",
+    "DEVICE": "Устройство",
+    "CONTROLLER BINDINGS": "Назначения кнопок",
+    "GAMEPAD": "Геймпад", "KEYBOARD": "Клавиатура", "PLAYSTATION": "PlayStation", "XBOX": "Xbox",
+    "PRESS A BUTTON": "Нажмите кнопку",
+    "RELOAD (A)": "Перезарядить (A)", "MELEE (B)": "Удар (B)", "INTERACT (X)": "Взаимодействовать (X)",
+    "SUPPRESSOR (Y)": "Глушитель (Y)", "BLACK (RB)": "Чёрная кнопка (RB)", "NEXT TRACK (LB)": "Следующий трек (LB)",
+    "GRENADE (LT)": "Граната (LT)", "FIRE (RT)": "Стрелять (RT)",
+    "FIRING MODE (D-PAD UP)": "Режим огня (крестовина вверх)", "MEDKIT (D-PAD DOWN)": "Аптечка (крестовина вниз)",
+    "WEAPON DOWN (D-PAD LEFT)": "Оружие назад (крестовина влево)", "WEAPON UP (D-PAD RIGHT)": "Оружие вперёд (крестовина вправо)",
+    "PAUSE (START)": "Пауза (Start)", "OBJECTIVES (BACK)": "Задания (Back)", "CROUCH (LS)": "Присесть (LS)", "AIM (RS)": "Прицелиться (RS)",
+    "%@ / %@: PAGE     UP / DOWN: SELECT": "%@ / %@: вкладка     Вверх / вниз: выбор",
+    "LEFT / RIGHT: ADJUST    %@: CHANGE    %@: BACK": "Влево / вправо: изменить    %@: выбрать    %@: назад",
+    "AUTO FOLLOWS DELIBERATE INPUT. MOUSE MOTION DOES NOT STEAL THE PAD.": "Авто следует нажатиям. Движение мыши не перехватывает геймпад.",
+    "NO GAMEPAD CONNECTED. KEYBOARD STILL OPENS SETTINGS; SELECT AUTO OR KEYBOARD.": "Геймпад не подключён. Настройки доступны с клавиатуры; выберите Авто или Клавиатура.",
+    "ACTIVE: %@. SETTINGS STAY ACCESSIBLE WITH EITHER DEVICE.": "Активно: %@. Настройки доступны с обоих устройств.",
+    "AUTO FOLLOWS THE ACTIVE DEVICE: XBOX, PLAYSTATION OR KEYBOARD.": "Авто следует активному устройству: Xbox, PlayStation или клавиатура.",
+    "OVERRIDE THE SYMBOLS WITHOUT CHANGING WHICH DEVICE CONTROLS THE GAME.": "Меняет только значки. Устройство управления остаётся прежним.",
+    "RELEASE ALL BUTTONS, THEN PRESS ONE. ESC CANCELS; DELETE CLEARS.": "Отпустите все кнопки и нажмите одну. Esc: отмена; Delete: очистить.",
+    "ENTER STARTS CAPTURE. LEFT / RIGHT CHOOSE A BUTTON. DELETE CLEARS.": "Enter: назначить. Влево / вправо: выбрать кнопку. Delete: очистить.",
+    "CONTROLLER DISCONNECTED. BINDING KEPT. CONNECT AND TRY AGAIN.": "Геймпад отключён. Назначение сохранено. Подключите и повторите.",
+    "DEFAULT GAME SCHEME. MENUS KEEP THEIR PHYSICAL BUTTONS; SAVED IMMEDIATELY.": "Для исходной схемы игры. Меню сохраняют обычные кнопки. Сохранение сразу.",
     "SETTINGS": "Настройки", "RECOMP SETTINGS": "Настройки рекомпа", "MOUSE AND KEYBOARD": "Мышь и клавиатура",
     "CONTROLLER": "Геймпад", "MODS": "Моды",
     "DISPLAY": "Экран", "GRAPHICS": "Графика", "GENERAL": "Общие", "LOOK SENSITIVITY": "Чувствительность обзора",
@@ -217,6 +247,46 @@ RU = {
     "LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.": "Сразу. Файлы находит таблица portingpete; без файла остаётся текстура игры.",
     "RAW %+.0f / %+.0f%%": "Сырое %+.0f / %+.0f%%", "OUT %+.0f / %+.0f%%": "Выход %+.0f / %+.0f%%",
 }
+
+# Unified Controls hub. Labels keep the original BLACK menu vocabulary.
+LOCAL.update({
+    "PORT SETTINGS": ("Options du port", "Port-Einstellungen", "Opciones del port", "Impostazioni port"),
+    "CONTROLS": ("Commandes", "Steuerung", "Controles", "Comandi"),
+    "BUTTON BINDINGS": ("Affectation des touches", "Tastenbelegung", "Asignación de botones", "Assegnazione pulsanti"),
+    "MOUSE AND AIMING": ("Souris et visée", "Maus und Zielen", "Ratón y apuntado", "Mouse e mira"),
+    "GAMEPAD AND VIBRATION": ("Manette et vibrations", "Gamepad und Vibration", "Mando y vibración", "Controller e vibrazione"),
+    "ADVANCED GAMEPAD": ("Manette : avancé", "Gamepad: Erweitert", "Mando: avanzado", "Controller: avanzate"),
+    "CONTROLLER DIAGNOSTICS": ("Diagnostic manette", "Controller-Diagnose", "Diagnóstico del mando", "Diagnostica controller"),
+    "EDIT BINDINGS FOR": ("Modifier les commandes", "Belegung bearbeiten für", "Editar asignaciones", "Modifica assegnazioni"),
+    "KEYBOARD AND MOUSE": ("Clavier et souris", "Tastatur und Maus", "Teclado y ratón", "Tastiera e mouse"),
+    "MOUSE AIMING": ("Visée souris", "Zielen mit Maus", "Apuntado con ratón", "Mira con mouse"),
+    "GAMEPAD LOOK": ("Vue manette", "Gamepad-Blick", "Vista con mando", "Visuale controller"),
+    "GAMEPAD AIMING": ("Visée manette", "Zielen mit Gamepad", "Apuntado con mando", "Mira con controller"),
+    "RESET BINDINGS": ("Réinit. touches", "Belegung zurücks.", "Restabl. botones", "Ripristina tasti"),
+    "RESET MOUSE": ("Réinit. souris", "Maus zurücks.", "Restabl. ratón", "Ripristina mouse"),
+    "RESET GAMEPAD": ("Réinit. manette", "Gamepad zurücks.", "Restabl. mando", "Ripristina pad"),
+    "RESET ADVANCED": ("Réinit. avancé", "Erweitert zurücks.", "Restabl. avanzado", "Ripristina avanzate"),
+})
+RU.update({
+    "PORT SETTINGS": "Настройки порта", "CONTROLS": "Управление",
+    "BUTTON BINDINGS": "Назначение кнопок", "BUTTON PROMPTS": "Кнопки в подсказках",
+    "MOUSE AND AIMING": "Мышь и прицеливание", "GAMEPAD AND VIBRATION": "Геймпад и вибрация",
+    "ADVANCED GAMEPAD": "Геймпад: дополнительно", "CONTROLLER DIAGNOSTICS": "Проверка геймпада",
+    "EDIT BINDINGS FOR": "Редактировать назначения", "KEYBOARD AND MOUSE": "Клавиатура и мышь",
+    "MOUSE AIMING": "Прицеливание мышью", "GAMEPAD LOOK": "Обзор геймпадом", "GAMEPAD AIMING": "Прицеливание геймпадом",
+    "RESET BINDINGS": "Сброс кнопок", "RESET MOUSE": "Сброс мыши", "RESET GAMEPAD": "Сброс геймпада", "RESET ADVANCED": "Сброс раздела",
+    "EDIT KEYBOARD OR GAMEPAD BINDINGS IN ONE PLACE.": "Назначения клавиатуры и геймпада в одном разделе.",
+    "MOUSE LOOK, AIMING AND WALK SPEED.": "Обзор мышью, прицеливание и скорость ходьбы.",
+    "GAMEPAD LOOK, AIMING AND VIBRATION.": "Обзор стиками, прицеливание и вибрация.",
+    "DEADZONES, AIM ASSIST AND DRIVER OPTIONS.": "Мёртвые зоны, помощь прицеливанию и драйвер.",
+    "CHECK STICK INPUT AND MEASURE DRIFT.": "Проверить отклик стиков и измерить дрейф.",
+    "ENTER / A OPENS. BACK RETURNS HERE WITHOUT CHANGING YOUR DEVICE.": "Enter / A: открыть. Назад возвращает сюда; устройство сохраняется.",
+    "CHOOSE WHICH BINDINGS TO EDIT. THIS DOES NOT SWITCH GAMEPLAY INPUT.": "Выберите список назначений. Устройство управления игрой не меняется.",
+    "KEYBOARD HAS TWO KEY SLOTS; GAMEPAD USES ITS PHYSICAL BUTTONS.": "Клавиатура: два поля на действие. Геймпад: физические кнопки.",
+    "LEFT / RIGHT ADJUST THE SELECTED AXIS. ENTER / BACK FINISHES.": "Влево / вправо: изменить ось. Enter / Назад: завершить.",
+    "LEFT / RIGHT CHOOSE X OR Y. ENTER / A EDITS THAT AXIS.": "Влево / вправо: выбрать X или Y. Enter / A: изменить ось.",
+    "LIVE. X / Y, MOUSE / GAMEPAD AND AIMING KEEP SEPARATE VALUES.": "Сразу. Оси, мышь, геймпад и прицеливание настраиваются отдельно.",
+})
 
 def c(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'

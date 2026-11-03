@@ -1,5 +1,6 @@
 /* Russian game text in the installed copy; see game_translation.h. */
 #import "game_translation.h"
+#import "input_glyphs.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreText/CoreText.h>
 #include <math.h>
@@ -116,7 +117,7 @@ static Glyph draw_glyph(CTFontRef font, unichar ch, CGFloat cap, CGFloat sx)
     return g;
 }
 
-NSData *black_FontWithCyrillic(NSData *input, NSString *systemFont, NSError **e)
+static NSData *font_with_characters(NSData *input, NSString *systemFont, BOOL cyrillic, NSError **e)
 {
     NSMutableData *font = [[input mutableCopy] autorelease];
     uint8_t *b = font.mutableBytes; NSUInteger n = font.length;
@@ -130,7 +131,11 @@ NSData *black_FontWithCyrillic(NSData *input, NSString *systemFont, NSError **e)
         for (NSUInteger i = 0; i < glyphs; ++i) if (rd16(b + RECORDS + i * RECORD + 28) == c) return (int)i;
         return -1;
     };
-    if (find(0x410) >= 0) return input;
+    NSString *aliases = cyrillic ? same : @"";
+    NSString *characters = cyrillic ? drawn : @"×○□△";
+    BOOL complete = cyrillic ? find(0x410) >= 0 : YES;
+    if (!cyrillic) for (NSUInteger i = 0; i < characters.length; ++i) complete &= find([characters characterAtIndex:i]) >= 0;
+    if (complete) return input;
     int H_ = find('H');
     if (H_ < 0) { fail(e, @"The game font has no H."); return nil; }
     const uint8_t *hr = b + RECORDS + H_ * RECORD;
@@ -164,16 +169,17 @@ NSData *black_FontWithCyrillic(NSData *input, NSString *systemFont, NSError **e)
         memcpy(r + 28, &code, 2);
         [records appendBytes:r length:RECORD];
     };
-    for (NSUInteger i = 0; i < same.length; ++i) {
+    for (NSUInteger i = 0; i < aliases.length; ++i) {
         int at = find([latin characterAtIndex:i]);
         if (at < 0) { free(taken); CFRelease(ct); fail(e, @"The game font lacks a Latin letter Cyrillic shares."); return nil; }
         float f[7]; for (int k = 0; k < 7; ++k) f[k] = rdf(b + RECORDS + at * RECORD + 4 * k);
-        unichar c = [same characterAtIndex:i];
+        unichar c = [aliases characterAtIndex:i];
         record(f, c); record(f, [[[NSString stringWithCharacters:&c length:1] lowercaseString] characterAtIndex:0]);
     }
-    for (NSUInteger i = 0; i < drawn.length; ++i) {
-        unichar c = [drawn characterAtIndex:i];
-        Glyph g = draw_glyph(ct, c, cap, sx);
+    for (NSUInteger i = 0; i < characters.length; ++i) {
+        unichar c = [characters characterAtIndex:i];
+        if (find(c) >= 0) continue;
+        Glyph g = draw_glyph(ct, c, cap, cyrillic ? sx : 1);
         int px = -1, py = -1;
         for (int y = 2; y + g.height + 2 <= (int)H && px < 0; ++y)
             for (int x = 2; x + g.width + 2 <= (int)W; ++x) {
@@ -196,7 +202,8 @@ NSData *black_FontWithCyrillic(NSData *input, NSString *systemFont, NSError **e)
                 memcpy(atlas + (by * (W / 4) + bx) * 16 + 8, "\xff\xff\xff\xff\0\0\0\0", 8);
         float f[7] = {(float)px / W, (float)py / H, (float)g.width / W, (float)g.height / H,
                       (float)g.left / W, (float)(cap_top + (double)g.top / H), (float)(g.advance / W)};
-        record(f, c); record(f, [[[NSString stringWithCharacters:&c length:1] lowercaseString] characterAtIndex:0]);
+        record(f, c);
+        if (cyrillic) record(f, [[[NSString stringWithCharacters:&c length:1] lowercaseString] characterAtIndex:0]);
         free(g.alpha);
     }
     free(taken); CFRelease(ct);
@@ -225,6 +232,11 @@ NSData *black_FontWithCyrillic(NSData *input, NSString *systemFont, NSError **e)
     free(sorted);
     return out;
 }
+
+NSData *black_FontWithCyrillic(NSData *input, NSString *face, NSError **e)
+{ return font_with_characters(input,face,YES,e); }
+NSData *black_FontWithInputGlyphs(NSData *input, NSError **e)
+{ return black_InputGlyphFont(input,e); }
 
 /* ---- the installed game ---- */
 static NSDictionary *retail(void)

@@ -1,5 +1,6 @@
 /* Shared native drawing in the look of BLACK's menus; see black_ui.h. */
 #import "black_ui.h"
+#include "input_atlas.h"
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -23,7 +24,7 @@ void black_ui_load_font(BlackUIFont *font, NSData *data)
     uint32_t format = read32(b + texture + 12);
     unsigned width = 1u << ((format >> 20) & 15), height = 1u << ((format >> 24) & 15);
     if (((format >> 8) & 0xFF) != 0x0E || width < 4 || height < 4 ||
-        width > 1024 || height > 1024 || (uint64_t)texture + 128 + width * height > data.length) return;
+        width > 1024 || height > 4096 || (uint64_t)texture + 128 + width * height > data.length) return;
     /* Xbox DXT3 blocks: explicit 4-bit alpha followed by the color block.
      * The original glyph atlas is white; only alpha is needed for tinting. */
     NSMutableData *alpha = [NSMutableData dataWithLength:width * height * 4];
@@ -38,6 +39,14 @@ void black_ui_load_font(BlackUIFont *font, NSData *data)
                 pixels[pixel + 3] = ((block[i / 2] >> ((i & 1) * 4)) & 15) * 17;
             }
         }
+    /* Private guest fonts use host atlas coordinates; source fonts do not. */
+    int custom=0;uint32_t last=read32(b+0x1C);
+    if(last<0x220||last>texture||(last-0x220)%40)return;
+    for(uint32_t at=0x220;at+40<=last;at+=40){uint16_t c;memcpy(&c,b+at+28,2);if(c==0xE100)custom=1;}
+    BlackInputAtlas input;
+    if(custom&&black_InputAtlasFind(blocks,width*height,width,height,14,&input)) {
+        height=input.height;alpha=[NSMutableData dataWithBytes:input.rgba length:width*height*4];
+    }
     CGDataProviderRef provider = CGDataProviderCreateWithCFData((CFDataRef)alpha);
     CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
     CGImageRef atlas = CGImageCreate(width, height, 8, 32, width * 4, space,

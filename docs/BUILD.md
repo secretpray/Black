@@ -8,7 +8,7 @@ Do not mix TGP's C++ X86Context hooks with their generated C ABI.
 
 Apple Silicon, a current Xcode installation with the Metal toolchain,
 Homebrew, Python 3.11+, and your own supported Original Xbox BLACK disc.
-The distributed 0.4.1 app requires macOS 27+ because of its actual library
+The distributed 0.5.0 app requires macOS 27+ because of its actual library
 build targets. A deployment-target flag alone does not establish older-OS support.
 
 ```sh
@@ -60,6 +60,24 @@ Bound automated runs and retain their unique log/outcome. A timeout is a stop
 condition, not gameplay acceptance. Muted/dummy audio does not qualify real audio;
 scripted input does not qualify a physical controller or rumble/hotplug.
 
+## Input device and prompts
+
+Controls saves Auto/Gamepad/Keyboard and a separate prompt family at the top
+of its five-row home page. Bindings and mouse/gamepad response use subpages.
+`run --input-device auto|gamepad|keyboard` explicitly overrides the saved device
+for that run; without it the saved selection applies. Other preference writes
+do not persist the temporary override. Editing Input Device clears it.
+
+At launch the host builds a private `input-view-*` under the unique run folder:
+all disc content is linked read-only by convention, and only Big.bin/Small.bin
+are copied and given private-use bitmap button records. The expanded artwork
+stays in a host atlas; guest texture allocation and source glyph pixels are
+preserved. CoreGraphics draws the shared original button artwork.
+The original font files, XBE and banks stay unchanged. The view is removed on a
+normal return; a killed process may leave it in the ignored/private run folder.
+Missing or unsupported fonts leave the game usable with spelled-out button names.
+[Input behaviour and checks](INPUT.md).
+
 ## Russian game text
 
 `resources/translations/ru/strings.json` holds the Russian text by string ID
@@ -89,12 +107,12 @@ paints Cyrillic over Latin cells. The app does not use it.
 ```sh
 python3 tools/macos/make_icon.py
 python3 tools/macos/package_app.py out/build/macos-metal/black-recomp \
-  out/release/0.4.1/BLACK.app --version 0.4.1
+  out/release/0.5.0/BLACK.app --version 0.5.0
 .venv/macos/bin/python3 -m pip install -r tools/macos/requirements-package.txt
 .venv/macos/bin/python3 tools/macos/styled_dmg.py \
-  out/release/0.4.1/BLACK.app out/release/0.4.1/BLACK-0.4.1-macos-arm64.dmg
-python3 tools/macos/package_sources.py out/release/0.4.1/BLACK.app \
-  out/release/0.4.1/optional-library-sources.tar.xz --version 0.4.1
+  out/release/0.5.0/BLACK.app out/release/0.5.0/BLACK-0.5.0-macos-arm64.dmg
+python3 tools/macos/package_sources.py out/release/0.5.0/BLACK.app \
+  out/release/0.5.0/optional-library-sources.tar.xz --version 0.5.0
 ```
 
 Use an unused output path: packaging refuses to overwrite a prior candidate.

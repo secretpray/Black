@@ -51,6 +51,31 @@ int main(void)
         for (int poll = 0; poll < 5; ++poll)
             if (black_film_skip_policy(&state, 1, i + 2, name, 0x1C, 0, 0, 1, 0)) return 16;
     }
+    /* Frontend weapon previews are not a campaign transition. They may play
+     * between the logo and C_N_US/02_N while the startup skip is still On. */
+    state = (BlackFilmSkip){0};
+    const char *previews[] = {"AK_N", "Mag_N", "SMG_N", "MP5_N"};
+    for (unsigned i = 0; i < sizeof previews / sizeof previews[0]; ++i) {
+        char name[9] = {0}; strcpy(name, previews[i]);
+        for (int poll = 0; poll < 5; ++poll)
+            if (black_film_skip_policy(&state, 1, 20+i, name, 0x1C, 0, 1, 0, 0)) return 17;
+        if (state.startup_done) return 18;
+    }
+    const char *remaining_intros[] = {"C_N_US", "02_N", "F02_P"};
+    for (unsigned i = 0; i < sizeof remaining_intros / sizeof remaining_intros[0]; ++i) {
+        char name[9] = {0}; strcpy(name, remaining_intros[i]);
+        for (int poll = 0; poll < 3; ++poll)
+            if (black_film_skip_policy(&state, 1, 30+i, name, 0x1C, 0, 1, 0, 0) != (poll == 2)) return 19;
+    }
+    /* Actual briefing/debrief/ending still seals the startup phase. */
+    const char *campaign[] = {"03_N", "06_N", "F11_P", "F18_N"};
+    for (unsigned i = 0; i < sizeof campaign / sizeof campaign[0]; ++i) {
+        char name[9] = {0}; strcpy(name, campaign[i]); state = (BlackFilmSkip){0};
+        black_film_skip_policy(&state,1,40+i,name,0x1C,0,1,0,0);
+        if (!state.startup_done) return 20;
+        for (int poll=0;poll<5;++poll)
+            if(black_film_skip_policy(&state,1,50,"C_N_US",0x1C,0,1,0,0)) return 21;
+    }
     puts("Selected film / third playing poll / background and Off paths: PASS");
     return 0;
 }

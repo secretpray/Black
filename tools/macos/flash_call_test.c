@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../ports/macos/overrides/flash_menu.h"
+#include "../../ports/macos/overrides/hud_prompts.h"
+#include "../../ports/macos/overrides/game_prompts.h"
 typedef union {uint64_t q[2];} RecompXmm;
 typedef union {uint64_t q;} RecompMmx;
 typedef void (*recomp_func_t)(void);
@@ -55,6 +57,17 @@ static recomp_func_t recomp_lookup_manual(uint32_t at){(void)at;return NULL;}
 static recomp_func_t recomp_lookup(uint32_t at){return at==0x123?destroy:NULL;}
 #define RECOMP_ICALL_IS_CODE(at) ((at)==0x123)
 #include "../../ports/macos/overrides/flash_guest_call.inc"
+static BlackGamePrompts prompts;
+static BlackHudPrompts hud_prompts;
+static int handled, original_calls, handler_bad;
+static void initialize(void) {}
+int black_HudPromptFormat(BlackHudPrompts *h,const BlackFlashApi *a,uint32_t caller,uint32_t buffer,uint32_t hud)
+{
+    handler_bad=h!=&hud_prompts || a!=&prompts.api || caller!=0x12B4EF || buffer!=0x18000 || hud!=0x16000;
+    return handled;
+}
+void black_OriginalHintFormat(void) { ++original_calls;g_esp+=4; }
+#include BLACK_HINT_WRAPPER_SOURCE
 int main(void)
 {
     memset(&cpu,0x5a,sizeof cpu);g_esp=0x30000;struct Cpu before=cpu;uint32_t args[]={44,55};
@@ -63,5 +76,12 @@ int main(void)
     if(call_guest(NULL,0x124,0,0,0,NULL,0)||!menu.fault||memcmp(&before,&cpu,sizeof cpu))return 2;
     menu.fault=0;g_esp=0x10000;before=cpu;
     if(call_guest(NULL,0x123,0,0,0,args,2)||!menu.fault||memcmp(&before,&cpu,sizeof cpu))return 3;
-    puts("Production Flash guest call: args/return, GPR/stack/SEH/TIB/x87/MMX/SSE/control restoration and unresolved/stack guards: PASS");return 0;
+    for(handled=0;handled<2;++handled) {
+        g_esp=0x20000;g_ebx=0x16000;MEM32(g_esp)=0x12B4EF;MEM32(g_esp+4)=0x18000;
+        before=cpu;before.r[3]+=4;original_calls=0;handler_bad=0;
+        sub_00113BF0();
+        if(handler_bad || original_calls!=!handled || memcmp(&before,&cpu,sizeof cpu)) return 4;
+        if(MEM32(0x20004)!=0x18000)return 5; /* cdecl caller still owns its argument */
+    }
+    puts("Production Flash guest call: args/return, GPR/stack/SEH/TIB/x87/MMX/SSE/control restoration, unresolved/stack guards and cdecl hint-wrapper stack: PASS");return 0;
 }

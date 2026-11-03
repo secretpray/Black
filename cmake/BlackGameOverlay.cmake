@@ -1,5 +1,7 @@
 # Rename definitions only; original calls/dispatch reach native C wrappers.
 set(BLACK_RENAMED
+    "sub_001F3A80|black_OriginalString"
+    "sub_00113BF0|black_OriginalHintFormat" "sub_001314E0|black_OriginalHintTick"
     "sub_000BE3F0|black_OriginalTimerStep" "sub_00209DC0|black_OriginalFilmTick"
     "sub_0021C7EF|black_OriginalAudioCompletion"
     # widescreen 2D (ports/macos/overrides/game_hud.c)
@@ -21,6 +23,7 @@ set(BLACK_FOUND_STICK_LOOK 0)
 set(BLACK_FOUND_MOUSE_LOOK 0)
 set(BLACK_FOUND_FLASH_MENU 0)
 set(BLACK_FOUND_FLASH_NAME 0)
+set(BLACK_FOUND_PICKUP_TEXT 0)
 foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER MOD_RECOIL)
     set(BLACK_FOUND_${point} 0)
 endforeach()
@@ -39,6 +42,13 @@ foreach(source IN LISTS BLACK_GENERATED)
         math(EXPR BLACK_FOUND_FLASH_MENU "${BLACK_FOUND_FLASH_MENU} + ${flash_matches}")
         string(REPLACE "${flash_anchor}" "loc_00124374: ;\n    black_GameMenu(ebp);\n    _fa = (uint32_t)(MEM32(ebp + 0x3884))" edited "${edited}")
         string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_GameMenu(uint32_t);" edited "${edited}")
+    endif()
+    set(pickup_anchor "loc_00132AB7: ;\n    MEM8(esi + 0x1D) = LO8(eax);")
+    string(FIND "${edited}" "${pickup_anchor}" pickup_position)
+    if(NOT pickup_position EQUAL -1)
+        math(EXPR BLACK_FOUND_PICKUP_TEXT "${BLACK_FOUND_PICKUP_TEXT} + 1")
+        string(REPLACE "${pickup_anchor}" "${pickup_anchor}\n    black_GamePickupText(esi);" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_GamePickupText(uint32_t);" edited "${edited}")
     endif()
     set(name_anchor "    _cf = (int)(_fa < _fb);\n    PUSH32(esp, ebx);\n    if (CMP_NE(_fa, _fb)) goto loc_00124487;")
     string(REPLACE "${name_anchor}" "" without_name "${edited}")
@@ -245,4 +255,8 @@ endif()
 
 if(NOT BLACK_FOUND_FLASH_NAME EQUAL 1)
     message(FATAL_ERROR "Expected exactly one verified NameEntry hook at 0x12437B")
+endif()
+
+if(NOT BLACK_FOUND_PICKUP_TEXT EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified pickup text point at 0x132AB7")
 endif()
