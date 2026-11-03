@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 — 2026-11-03
 
 - **Russian film subtitles.** With Russian game text, the mission briefing films
   show Russian subtitles: the nine tracks ship with the app and turn on by
   themselves.
+- **Wider Cyrillic in the setup.** Text the game's fonts cannot draw, such as
+  РУССКИЙ, uses the settings panel's wide faces instead of a narrow stand-in.
 
 ## 0.4.0 — 2026-11-03
 

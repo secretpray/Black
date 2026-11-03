@@ -1,6 +1,6 @@
 # Release validation and current limits
 
-Candidate: **BLACK 0.4.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Candidate: **BLACK 0.4.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
 ## Evidence
@@ -117,13 +117,23 @@ settings file at once. Unattended with German chosen in the setup, the real
 binary installed the European folder and the game opened `MainGe.bin` on its
 first start, then quit normally with exit code 0.
 
-## Russian film subtitles (after 0.4.0)
+## Russian film subtitles (0.4.1)
 
 The real binary with an empty data folder, Russian chosen in setup and films not
 skipped: the start turned the subtitles on, the first mission's briefing film
 `03_N` loaded its 35 cues and the cues changed with the film (27 selections in the
 run). The person watching confirmed they showed correctly. Only that film was
 watched; the other eight tracks were checked as SRT (UTF-8, ordered times).
+
+The setup drew Cyrillic it could not take from the game's fonts in narrow DIN
+Condensed. Once the disc's fonts are read it now falls back to Arial Black /
+Arial Bold, as the settings panel does; `black-setup-preview` on the European ISO
+showed РУССКИЙ at the width of the Latin rows.
+
+The packaged 0.4.1 app, run from its mounted DMG with the system PATH and an
+empty data folder: setup installed the European ISO with Russian chosen, the
+start built the Russian bank and turned the film subtitles on, and the app quit
+with exit code 0. Films were not reached in that run.
 
 ## Russian game text (0.4.0)
 

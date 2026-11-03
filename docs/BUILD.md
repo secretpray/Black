@@ -8,7 +8,7 @@ Do not mix TGP's C++ X86Context hooks with their generated C ABI.
 
 Apple Silicon, a current Xcode installation with the Metal toolchain,
 Homebrew, Python 3.11+, and your own supported Original Xbox BLACK disc.
-The distributed 0.4.0 app requires macOS 27+ because of its actual library
+The distributed 0.4.1 app requires macOS 27+ because of its actual library
 build targets. A deployment-target flag alone does not establish older-OS support.
 
 ```sh
@@ -89,12 +89,12 @@ paints Cyrillic over Latin cells. The app does not use it.
 ```sh
 python3 tools/macos/make_icon.py
 python3 tools/macos/package_app.py out/build/macos-metal/black-recomp \
-  out/release/0.4.0/BLACK.app --version 0.4.0
+  out/release/0.4.1/BLACK.app --version 0.4.1
 .venv/macos/bin/python3 -m pip install -r tools/macos/requirements-package.txt
 .venv/macos/bin/python3 tools/macos/styled_dmg.py \
-  out/release/0.4.0/BLACK.app out/release/0.4.0/BLACK-0.4.0-macos-arm64.dmg
-python3 tools/macos/package_sources.py out/release/0.4.0/BLACK.app \
-  out/release/0.4.0/optional-library-sources.tar.xz --version 0.4.0
+  out/release/0.4.1/BLACK.app out/release/0.4.1/BLACK-0.4.1-macos-arm64.dmg
+python3 tools/macos/package_sources.py out/release/0.4.1/BLACK.app \
+  out/release/0.4.1/optional-library-sources.tar.xz --version 0.4.1
 ```
 
 Use an unused output path: packaging refuses to overwrite a prior candidate.

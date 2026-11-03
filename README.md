@@ -10,9 +10,9 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.4.0 is an experimental macOS release** that adds a first-time setup drawn like
+> **0.4.1 is an experimental macOS release.** 0.4.0 added a first-time setup drawn like
 > the game's own menus, Russian game text built into your own copy, and the game's
-> menu look for the settings panel.
+> menu look for the settings panel; 0.4.1 adds Russian subtitles to the briefing films.
 > Combat, menus and profile saving have been exercised on the development Mac. A complete
 > playthrough, all runtime races, audio quality and controller calibration are not yet
 > qualified. [Validation](docs/VALIDATION.md).
@@ -37,11 +37,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.4.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.4.0)**
+**[BLACK 0.4.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.4.1)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.4.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.4.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
