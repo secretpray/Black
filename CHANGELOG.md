@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Russian film subtitles.** With Russian game text, the mission briefing films
+  show Russian subtitles: the nine tracks ship with the app and turn on by
+  themselves.
+
 ## 0.4.0 — 2026-11-03
 
 - **First-time setup** in the look of BLACK's own menu pages: rails, the heading

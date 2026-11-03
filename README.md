@@ -92,7 +92,8 @@ PS2 and Xbox 360 files are not supported.
   **Recomp Settings → Textures**. The pack is not included.
 - Game text in English, French, German, Spanish or Italian from your disc, or
   Russian: the app carries the translation text only and builds the Russian
-  bank and Cyrillic letters into your own installed copy when the game starts.
+  bank and Cyrillic letters into your own installed copy when the game starts,
+  and shows Russian subtitles in the mission briefing films.
   The settings panel speaks those languages or Russian.
 - Separate stick/trigger deadzones, explicit drift measurement, live axes,
   normal/aim X/Y sensitivity, hold-to-aim, aim assist and rumble intensity.
@@ -206,6 +207,9 @@ its launcher is the model for this port's first-time setup and its menu look,
 its Xbox-to-pack map drives HD texture replacement, and its notes on the string
 banks, the game fonts and save profiles, its audio completion work and its film
 timing research guided much of the work here. Thanks as well for xboxrecomp.
+
+Thanks to **soldieg** for [BLACK-SUBTITLES](https://github.com/soldieg/BLACK-SUBTITLES),
+the source of the Russian film subtitles.
 
 Thanks to **elpetese** for the [native macOS game host](https://github.com/elpetese/black-macos-recomp)
 and [runtime](https://github.com/elpetese/black-macos-runtime), **sp00nz** for

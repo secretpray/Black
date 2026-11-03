@@ -77,6 +77,10 @@ each bucket or at the default glyph; the game finds glyphs only through them, so
 new records are sorted in and the buckets rebuilt. Only the retail font hashes
 are changed. Outside the app, `BLACK_RUSSIAN_STRINGS` names the JSON.
 
+With Russian chosen the app also sets `BLACK_SUBTITLE_DIR` to its
+`russian-subtitles` folder (outside the app, `subtitles/` beside the JSON) unless
+a folder was named, so the briefing films show `resources/translations/ru/subtitles`.
+
 `russian_font.py` is older: it rebuilds a fan translation's own font, which
 paints Cyrillic over Latin cells. The app does not use it.
 

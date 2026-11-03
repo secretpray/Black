@@ -15,5 +15,9 @@ original is Latin (480P, IT, HR, EAUK, CRITERION GAMES), and names in the
 credits returned to the game's own spelling. It is decoded from the old
 translation's font-cell encoding into plain UTF-8.
 
+`subtitles/` holds the nine briefing film tracks (`03_N` … `18_N`) as SRT, from
+the draft Russian tracks of BLACK-SUBTITLES, edited for this project. The app
+shows them when the game text is Russian.
+
 Difficulty names follow the project's choice: НОВОБРАНЕЦ, СОЛДАТ, ВЕТЕРАН,
 СПЕЦНАЗ.

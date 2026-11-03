@@ -15,6 +15,9 @@
 /* The shipped translation: russian-strings.json in the app, or
  * BLACK_RUSSIAN_STRINGS outside it; nil when there is none. */
 NSURL *black_RussianStrings(void);
+/* The film subtitles that come with it: russian-subtitles in the app, or the
+ * subtitles folder beside the JSON; nil when there are none. */
+NSURL *black_RussianSubtitles(void);
 /* {id hex: text or NSNull (keep the English string)} from the shipped JSON. */
 NSDictionary<NSString *, id> *black_TranslationLoad(NSURL *json, NSError **error);
 /* A string bank with the same IDs and order as `english`, texts replaced. */

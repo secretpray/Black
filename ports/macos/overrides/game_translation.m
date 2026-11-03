@@ -25,6 +25,13 @@ NSURL *black_RussianStrings(void)
     return url && [NSFileManager.defaultManager isReadableFileAtPath:url.path] ? url : nil;
 }
 
+NSURL *black_RussianSubtitles(void)
+{
+    NSURL *url = [NSBundle.mainBundle URLForResource:@"russian-subtitles" withExtension:nil];
+    if (!url) url = [black_RussianStrings().URLByDeletingLastPathComponent URLByAppendingPathComponent:@"subtitles"];
+    return [NSFileManager.defaultManager fileExistsAtPath:[url URLByAppendingPathComponent:@"03_N.srt"].path] ? url : nil;
+}
+
 NSDictionary<NSString *, id> *black_TranslationLoad(NSURL *json, NSError **e)
 {
     NSData *data = [NSData dataWithContentsOfURL:json options:0 error:e];

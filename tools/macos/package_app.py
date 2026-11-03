@@ -50,6 +50,8 @@ def build(binary, output, version):
         shutil.copy2(ROOT / "resources/textures/black-hd-reimagined-extra.map", resources)
         # Russian text only; the bank and fonts are built from the player's own copy.
         shutil.copy2(ROOT / "resources/translations/ru/strings.json", resources / "russian-strings.json")
+        # Russian film subtitles from soldieg/BLACK-SUBTITLES, edited; see its README.
+        shutil.copytree(ROOT / "resources/translations/ru/subtitles", resources / "russian-subtitles")
         sources, pending, mapped = {}, [binary], {}
         search = [ROOT / "out/macos/angle/lib", Path("/opt/homebrew/lib")]
         while pending:

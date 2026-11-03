@@ -117,6 +117,14 @@ settings file at once. Unattended with German chosen in the setup, the real
 binary installed the European folder and the game opened `MainGe.bin` on its
 first start, then quit normally with exit code 0.
 
+## Russian film subtitles (after 0.4.0)
+
+The real binary with an empty data folder, Russian chosen in setup and films not
+skipped: the start turned the subtitles on, the first mission's briefing film
+`03_N` loaded its 35 cues and the cues changed with the film (27 selections in the
+run). The person watching confirmed they showed correctly. Only that film was
+watched; the other eight tracks were checked as SRT (UTF-8, ordered times).
+
 ## Russian game text (0.4.0)
 
 The fonts were found to keep their glyph records sorted by `(code & 127, code)`

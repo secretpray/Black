@@ -49,6 +49,9 @@ char *black_AppPrepareGame(void)
         if(wants&&!black_PrepareRussian(game,russian,&issue)){wants=NO;fprintf(stderr,"[LANG] Russian not prepared: %s\n",issue.localizedDescription.UTF8String);}
         if(!black_ApplyGameText(game,wants,&issue))fprintf(stderr,"[LANG] game text not set: %s\n",issue.localizedDescription.UTF8String);
         else fprintf(stderr,"[LANG] MainUS.bin is the %s bank\n",wants?"Russian":"English");
+        /* Russian also shows the film subtitles that come with it, unless a folder was named. */
+        NSURL *films=wants?black_RussianSubtitles():nil;
+        if(films&&!getenv("BLACK_SUBTITLE_DIR")){setenv("BLACK_SUBTITLE_DIR",films.path.fileSystemRepresentation,1);fprintf(stderr,"[LANG] Russian film subtitles on\n");}
         setenv("XDG_DATA_HOME",[[root URLByAppendingPathComponent:@"Data"].path fileSystemRepresentation],1);
         setenv("BLACK_GAME_DIR",game.path.fileSystemRepresentation,1);
         const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_FULLSCREEN","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};
