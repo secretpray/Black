@@ -40,12 +40,13 @@ char *black_AppPrepareGame(void)
             if(!patch&&getenv("BLACK_EUROPE_PATCH"))patch=[NSURL fileURLWithPath:@(getenv("BLACK_EUROPE_PATCH"))];
             if(!black_SetupRun(game,patch))return NULL;
         }
-        /* Russian is built into this copy and MainUS.bin set by the chosen language,
-         * every start, so changing it in settings needs nothing else. */
+        /* Russian is built into this copy when it is chosen and MainUS.bin set by the
+         * chosen language, every start, so changing it in settings needs nothing else.
+         * The other languages leave the fonts as installed. */
         NSURL *russian=black_RussianStrings();NSError *issue=nil;
-        BOOL ready=black_PrepareRussian(game,russian,&issue);
-        if(!ready)fprintf(stderr,"[LANG] Russian not prepared: %s\n",issue.localizedDescription.UTF8String);
-        BOOL wants=black_SettingsGameLanguage()==BLACK_LANG_RUSSIAN&&ready&&russian;
+        if(russian)setenv("BLACK_RUSSIAN_STRINGS",russian.path.fileSystemRepresentation,1);
+        BOOL wants=black_SettingsGameLanguage()==BLACK_LANG_RUSSIAN&&russian;
+        if(wants&&!black_PrepareRussian(game,russian,&issue)){wants=NO;fprintf(stderr,"[LANG] Russian not prepared: %s\n",issue.localizedDescription.UTF8String);}
         if(!black_ApplyGameText(game,wants,&issue))fprintf(stderr,"[LANG] game text not set: %s\n",issue.localizedDescription.UTF8String);
         else fprintf(stderr,"[LANG] MainUS.bin is the %s bank\n",wants?"Russian":"English");
         setenv("XDG_DATA_HOME",[[root URLByAppendingPathComponent:@"Data"].path fileSystemRepresentation],1);

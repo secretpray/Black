@@ -7,17 +7,23 @@
 #ifndef BLACK_GAME_LANGUAGE_H
 #define BLACK_GAME_LANGUAGE_H
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "port_menu.h"
 
 static const int black_game_language_index[BLACK_GAME_LANGUAGES] = {1, 4, 3, 5, 6, 1};
 static const char *const black_game_language_suffix[BLACK_GAME_LANGUAGES] = {"US", "Fr", "Ge", "Sp", "It", "Ru"};
 
-/* English always loads (MainUS.bin, the European MainUK.bin alias); another
+/* English always loads (MainUS.bin, the European MainUK.bin alias); Russian
+ * needs the translation the app carries (BLACK_RUSSIAN_STRINGS); another
  * language needs its bank in the installed game. */
 static inline int black_game_language_available(const char *game_dir, int language)
 {
     if (language == BLACK_LANG_ENGLISH) return 1;
+    if (language == BLACK_LANG_RUSSIAN) {
+        const char *strings = getenv("BLACK_RUSSIAN_STRINGS");
+        return strings && access(strings, R_OK) == 0;
+    }
     if (language < 0 || language >= BLACK_GAME_LANGUAGES || !game_dir || !*game_dir) return 0;
     char path[1024];
     snprintf(path, sizeof path, "%s/language/strings/Main%s.bin", game_dir, black_game_language_suffix[language]);

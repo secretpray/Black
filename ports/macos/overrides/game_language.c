@@ -9,6 +9,12 @@ uint32_t black_GameLanguageIndex(void)
 {
     int language = black_SettingsGameLanguage();
     const char *dir = getenv("BLACK_GAME_DIR");
+    char built[1024];
+    snprintf(built, sizeof built, "%s/language/strings/MainRu.bin", dir ? dir : "");
+    if (language == BLACK_LANG_RUSSIAN && black_game_language_available(dir, language) && access(built, R_OK)) {
+        fprintf(stderr, "[LANG] the Russian bank was not built; English\n");
+        language = BLACK_LANG_ENGLISH;
+    }
     if (!black_game_language_available(dir, language)) {
         if (language != BLACK_LANG_ENGLISH)
             fprintf(stderr, "[LANG] Main%s.bin is not in the installed game; English\n", black_game_language_suffix[language]);
