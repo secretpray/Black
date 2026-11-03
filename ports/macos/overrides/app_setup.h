@@ -10,9 +10,11 @@ BOOL black_SetupRun(NSURL *game, NSURL *patch);
 
 /* Previews and tests: the view alone, and a page shown with given state. */
 typedef enum { BLACK_SETUP_DISC, BLACK_SETUP_CHECKING, BLACK_SETUP_REVIEW, BLACK_SETUP_COPYING,
-               BLACK_SETUP_STOPPED, BLACK_SETUP_FAILED, BLACK_SETUP_DONE } BlackSetupPage;
+               BLACK_SETUP_STOPPED, BLACK_SETUP_FAILED, BLACK_SETUP_LANGUAGE, BLACK_SETUP_GRAPHICS,
+               BLACK_SETUP_DONE } BlackSetupPage;
 NSView *black_SetupMakeView(NSURL *game, NSURL *patch);
 void black_SetupShow(NSView *view, BlackSetupPage page, BlackDiscInfo *info, BlackInstallProgress *progress,
     NSString *message, int selected, double age);
-/* Inspects and installs `source` as the window would, without a window. */
+/* Inspects and installs `source` as the window would, then continues past
+ * language and graphics as shown. */
 BlackSetupPage black_SetupDrive(NSView *view, NSURL *source, double timeout);

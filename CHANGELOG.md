@@ -6,7 +6,10 @@
   typed in, green-grey rows and the selector bar, the game's fonts read from your
   disc. Choose or drop an ISO/XISO or folder, review the release, languages, size
   and free space, then copy with progress, speed and time left. **Stop** keeps
-  the copied files and the next install carries on from them.
+  the copied files and the next install carries on from them. Then choose the
+  game text from your disc's languages (the Mac's own language first when the
+  disc has it), the settings panel's language, and render scale, anti-aliasing,
+  upscaling, texture filtering and field of view, or the recommended set.
 - **Recomp settings** now use the game's menu palette and rails instead of the
   gold palette carried over from TGP's other ports. Layout and controls are unchanged.
 

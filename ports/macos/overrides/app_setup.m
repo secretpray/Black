@@ -5,6 +5,9 @@
  * for the game's fonts; then its own Big/Small are read from the player's copy. */
 #import "app_setup.h"
 #import "black_ui.h"
+#include "port_menu.h"
+#include "game_language.h"
+#include <sys/sysctl.h>
 #import <GameController/GameController.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -46,9 +49,31 @@ static NSString *languages(BlackDiscInfo *info)
 }
 static double ease(double t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return 1 - pow(1 - t, 3); }
 static BOOL still(void) { return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion; }
-static const char *const page_names[] = {"Disc", "Checking", "Review", "Copying", "Stopped", "Failed", "Done"};
+static const char *const page_names[] = {"Disc", "Checking", "Review", "Copying", "Stopped", "Failed", "Language", "Graphics", "Done"};
+/* Game languages as port_settings numbers them, with each one's string bank suffixes. */
+static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO"};
+static NSString *const menu_language_names[] = {@"AUTO", @"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
+static BOOL on_disc(BlackDiscInfo *info, int language)
+{
+    NSArray *suffixes = @[@[@"UK", @"US"], @[@"Fr"], @[@"Ge"], @[@"Sp"], @[@"It"]][language];
+    for (NSString *have in info.languages)
+        for (NSString *want in suffixes) if ([have caseInsensitiveCompare:want] == NSOrderedSame) return YES;
+    return language == BLACK_LANG_ENGLISH;
+}
+static int languages_count(BlackDiscInfo *info)
+{ int n = 0; for (int i = 0; i < BLACK_GAME_LANGUAGES; ++i) n += on_disc(info, i); return n; }
+static NSString *this_mac(void)
+{
+    char brand[128] = ""; size_t length = sizeof brand; uint64_t memory = 0; size_t size = sizeof memory;
+    sysctlbyname("machdep.cpu.brand_string", brand, &length, NULL, 0);
+    sysctlbyname("hw.memsize", &memory, &size, NULL, 0);
+    return [NSString stringWithFormat:@"%@, %llu GB", @(brand).uppercaseString, memory >> 30];
+}
+/* The defaults: measured on an M1 Pro at the game's 30 frames a second (GRAPHICS). */
+enum { REC_SCALE = 2, REC_AA = 2, REC_UPSCALER = 1, REC_AF = 0, REC_FOV = 70 };
+static const int af_levels[] = {0, 2, 4, 8, 16};
 
-typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } SetupRow;
+typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; NSString *value; } SetupRow;
 
 @interface BlackSetupView : NSView {
 @public
@@ -132,6 +157,32 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
         r[n++] = (SetupRow){@"CHOOSE ANOTHER COPY", @"BACK TO THE CHOICE OF DISC IMAGE OR FOLDER. YOUR COPY WAS NOT CHANGED.", nil, @selector(back:), YES};
         r[n++] = (SetupRow){@"QUIT", @"CLOSES SETUP.", nil, @selector(quit:), YES};
         break;
+    case BLACK_SETUP_LANGUAGE:
+        r[n++] = (SetupRow){@"GAME TEXT", languages_count(info) > 1 ?
+            @"TEXT AND MENUS OF THE GAME ITSELF, FROM YOUR DISC'S STRING BANKS. LEFT / RIGHT CHANGES IT." :
+            @"THIS DISC HAS ENGLISH TEXT ONLY. THE EUROPEAN DISC ADDS FRENCH, GERMAN, SPANISH AND ITALIAN.",
+            nil, @selector(forward:), YES, game_language_names[black_SettingsGameLanguage()]};
+        r[n++] = (SetupRow){@"SETTINGS MENU", @"LANGUAGE OF THE RECOMP SETTINGS PANEL. AUTO FOLLOWS THE GAME TEXT; RUSSIAN IS FOR THE PANEL ONLY.",
+            nil, @selector(forward:), YES, menu_language_names[black_SettingsMenuLanguage()]};
+        r[n++] = (SetupRow){@"CONTINUE", @"ON TO GRAPHICS. BOTH CAN BE CHANGED LATER WITH CMD+, OR F1.", nil, @selector(next:), YES};
+        break;
+    case BLACK_SETUP_GRAPHICS: {
+        int scale = black_SettingsRenderScale(), aa = black_SettingsAntiAliasing(), af = black_SettingsAniso();
+        r[n++] = (SetupRow){@"RENDER SCALE", scale == 1 ? @"1X SENDS EVERY FRAME BACK FROM THE GPU AND RUNS SLOWER THAN 2X." :
+            [NSString stringWithFormat:@"THE GAME DRAWN AT %d X %d. HIGHER IS SHARPER AND SLOWER; 2X HOLDS 30 FPS ON AN M1 PRO.", 640 * scale, 480 * scale],
+            nil, @selector(forward:), YES, [NSString stringWithFormat:@"%dX", scale]};
+        r[n++] = (SetupRow){@"ANTI-ALIASING", @"SMOOTHS JAGGED EDGES. SMAA IS SHARPER, FXAA IS CHEAPER.", nil, @selector(forward:), YES,
+            aa == 2 ? @"SMAA" : aa == 1 ? @"FXAA" : @"OFF"};
+        r[n++] = (SetupRow){@"UPSCALING", @"METALFX SHARPENS THE RENDER SCALE UP TO THE WINDOW'S PIXELS.", nil, @selector(forward:), YES,
+            black_SettingsUpscaler() ? @"METALFX" : @"OFF"};
+        r[n++] = (SetupRow){@"TEXTURE FILTERING", @"SHARPER FLOORS AND WALLS AT AN ANGLE. GAME KEEPS THE ORIGINAL FILTERING.", nil, @selector(forward:), YES,
+            af ? [NSString stringWithFormat:@"%dX", af] : @"GAME"};
+        r[n++] = (SetupRow){@"FIELD OF VIEW", @"CAMERA ANGLE IN DEGREES. ORIGINAL: 70.", nil, @selector(forward:), YES,
+            [NSString stringWithFormat:@"%d", black_SettingsFov()]};
+        r[n++] = (SetupRow){@"USE RECOMMENDED", @"2X, SMAA, METALFX, THE GAME'S FILTERING AND 70 DEGREES: 30 FPS ON AN M1 PRO.", nil, @selector(recommended:), YES};
+        r[n++] = (SetupRow){@"CONTINUE", @"ALL OF THESE CHANGE LATER IN SETTINGS AND APPLY ON THE NEXT LAUNCH.", nil, @selector(next:), YES};
+        break;
+    }
     case BLACK_SETUP_DONE:
         r[n++] = (SetupRow){@"PLAY", @"STARTS BLACK. SETTINGS: CMD+, OR F1 DURING PLAY.", nil, @selector(play:), YES};
         r[n++] = (SetupRow){@"QUIT", @"THE GAME STAYS INSTALLED; OPEN BLACK AGAIN TO PLAY.", nil, @selector(quit:), YES};
@@ -143,12 +194,15 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
 {
     switch (page) {
     case BLACK_SETUP_REVIEW: return 336;
+    case BLACK_SETUP_LANGUAGE: return 236;
+    case BLACK_SETUP_GRAPHICS: return 210;
     case BLACK_SETUP_COPYING: return 316;
     case BLACK_SETUP_DISC: return 300;
     default: return 276;
     }
 }
-- (CGFloat)rowY:(int)i { return self.rowsTop + i * 40; }
+- (CGFloat)pitch { return page == BLACK_SETUP_GRAPHICS ? 34 : 40; }
+- (CGFloat)rowY:(int)i { return self.rowsTop + i * self.pitch; }
 
 /* ---- actions ---- */
 - (void)chooseImage:(id)sender { (void)sender; [self choose:NO]; }
@@ -208,32 +262,98 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
         dispatch_async(dispatch_get_main_queue(), ^{
             fprintf(stderr, "[SETUP] copy %s: %llu of %llu bytes, %lu of %lu files\n", ok ? "complete" : stopped ? "stopped" : "failed",
                 watch.bytesDone, watch.bytesTotal, (unsigned long)watch.filesDone, (unsigned long)watch.filesTotal);
-            if (ok) [self go:BLACK_SETUP_DONE];
+            if (ok) [self enterLanguage];
             else if (stopped) { partial = copied; [self go:BLACK_SETUP_STOPPED]; }
             else { [message release]; message = [problem.uppercaseString retain]; [self go:BLACK_SETUP_FAILED]; }
             [problem release];
         });
     }});
 }
+- (void)forward:(id)sender { (void)sender; [self adjust:1]; }
+/* Left / right on a value row; each change is saved at once, as in the settings panel. */
+- (void)adjust:(int)delta
+{
+    if (page == BLACK_SETUP_LANGUAGE && selected == 0) {
+        int language = black_SettingsGameLanguage();
+        for (int i = 0; i < BLACK_GAME_LANGUAGES; ++i) {
+            language = (language + delta + BLACK_GAME_LANGUAGES) % BLACK_GAME_LANGUAGES;
+            if (on_disc(info, language)) break;
+        }
+        black_SettingsSetGameLanguage(language);
+    } else if (page == BLACK_SETUP_LANGUAGE && selected == 1) {
+        int count = (int)(sizeof menu_language_names / sizeof menu_language_names[0]);
+        black_SettingsSetMenuLanguage((black_SettingsMenuLanguage() + delta + count) % count);
+    } else if (page == BLACK_SETUP_GRAPHICS) {
+        switch (selected) {
+        case 0: black_SettingsSetRenderScale((black_SettingsRenderScale() - 1 + delta + 4) % 4 + 1); break;
+        case 1: black_SettingsSetAntiAliasing((black_SettingsAntiAliasing() + delta + 3) % 3); break;
+        case 2: black_SettingsSetUpscaler(!black_SettingsUpscaler()); break;
+        case 3: {
+            int at = 0; while (at < 4 && af_levels[at] != black_SettingsAniso()) ++at;
+            black_SettingsSetAniso(af_levels[(at + delta + 5) % 5]); break;
+        }
+        case 4: black_SettingsSetFov(MAX(45, MIN(140, (black_SettingsFov() + delta * 5) / 5 * 5))); break;
+        default: return;
+        }
+    } else return;
+    [self logSettings:@"changed"];
+    [self setNeedsDisplay:YES];
+}
+- (void)logSettings:(NSString *)why
+{
+    fprintf(stderr, "[SETUP] settings %s: game_language=%d menu_language=%d render_scale=%d anti_aliasing=%d upscaler=%d anisotropic=%d fov=%d saved=%d\n",
+        why.UTF8String, black_SettingsGameLanguage(), black_SettingsMenuLanguage(), black_SettingsRenderScale(), black_SettingsAntiAliasing(),
+        black_SettingsUpscaler(), black_SettingsAniso(), black_SettingsFov(), !black_SettingsSaveFailed());
+}
+- (void)recommended:(id)sender
+{
+    (void)sender;
+    black_SettingsSetRenderScale(REC_SCALE); black_SettingsSetAntiAliasing(REC_AA); black_SettingsSetUpscaler(REC_UPSCALER);
+    black_SettingsSetAniso(REC_AF); black_SettingsSetFov(REC_FOV);
+    [self logSettings:@"recommended"];
+}
+- (void)next:(id)sender
+{
+    (void)sender;
+    [self go:page == BLACK_SETUP_LANGUAGE ? BLACK_SETUP_GRAPHICS : BLACK_SETUP_DONE];
+}
+/* A fresh install starts the game in the Mac's own language when the disc has it. */
+- (void)enterLanguage
+{
+    const char *settings = getenv("BLACK_SETTINGS_FILE");
+    BOOL fresh = !settings || ![NSFileManager.defaultManager fileExistsAtPath:@(settings)];
+    if (!on_disc(info, black_SettingsGameLanguage())) black_SettingsSetGameLanguage(BLACK_LANG_ENGLISH);
+    else if (fresh) {
+        NSArray *codes = @[@"en", @"fr", @"de", @"es", @"it"];
+        for (NSString *preferred in NSLocale.preferredLanguages) {
+            NSUInteger language = [codes indexOfObject:[preferred substringToIndex:MIN(2u, preferred.length)]];
+            if (language != NSNotFound && on_disc(info, (int)language)) { black_SettingsSetGameLanguage((int)language); break; }
+        }
+    }
+    [self logSettings:fresh ? @"first" : @"kept"];
+    [self go:BLACK_SETUP_LANGUAGE];
+}
 - (void)stop:(id)sender { (void)sender; progress.cancelled = YES; fprintf(stderr, "[SETUP] stop requested\n"); }
 - (void)back:(id)sender
 {
     (void)sender;
     if (page == BLACK_SETUP_COPYING) { [self stop:nil]; return; }
-    if (page == BLACK_SETUP_DISC || page == BLACK_SETUP_DONE) return;
+    if (page == BLACK_SETUP_DISC || page == BLACK_SETUP_LANGUAGE) return;
+    if (page == BLACK_SETUP_GRAPHICS) { [self go:BLACK_SETUP_LANGUAGE]; return; }
+    if (page == BLACK_SETUP_DONE) { [self go:BLACK_SETUP_GRAPHICS]; return; }
     ++generation; [self go:BLACK_SETUP_DISC];
 }
 - (void)quit:(id)sender { (void)sender; if (page == BLACK_SETUP_COPYING) [self stop:nil]; else finished = -1; }
 - (void)play:(id)sender { (void)sender; finished = 1; }
 - (void)activate
 {
-    SetupRow r[4]; int n = [self rows:r];
+    SetupRow r[8]; int n = [self rows:r];
     if (selected < n && r[selected].enabled) { [self performSelector:r[selected].action withObject:nil]; [self setNeedsDisplay:YES]; }
     else NSBeep();
 }
 - (void)step:(int)delta
 {
-    SetupRow r[4]; int n = [self rows:r];
+    SetupRow r[8]; int n = [self rows:r];
     if (n) selected = (selected + delta + n) % n;
     [self setNeedsDisplay:YES];
 }
@@ -247,14 +367,22 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
 - (int)rowAt:(NSPoint)window
 {
     NSPoint p = [self logical:[self convertPoint:window fromView:nil]];
-    SetupRow r[4]; int n = [self rows:r];
-    for (int i = 0; i < n; ++i) if (p.x >= 84 && p.x <= 876 && p.y >= [self rowY:i] && p.y < [self rowY:i] + 34) return i;
+    SetupRow r[8]; int n = [self rows:r];
+    for (int i = 0; i < n; ++i) if (p.x >= 84 && p.x <= 876 && p.y >= [self rowY:i] && p.y < [self rowY:i] + self.pitch - 6) return i;
     return -1;
 }
 - (void)mouseMoved:(NSEvent *)event
 { int row = [self rowAt:event.locationInWindow]; if (row >= 0 && row != selected) { selected = row; [self setNeedsDisplay:YES]; } }
 - (void)mouseDown:(NSEvent *)event
-{ int row = [self rowAt:event.locationInWindow]; if (row >= 0) { selected = row; [self activate]; } }
+{
+    int row = [self rowAt:event.locationInWindow];
+    if (row < 0) return;
+    selected = row;
+    SetupRow r[8]; [self rows:r];
+    /* On a value row the left arrow steps back; anywhere else steps on. */
+    if (r[row].value && [self logical:[self convertPoint:event.locationInWindow fromView:nil]].x < 735) [self adjust:-1];
+    else [self activate];
+}
 - (void)keyDown:(NSEvent *)event
 {
     unsigned short code = event.keyCode;
@@ -263,6 +391,7 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
         else [super keyDown:event];
         return;
     }
+    if (code == 123 || code == 124) { [self adjust:code == 124 ? 1 : -1]; return; }
     if (code == 126) [self step:-1];
     else if (code == 125) [self step:1];
     else if (code == 36 || code == 76 || code == 49) [self activate];
@@ -283,20 +412,25 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
 /* Controllers: d-pad or left stick moves, A confirms, B goes back; held directions repeat. */
 - (void)pollPad:(double)now
 {
-    BOOL up = NO, down = NO, a = NO, b = NO;
+    BOOL up = NO, down = NO, left = NO, right = NO, a = NO, b = NO;
     for (GCController *pad in GCController.controllers) {
         GCExtendedGamepad *g = pad.extendedGamepad;
         if (!g) continue;
         up |= g.dpad.up.pressed || g.leftThumbstick.yAxis.value > .55f;
         down |= g.dpad.down.pressed || g.leftThumbstick.yAxis.value < -.55f;
+        left |= g.dpad.left.pressed || g.leftThumbstick.xAxis.value < -.55f;
+        right |= g.dpad.right.pressed || g.leftThumbstick.xAxis.value > .55f;
         a |= g.buttonA.pressed; b |= g.buttonB.pressed;
     }
     static BOOL was_a, was_b;
     if (a && !was_a) [self activate];
     if (b && !was_b) [self back:nil];
     was_a = a; was_b = b;
-    if (up || down) {
-        if (!pad_held || now >= pad_next) { [self step:up ? -1 : 1]; pad_next = now + (pad_held ? .12 : .4); pad_held = YES; }
+    if (up || down || left || right) {
+        if (!pad_held || now >= pad_next) {
+            if (up || down) [self step:up ? -1 : 1]; else [self adjust:right ? 1 : -1];
+            pad_next = now + (pad_held ? .12 : .4); pad_held = YES;
+        }
     } else pad_held = NO;
 }
 - (void)tick
@@ -306,6 +440,9 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
     /* Automated app check (BLACK_TEST_SETUP_SOURCE): install that copy and play, untouched. */
     if (getenv("BLACK_TEST_SETUP_SOURCE") && self.age > 1) {
         if (page == BLACK_SETUP_REVIEW) [self install:nil];
+        else if (page == BLACK_SETUP_LANGUAGE && getenv("BLACK_TEST_SETUP_LANGUAGE") &&
+                 black_SettingsGameLanguage() != atoi(getenv("BLACK_TEST_SETUP_LANGUAGE"))) { selected = 0; [self adjust:1]; }
+        else if (page == BLACK_SETUP_LANGUAGE || page == BLACK_SETUP_GRAPHICS) [self next:nil];
         else if (page == BLACK_SETUP_DONE) finished = 1;
         else if (page == BLACK_SETUP_FAILED) finished = -1;
     }
@@ -359,8 +496,9 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
     /* Title and the steps of setup. */
     text(@"BLACK", 96, 34, 40, BLACK_UI_TEXT, 1, 1);
     text(@"FIRST-TIME SETUP  /  ORIGINAL XBOX  /  NATIVE ON MAC", 98, 86, 10, BLACK_UI_ROW, 1, 0);
-    NSArray *steps = @[@"1  DISC", @"2  COPY", @"3  PLAY"];
-    int step = page == BLACK_SETUP_DONE ? 2 : page == BLACK_SETUP_COPYING || page == BLACK_SETUP_STOPPED ? 1 : 0;
+    NSArray *steps = @[@"1  DISC", @"2  COPY", @"3  LANGUAGE", @"4  GRAPHICS", @"5  PLAY"];
+    int step = page == BLACK_SETUP_DONE ? 4 : page == BLACK_SETUP_GRAPHICS ? 3 : page == BLACK_SETUP_LANGUAGE ? 2 :
+        page == BLACK_SETUP_COPYING || page == BLACK_SETUP_STOPPED ? 1 : 0;
     CGFloat sx = 876;
     for (int i = (int)steps.count - 1; i >= 0; --i) {
         sx -= width_of(steps[i], 11, 0);
@@ -372,7 +510,7 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
 
     /* The page heading types in with a block cursor, as the game's menus do. */
     NSString *heading = @[@"YOUR DISC", @"CHECKING YOUR COPY", @"READY TO INSTALL", @"COPYING YOUR DISC",
-                          @"COPYING STOPPED", @"SETUP COULD NOT FINISH", @"BLACK IS INSTALLED"][page];
+                          @"COPYING STOPPED", @"SETUP COULD NOT FINISH", @"LANGUAGE", @"GRAPHICS", @"READY"][page];
     NSUInteger shown = MIN(heading.length, (NSUInteger)(age * 42));
     text([heading substringToIndex:shown], 96, 130, 24, BLACK_UI_TEXT, 1, 1);
     if (shown < heading.length) {
@@ -393,9 +531,16 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
         intro = [NSString stringWithFormat:@"%@ OF %@ ARE COPIED AND KEPT. CONTINUE NOW OR THE NEXT TIME YOU OPEN BLACK.", bytes(partial), bytes(info.totalBytes)];
         break;
     case BLACK_SETUP_FAILED: intro = message; break;
+    case BLACK_SETUP_LANGUAGE:
+        intro = [NSString stringWithFormat:@"THE GAME IS INSTALLED AND CHECKED. YOUR DISC HAS GAME TEXT IN %@. THE MENU LANGUAGE SETS THE RECOMP SETTINGS PANEL.", languages(info)];
+        break;
+    case BLACK_SETUP_GRAPHICS:
+        intro = [NSString stringWithFormat:@"THIS MAC: %@. EACH CHANGE IS SAVED AT ONCE.", this_mac()];
+        break;
     case BLACK_SETUP_DONE:
-        intro = [NSString stringWithFormat:@"THE %@ RELEASE IS IN YOUR LIBRARY AND CHECKED. GAME TEXT: %@.",
-            [info.region isEqual:@"USA"] ? @"USA" : @"EUROPEAN", languages(info) ?: @"ENGLISH"];
+        intro = [NSString stringWithFormat:@"THE %@ RELEASE IS IN YOUR LIBRARY AND CHECKED. GAME TEXT: %@. GRAPHICS: %dX, %@, %@.",
+            [info.region isEqual:@"USA"] ? @"USA" : @"EUROPEAN", game_language_names[black_SettingsGameLanguage()], black_SettingsRenderScale(),
+            @[@"NO ANTI-ALIASING", @"FXAA", @"SMAA"][black_SettingsAntiAliasing()], black_SettingsUpscaler() ? @"METALFX" : @"NO UPSCALING"];
         break;
     default: break;
     }
@@ -445,24 +590,30 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
     }
 
     /* Rows: each slides in a moment after the one above; the bar follows the selection. */
-    SetupRow r[4]; int n = [self rows:r];
+    SetupRow r[8]; int n = [self rows:r];
     if (n) {
         CGFloat bar_alpha = ease((age - .25) / .2);
         if (bar_alpha > 0) {
             [NSGraphicsContext saveGraphicsState];
             CGContextSetAlpha(NSGraphicsContext.currentContext.CGContext, bar_alpha);
-            black_ui_selector(NSMakeRect(84, selector_y, 792, 34), rail, edge);
+            black_ui_selector(NSMakeRect(84, selector_y, 792, self.pitch - 6), rail, edge);
             [NSGraphicsContext restoreGraphicsState];
         }
     }
     for (int i = 0; i < n; ++i) {
         CGFloat e = ease((age - .25 - i * .06) / .22), ry = [self rowY:i];
         unsigned rgb = !r[i].enabled ? BLACK_UI_DISABLED : i == selected ? BLACK_UI_TEXT : BLACK_UI_ROW;
-        text(r[i].label, 96 + 14 * (1 - e), ry + 11, 13, rgb, e, 0);
+        text(r[i].label, 96 + 14 * (1 - e), ry + (self.pitch - 6) / 2 - 6, 13, rgb, e, 0);
         if (r[i].tag) text(r[i].tag, 862 - width_of(r[i].tag, 11, 0), ry + 12, 11, rgb, e, 0);
+        if (r[i].value) {
+            CGFloat vy = ry + (self.pitch - 6) / 2 - 6;
+            text(@"<", 716, vy, 12, rgb, e, 0);
+            text(r[i].value, 790 - width_of(r[i].value, 12, 0) / 2, vy, 12, rgb, e, 0);
+            text(@">", 856, vy, 12, rgb, e, 0);
+        }
     }
     if (n && selected < n) {
-        CGFloat ty = self.rowsTop + n * 40 + 10;
+        CGFloat ty = self.rowsTop + n * self.pitch + 10;
         for (NSString *line in wrap(r[selected].help, 768, 10)) { text(line, 96, ty, 10, r[selected].enabled ? BLACK_UI_ROW : BLACK_UI_WARN, body, 0); ty += 17; }
     }
 
@@ -470,8 +621,9 @@ typedef struct { NSString *label, *help, *tag; SEL action; BOOL enabled; } Setup
     over(NSMakeRect(84, 512, 792, 1), BLACK_UI_TICK, 1);
     CGFloat px = 96;
     [self prompt:@"UP / DOWN" pad:nil label:@"CHOOSE" at:&px];
+    if (page == BLACK_SETUP_LANGUAGE || page == BLACK_SETUP_GRAPHICS) [self prompt:@"LEFT / RIGHT" pad:nil label:@"CHANGE" at:&px];
     [self prompt:@"ENTER" pad:@"A" label:@"SELECT" at:&px];
-    if (page != BLACK_SETUP_DISC && page != BLACK_SETUP_DONE) [self prompt:@"ESC" pad:@"B" label:@"BACK" at:&px];
+    if (page != BLACK_SETUP_DISC && page != BLACK_SETUP_LANGUAGE) [self prompt:@"ESC" pad:@"B" label:@"BACK" at:&px];
     NSString *version = [NSString stringWithFormat:@"BLACK %@", [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"DEV"];
     text(version, 876 - width_of(version, 10, 0), 531, 10, BLACK_UI_DISABLED, 1, 0);
     [NSGraphicsContext restoreGraphicsState];
@@ -524,6 +676,9 @@ BlackSetupPage black_SetupDrive(NSView *view, NSURL *source, double timeout)
     if (v->page != BLACK_SETUP_REVIEW) return v->page;
     [v install:nil];
     run_until(v, ^{ return (BOOL)(v->page != BLACK_SETUP_COPYING); }, timeout);
+    /* Language and graphics keep what they show, as Continue does. */
+    if (v->page == BLACK_SETUP_LANGUAGE) [v next:nil];
+    if (v->page == BLACK_SETUP_GRAPHICS) [v next:nil];
     return v->page;
 }
 

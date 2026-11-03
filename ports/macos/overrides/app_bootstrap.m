@@ -29,6 +29,8 @@ char *black_AppPrepareGame(void)
         int fd=open([[logs URLByAppendingPathComponent:@"game.log"].path fileSystemRepresentation],O_WRONLY|O_CREAT|O_EXCL,0600);
         if(fd<0){message(@"Cannot create a session log",@"Check available space and access to your Library folder.");return NULL;}dup2(fd,STDOUT_FILENO);dup2(fd,STDERR_FILENO);close(fd);
         if(chdir(logs.path.fileSystemRepresentation)){message(@"Cannot open session folder",@"Check access to your Library folder.");return NULL;}
+        /* Before setup: its language and graphics pages save into the same settings. */
+        setenv("BLACK_SETTINGS_FILE",[[root URLByAppendingPathComponent:@"settings.ini"].path fileSystemRepresentation],1);
         if(!black_ValidateInstalledGame(game,&error)){
             if([fm fileExistsAtPath:game.path]){message(@"Game files need attention",@"The installed executable is missing or does not match the supported disc revision. Your saves were preserved. See the installation guide before replacing game data.");return NULL;}
             /* First run: the setup window installs the game from the player's own copy. */
@@ -37,7 +39,6 @@ char *black_AppPrepareGame(void)
             if(!patch&&getenv("BLACK_EUROPE_PATCH"))patch=[NSURL fileURLWithPath:@(getenv("BLACK_EUROPE_PATCH"))];
             if(!black_SetupRun(game,patch))return NULL;
         }
-        setenv("BLACK_SETTINGS_FILE",[[root URLByAppendingPathComponent:@"settings.ini"].path fileSystemRepresentation],1);
         setenv("XDG_DATA_HOME",[[root URLByAppendingPathComponent:@"Data"].path fileSystemRepresentation],1);
         setenv("BLACK_GAME_DIR",game.path.fileSystemRepresentation,1);
         const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_FULLSCREEN","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};

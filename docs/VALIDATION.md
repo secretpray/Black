@@ -110,6 +110,13 @@ yet used the setup with a mouse or a physical controller, or dropped a file on i
 105 CTest checks passed. The settings panel kept its layout and every preview page;
 its colours changed.
 
+Language and graphics pages: the preview changed render scale with the right
+arrow (saved as 3), restored the recommended set (2x, SMAA, MetalFX, game
+filtering, 70 degrees) and stepped the game text, each written to its own
+settings file at once. Unattended with German chosen in the setup, the real
+binary installed the European folder and the game opened `MainGe.bin` on its
+first start, then quit normally with exit code 0.
+
 ## Languages (0.3.0)
 
 The USA executable picks its string bank

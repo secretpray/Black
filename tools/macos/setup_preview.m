@@ -37,6 +37,10 @@ int main(int argc, char **argv)
         NSURL *data = [output URLByAppendingPathComponent:@"data"], *game = [data URLByAppendingPathComponent:@"Game"];
         [fm removeItemAtURL:data error:nil];
         [fm createDirectoryAtURL:data withIntermediateDirectories:YES attributes:nil error:nil];
+        /* The language and graphics pages save into a settings file of the preview's own. */
+        NSString *settings = [output URLByAppendingPathComponent:@"preview-settings.ini"].path;
+        [fm removeItemAtPath:settings error:nil];
+        setenv("BLACK_SETTINGS_FILE", settings.fileSystemRepresentation, 1);
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 960, 600) styleMask:NSWindowStyleMaskTitled
             backing:NSBackingStoreBuffered defer:NO];
         window.releasedWhenClosed = NO;
@@ -68,8 +72,12 @@ int main(int argc, char **argv)
         black_SetupShow(view, BLACK_SETUP_FAILED, info, nil,
             @"UNSUPPORTED GAME REVISION. SELECT YOUR OWN USA OR SUPPORTED EUROPEAN ORIGINAL XBOX BLACK DISC.", 0, 5);
         snapshot(view, png(@"6-failed"));
+        black_SetupShow(view, BLACK_SETUP_LANGUAGE, info, nil, nil, 0, 5);
+        snapshot(view, png(@"7-language"));
+        black_SetupShow(view, BLACK_SETUP_GRAPHICS, info, nil, nil, 0, 5);
+        snapshot(view, png(@"8-graphics"));
         black_SetupShow(view, BLACK_SETUP_DONE, info, nil, nil, 0, 5);
-        snapshot(view, png(@"7-done"));
+        snapshot(view, png(@"9-done"));
 
         /* Keyboard: down moves the selection and wraps; the review offers two rows. */
         [window makeKeyAndOrderFront:nil]; [window makeFirstResponder:view];
@@ -79,6 +87,21 @@ int main(int argc, char **argv)
         snapshot(view, png(@"3-review-wrapped"));
         NSData *a = [NSData dataWithContentsOfFile:png(@"3-review")], *b = [NSData dataWithContentsOfFile:png(@"3-review-another")];
         if ([a isEqual:b]) return fail("down arrow did not move the selection");
+
+        /* Right arrow on a graphics row changes the setting and saves it. */
+        black_SetupShow(view, BLACK_SETUP_GRAPHICS, info, nil, nil, 0, 5);
+        key(window, 124);
+        NSString *saved = [NSString stringWithContentsOfFile:settings encoding:NSUTF8StringEncoding error:nil];
+        if (![saved containsString:@"render_scale=3"]) return fail("right arrow did not save render scale 3");
+        black_SetupShow(view, BLACK_SETUP_GRAPHICS, info, nil, nil, 5, 5);
+        key(window, 36);
+        saved = [NSString stringWithContentsOfFile:settings encoding:NSUTF8StringEncoding error:nil];
+        if (![saved containsString:@"render_scale=2"]) return fail("use recommended did not restore render scale 2");
+        black_SetupShow(view, BLACK_SETUP_LANGUAGE, info, nil, nil, 0, 5);
+        key(window, 124);
+        printf("Settings: scale 2 -> 3 -> recommended 2, game language after right: %s\n",
+            [[[NSString stringWithContentsOfFile:settings encoding:NSUTF8StringEncoding error:nil] componentsSeparatedByString:@"\n"]
+                filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF BEGINSWITH 'game_language'"]].firstObject.UTF8String);
 
         /* A real install through the setup's flow, stopped part way and resumed. */
         __block BOOL stopped = NO;
@@ -100,9 +123,9 @@ int main(int argc, char **argv)
         if (last != BLACK_SETUP_DONE) return fail("install did not finish");
         if (!black_ValidateInstalledGame(game, &error)) return fail("installed executable");
         if ([fm fileExistsAtPath:[data URLByAppendingPathComponent:@".install-partial"].path]) return fail("partial folder left behind");
-        snapshot(view, png(@"7-done-live"));
+        snapshot(view, png(@"9-done-live"));
         [window close];
-        puts("First-run setup: pages, keyboard selection, inspect, stop/resume, install and check: PASS");
+        puts("First-run setup: pages, keyboard selection, language/graphics settings, inspect, stop/resume, install and check: PASS");
     }
     return 0;
 }

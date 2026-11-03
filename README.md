@@ -62,8 +62,9 @@ are source snapshots, not playable apps.
    onto the window. It shows the release, languages and size before copying,
    then copies into your Library with progress; **Stop** keeps what was copied and
    the next install carries on from there. Your source stays unchanged. The
-   supported European executable is normalized in that private copy. Mouse,
-   keyboard and controller all work.
+   supported European executable is normalized in that private copy. Then pick
+   the game text from your disc's languages and the graphics settings; they
+   apply on the first start. Mouse, keyboard and controller all work.
 4. **F1/F10**, **Cmd+,** or **Back + Start** opens recomp settings.
 
 The app is **ad-hoc signed, not notarized**. If macOS blocks it, use
