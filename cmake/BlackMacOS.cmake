@@ -184,7 +184,8 @@ target_link_libraries(black-input-routing PRIVATE black-port-ui SDL2::SDL2 Threa
 add_test(NAME macos_input_routing COMMAND black-input-routing)
 black_apu_extract_function(input_source "static SDL_bool black_InputSetHint(const char *name, const char *value)\n{" input_hint)
 black_apu_extract_function(input_source "DWORD xbox_InputSetState(DWORD port, const XBOX_VIBRATION *vibration)\n{" input_rumble)
-file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc" "${input_hint}\n${input_rumble}\n")
+black_apu_extract_function(input_source "static DWORD black_SDLInputSetState(DWORD port, const XBOX_VIBRATION *vibration)\n{" input_host_rumble)
+file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc" "${input_hint}\n${input_host_rumble}\n${input_rumble}\n")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/xinput_device.c")
 add_executable(black-controller-backend tools/macos/controller_backend_test.c)
@@ -195,6 +196,7 @@ target_compile_definitions(black-controller-backend PRIVATE
     BLACK_CONTROLLER_BACKEND_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc")
 target_link_libraries(black-controller-backend PRIVATE black-port-ui SDL2::SDL2 Threads::Threads)
 add_test(NAME macos_controller_backend COMMAND black-controller-backend)
+include("${CMAKE_SOURCE_DIR}/cmake/BlackRumbleTests.cmake")
 add_executable(black-input-owner tools/macos/input_owner_test.c)
 add_test(NAME macos_input_owner COMMAND black-input-owner)
 add_executable(black-game-clock tools/macos/game_clock_test.c)
@@ -356,6 +358,19 @@ add_executable(black-game-mods tools/macos/game_mods_test.c)
 add_test(NAME macos_game_mods COMMAND black-game-mods)
 add_executable(black-audio-fade tools/macos/audio_fade_test.c)
 add_test(NAME macos_audio_fade COMMAND black-audio-fade)
+file(READ "${CMAKE_SOURCE_DIR}/ports/macos/overrides/apu_xaudio2.c" audio_menu_source)
+black_apu_extract_function(audio_menu_source "void black_AudioSetMenuOpen(int open)\n{" audio_menu_gate)
+black_apu_extract_function(audio_menu_source "int xa2_submit_samples(const int16_t *samples, int frames)\n{" audio_menu_submit)
+file(WRITE "${CMAKE_BINARY_DIR}/runtime-overlay/audio_menu_test.inc" "${audio_menu_gate}\n${audio_menu_submit}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/apu_xaudio2.c")
+add_executable(black-audio-menu tools/macos/audio_menu_test.c)
+target_include_directories(black-audio-menu PRIVATE "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
+target_compile_definitions(black-audio-menu PRIVATE BLACK_AUDIO_MENU_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/audio_menu_test.inc")
+target_compile_options(black-audio-menu PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+target_link_options(black-audio-menu PRIVATE -fsanitize=address)
+target_link_libraries(black-audio-menu PRIVATE SDL2::SDL2 Threads::Threads)
+add_test(NAME macos_audio_menu COMMAND black-audio-menu)
 add_executable(black-video-flags tools/macos/video_flags_test.c)
 add_test(NAME macos_video_flags COMMAND black-video-flags)
 add_executable(black-hud-layout tools/macos/hud_layout_test.c)
@@ -449,6 +464,7 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_timing.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_aim.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mouse.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_rumble.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_movies.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mods.c"

@@ -158,6 +158,8 @@ static void render_frame(void)
 
 static void black_MenuCapture(int opening)
 {
+    extern void black_AudioSetMenuOpen(int);
+    black_AudioSetMenuOpen(opening);
     static int restore_mouse;
     if (opening) {
         restore_mouse = s_mouse_captured;
@@ -193,6 +195,7 @@ void black_HostInputPump(void)
     static int was_menu;
     static BlackMouseCapture capture;
     int menu=black_GameMenuActive(),active=NSApp.active&&s_window.keyWindow;
+    black_InputFocusChanged(active);
     int wanted=black_mouse_capture(&capture,black_InputKeyboardActive(),menu,
         black_MenuIsOpen(),active,getenv("RECOMP_BACKGROUND")!=NULL);
     if(wanted>=0)xek_capture_mouse(wanted);

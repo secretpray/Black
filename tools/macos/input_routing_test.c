@@ -83,6 +83,18 @@ int main(void)
     keyboard=(XBOX_GAMEPAD){0};g_pads[0]=(SDL_GameController *)(uintptr_t)1;g_controller_connected[0]=1;instance=11;
     poll();assert(!black_InputKeyboardActive());
     ticks=2000;black_InputNoteMenuKeyboard();poll();assert(black_InputKeyboardActive());
+    /* Closed overlay with an old controller still deflected must not mute
+     * keyboard fire after changing owners. */
+    black_SettingsSetInputDevice(BLACK_INPUT_GAMEPAD);
+    black_MenuSetOpen(1); physical.wButtons=XBOX_GAMEPAD_START; poll();
+    black_MenuSetOpen(0); black_SettingsSetInputDevice(BLACK_INPUT_KEYBOARD);
+    keyboard.bAnalogButtons[XBOX_BUTTON_RTRIGGER]=255; ticks=3000;
+    pad=poll();assert(pad.bAnalogButtons[XBOX_BUTTON_RTRIGGER]==255);
+    /* Foreground return also clears an old menu drain immediately. */
+    black_SettingsSetInputDevice(BLACK_INPUT_GAMEPAD);poll();
+    black_MenuSetOpen(1);poll();black_MenuSetOpen(0);
+    black_InputFocusChanged(0);black_InputFocusChanged(1);
+    physical.bAnalogButtons[1]=255;pad=poll();assert(pad.bAnalogButtons[1]==255);
     assert(black_InputGetState(5,NULL)==ERROR_DEVICE_NOT_CONNECTED);
     unlink(path);rmdir(folder);puts("Production input routing: selection/reconnect/prompts/remap/menu/capture: PASS (synthetic SDL)");
 }

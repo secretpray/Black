@@ -392,6 +392,17 @@ int black_SettingsRumbleIntensity(void)
 int black_SettingsSetRumbleIntensity(int percent)
 { return percent >= 0 && percent <= 200 ? save_setting(&rumble_intensity, percent) : 0; }
 int black_InputKeyboardActive(void) { return atomic_load(&keyboard_active); }
+static atomic_int input_focused = 1;
+static atomic_uint input_focus_epoch;
+void black_InputFocusChanged(int focused)
+{
+    focused = !!focused;
+    int previous = atomic_exchange(&input_focused, focused);
+    if (focused && !previous) atomic_fetch_add(&input_focus_epoch, 1);
+    if (previous != focused && getenv("RECOMP_INPUT_DEBUG"))
+        fprintf(stderr, "[INPUT-FOCUS] active=%d epoch=%u\n", focused, atomic_load(&input_focus_epoch));
+}
+unsigned black_InputFocusEpoch(void) { return atomic_load(&input_focus_epoch); }
 void black_InputSetKeyboardActive(int active) { atomic_store(&keyboard_active, !!active); }
 
 int black_SettingsHoldAim(void)

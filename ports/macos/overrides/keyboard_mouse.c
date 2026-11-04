@@ -8,6 +8,8 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 static const BlackKeyAction actions[BLACK_ACTION_COUNT] = {
     {"move_forward", "MOVE FORWARD", 16, {13,-1}}, {"move_back", "MOVE BACK", 17, {1,-1}},
@@ -68,6 +70,9 @@ void black_KeyEvent(int key, int down)
     key = black_KeyCanonical(key);
     if (key < 0 || key >= BLACK_KEY_LIMIT || !black_KeyValid(key)) return;
     pthread_mutex_lock(&lock); held[key] = !!down; pthread_mutex_unlock(&lock);
+    if (key >= BLACK_MOUSE_LEFT && getenv("RECOMP_INPUT_DEBUG"))
+        fprintf(stderr, "[INPUT-MOUSE] key=%d down=%d ms=%llu\n", key, !!down,
+            (unsigned long long)black_InputNowMs());
 }
 void black_KeyReleaseAll(void)
 {

@@ -1,8 +1,12 @@
 /* Device apertures need scalar bus accesses. libc's SIMD loads cannot be
  * decoded by the ARM64 MMIO fault handler (observed at GP FE830BF8). */
 #define sub_000A24E0 black_OriginalMemcpy
+#define sub_0027DE6B black_OriginalRumbleNoop
+#define sub_0027DDF8 black_OriginalInputState
 #include "../game/src/recomp_natives.c"
 #undef sub_000A24E0
+#undef sub_0027DE6B
+#undef sub_0027DDF8
 #include "mcpx_mmio.h"
 
 static int black_dsp_overlap(uint32_t address, uint32_t count)

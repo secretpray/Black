@@ -9,13 +9,15 @@
 #include <unistd.h>
 static pthread_mutex_t black_input_lock = PTHREAD_MUTEX_INITIALIZER;
 static XBOX_VIBRATION observed;
-static int null_request;
-static DWORD black_SDLInputSetState(DWORD port, const XBOX_VIBRATION *vibration)
+static SDL_GameController *g_pads[XBOX_MAX_CONTROLLERS] = {(SDL_GameController *)1};
+static int rumble_failure;
+static int black_test_rumble(SDL_GameController *pad, Uint16 left, Uint16 right, Uint32 duration)
 {
-    null_request = vibration == NULL;
-    if (vibration) observed = *vibration;
-    return port == 0 && vibration ? ERROR_SUCCESS : ERROR_DEVICE_NOT_CONNECTED;
+    if (!pad || duration != 1000) abort();
+    observed = (XBOX_VIBRATION){left, right};
+    return rumble_failure ? -1 : 0;
 }
+#define SDL_GameControllerRumble black_test_rumble
 #include BLACK_CONTROLLER_BACKEND_SOURCE
 int main(void)
 {
@@ -32,9 +34,9 @@ int main(void)
     XBOX_VIBRATION request = {1234, 5678};
     if (xbox_InputSetState(0, &request) || observed.wLeftMotorSpeed != 1234 || observed.wRightMotorSpeed != 5678) return 6;
     if (!black_SettingsSetVibration(0) || xbox_InputSetState(0, &request) ||
-        observed.wLeftMotorSpeed || observed.wRightMotorSpeed || null_request) return 7;
+        observed.wLeftMotorSpeed || observed.wRightMotorSpeed) return 7;
     if (request.wLeftMotorSpeed != 1234 || request.wRightMotorSpeed != 5678) return 8;
-    if (xbox_InputSetState(0, NULL) != ERROR_DEVICE_NOT_CONNECTED || !null_request) return 9;
+    if (xbox_InputSetState(0, NULL) != ERROR_DEVICE_NOT_CONNECTED) return 9;
     if (!black_SettingsSetVibration(1) || xbox_InputSetState(0, &request) || observed.wRightMotorSpeed != 5678) return 10;
     if (xbox_InputSetState(3, &request) != ERROR_DEVICE_NOT_CONNECTED) return 11;
     request.wLeftMotorSpeed = 40000; request.wRightMotorSpeed = 12000;
@@ -47,6 +49,9 @@ int main(void)
     black_SettingsSetRumbleIntensity(100); black_InputSetKeyboardActive(1);
     if (xbox_InputSetState(0, &request) || observed.wLeftMotorSpeed || observed.wRightMotorSpeed) return 16;
     black_InputSetKeyboardActive(0);
+    rumble_failure = 1;
+    SDL_SetError("test rumble backend failure");
+    if (xbox_InputSetState(0, &request) != ERROR_NOT_SUPPORTED) return 17;
     unlink(path); rmdir(directory);
     puts("Production SDL hint selection and rumble gating: PASS (synthetic device sink)");
     return 0;

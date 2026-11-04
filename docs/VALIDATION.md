@@ -1,16 +1,41 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-The final 0.5.0 DMG was mounted read-only. The bundled app launched in English
-and Russian with system-only PATH and no DYLD_LIBRARY_PATH, using isolated
-Library data. Both runs opened settings, prepared the host font atlas and exited
-normally with code 0 before their limits. Private font views were removed;
-source fonts, bank, XBE and the user's preferences retained their hashes. The
-arm64 library closure, macOS 27 minimum, app signature and Applications link
-were checked. This is a packaging check on the development Mac, not a clean
-second-machine or physical controller qualification.
+## Fixes and physical checks in 0.5.1
+
+The user confirmed these fixes on the development Mac with a **Bluetooth
+DualSense and keyboard/mouse**:
+
+- Camera movement and mouse fire after switching from the gamepad.
+- One physical Reload-to-Square button rebind, restored after the check.
+- Controller vibration and disabling it through the settings menu.
+- Speech no longer looping while the recomp menu is open, with normal audio
+  after closing it.
+- Immediate input after returning from the macOS desktop.
+
+The final physical candidate exited normally with code 0 before its bound.
+This qualifies those scenarios on that hardware, not every input effect,
+controller or transport. USB and deliberate Bluetooth hotplug remain open.
+
+The source passes **113 CTest checks** and GPU readback/colour probes. New
+production-source regressions cover the native Xbox feedback layout/completion,
+menu audio fade/queue pacing/resume, focus capture and stale menu suppression.
+A separate bounded scripted run submitted 724480 silent PCM frames while the
+pre-mute game mixer remained nonzero; it quit normally before its limit. Dummy
+audio validates the output gate, not sound quality; the user's listening check
+is separate. All **43 Python packaging/disc tests** passed.
+
+The final 0.5.1 DMG was mounted read-only. Its bundled app launched in English
+and Russian with system-only PATH and no DYLD_LIBRARY_PATH, using isolated data.
+Both runs opened settings, prepared the host font atlas and quit normally with
+code 0 before their limits; neither required a forced kill. Private font views
+were removed, and source XBE/fonts/bank and user preferences retained their
+hashes. The arm64 library closure, macOS 27 minimum, app signature and
+Applications link were checked. Matching source archives/checksums contain no
+game or private data. These packaging checks do not qualify a clean second Mac
+or a complete playthrough.
 
 ## Input and menu changes in 0.5.0
 
@@ -28,10 +53,8 @@ hashes were preserved. This does not qualify physical hardware or gameplay.
 Version 0.5.0 adds saved input-device selection, controller button bindings
 and Auto/Xbox/PlayStation/Keyboard prompts. The README settings captures come
 from the running build.
-The current source passes **110 CTest checks**, GPU probes and **43 Python tests**.
-The user confirmed physical device/prompt switching. The subsequent mouse-look
-fix is covered by Cocoa event tests; physical reacceptance, controller mapping,
-rumble and hotplug remain open. [Detailed evidence](INPUT.md).
+The 0.5.0 source passed **110 CTest checks**, GPU probes and **43 Python tests**.
+The later physical checks and fixes are described above. [Input evidence](INPUT.md).
 
 The intro-skip policy now also excludes menu weapon previews from the transition
 that ends startup. A new regression fails on the previous policy and passes on
@@ -367,8 +390,8 @@ that each was visible or visually correct. The user subsequently exited normally
 
 - Longer combat/death/retry stress, additional missions and a complete playthrough.
 - Remaining guest/interrupt/scheduler races and reached unresolved targets.
-- Physical mouse aiming, scopes, pad/keyboard handoff, calibration response,
-  rumble, hotplug, focus changes and all Flash page layouts.
+- Extended physical aiming/scopes/calibration, other controllers, analog trigger
+  bindings, USB/Bluetooth hotplug, all control presets and Flash page layouts.
 - Audio quality across weapons/environments and physical output-device changes.
 - Long startup/gameplay frames. Neither stable 60 FPS nor unlocked-FPS physics
   is claimed; gameplay uses the original fixed step paced near 30 Hz.

@@ -1,6 +1,6 @@
 # Input devices and button prompts
 
-Added in **BLACK 0.5.0**, 3 November 2026.
+Added in **BLACK 0.5.0**; updated in **0.5.1**, 4 November 2026.
 
 Open settings with F1/F10, Cmd+, or Back+Start (Share+Options), then choose
 **Controls**. Its five rows fit without scrolling:
@@ -30,7 +30,9 @@ switch to keyboard after the pad has settled for 750 ms; mouse motion alone
 does not take it over. Pad input takes control back. Disconnect returns Auto to
 keyboard; reconnect starts with the pad. Switching to keyboard in gameplay or
 closing settings restores relative mouse look. Switching to the pad releases the
-mouse; Escape and focus loss still release capture. Gamepad selects port 0's controller
+mouse; Escape and focus loss release capture. Returning to the game window
+restores keyboard/mouse capture and the correct first responder immediately.
+Old menu suppression is cleared on foreground/device changes. Gamepad selects port 0's controller
 path, not a particular model from a list of several connected pads. With no pad,
 manual Gamepad keeps gameplay neutral; the keyboard still opens settings.
 
@@ -126,17 +128,26 @@ limit. A later run with the cached-HUD wrappers loaded the first mission and
 also exited normally. Its frame contained no tutorial/pickup caption, so their
 live visual replacement is covered by synthetic tests, not that game capture.
 The user subsequently confirmed physical device switching and changing hints.
-They reported missing mouse look after pad-to-keyboard switching; the capture
-transition fix is covered by production Cocoa events, with physical reacceptance
-still required. The final bounded launch opened settings, exited normally with code 0, and
-removed its private font view. Source XBE, both fonts and MainUS.bin hashes
-were unchanged. README images are compressed captures of the game window.
+The 0.5.1 fixes were then physically checked on the development Mac with a
+Bluetooth DualSense and keyboard/mouse: camera movement after pad-to-keyboard
+handoff, one Reload-to-Square rebind (then restored), controller vibration and
+its menu off switch. After the subsequent menu/focus changes, the user confirmed
+that speech no longer loops in the recomp menu, input returns immediately after
+the desktop, and mouse look/fire work after switching devices. Runtime diagnostics
+also show keyboard fire=255 reaching the game's output with capture=0/menu=0.
 
-Remaining acceptance: physical DualSense/Xbox/keyboard/mouse in combat, USB/Bluetooth
-hotplug, trigger rebinds, rumble, visible long-lived tutorial/pickup transitions,
-all control presets and language layouts, and updating an existing installation.
-Muted or scripted checks do not qualify hardware or real audio. Full-game
-stability, checkpoint restoration and clean-Mac acceptance remain separate.
+Version 0.5.0's native XInputSetState only completed requests without sending
+motor values to SDL. Version 0.5.1 forwards the packed Xbox feedback and keeps
+the game's own enable flags in sync with Controls after profile loads. Original
+Options/Pause vibration changes update the port setting too. While settings
+pause gameplay, game audio fades to silence; closing clears queued silence and
+fades back in. Source XBE/fonts/banks and submodule pins stay unchanged.
+
+Remaining acceptance: USB/Bluetooth hotplug, other controller models, analog
+trigger rebinds, extended aiming/calibration, visible long-lived tutorial/pickup
+transitions, all control presets/languages and clean-machine updates. Muted or
+scripted checks do not qualify hardware or real audio. Full-game stability and
+checkpoint restoration remain separate.
 
 The implementation adapts [TGP prompts/Flash](https://github.com/TGP482/BLACK-XBERecomp/tree/10b8464fa06ebd6e54e814b250e9e3554a48ef1c/src/game)
 and [portingpete's bounded HUD cache](https://github.com/portingpete/Black-2006-Recomp/blob/2041e5a97f1300dca128d51fc06e1ae32cea9f21/src/black_hud_input.inc)

@@ -92,7 +92,11 @@ int main(void)
         if(black_mouse_capture(&capture,1,0,1,1,0)!=0)return 25;
         if(black_mouse_capture(&capture,1,0,0,1,0)!=1)return 26;
         if(black_mouse_capture(&capture,0,0,0,1,0)!=0)return 27;
-        if(black_mouse_capture(&capture,1,0,0,0,0)!=-1)return 28;
+        if(black_mouse_capture(&capture,1,0,0,0,0)!=0)return 28;
+        if(black_mouse_capture(&capture,1,0,0,1,0)!=1)return 31;
+        xek_capture_mouse(YES); [view mouseDown:e]; state();
+        if(analog[7]!=255)return 32; /* First shot after return/device capture. */
+        [view mouseUp:e]; state(); if(analog[7])return 33;
         if(black_mouse_capture(&capture,1,1,0,1,0)!=0)return 29;
         if(black_mouse_capture(&capture,1,0,0,1,1)!=0)return 30;
         puts("Production Cocoa input: physical key release, first click, fractional motion, modifier binding, focus/Escape/Command and scripted gates: PASS");

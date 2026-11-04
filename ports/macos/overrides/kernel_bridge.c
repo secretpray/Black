@@ -39,6 +39,11 @@ void black_KernelWakeDeviceIRQ(void)
     black_audio_irq_wake(g_timer_wake);
 }
 
+void black_InputFeedbackEvent(uint32_t token)
+{
+    xbox_NtSetEvent(bridge_resolve_handle(token), NULL);
+}
+
 static uint64_t black_timer_ns(void)
 {
     struct timespec now;

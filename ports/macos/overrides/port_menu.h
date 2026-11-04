@@ -58,6 +58,8 @@ int black_SettingsSetInvertX(int enabled);
 int black_SettingsRumbleIntensity(void);
 int black_SettingsSetRumbleIntensity(int percent);
 int black_InputKeyboardActive(void);
+void black_InputFocusChanged(int focused);
+unsigned black_InputFocusEpoch(void);
 void black_InputSetKeyboardActive(int active);
 int black_SettingsHoldAim(void);
 int black_SettingsSetHoldAim(int enabled);

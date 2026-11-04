@@ -10,12 +10,14 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.5.0 is an experimental macOS release.** It adds a unified Controls menu,
-> saved device selection, controller button rebinding and drawn Xbox/PlayStation/
-> keyboard prompts. The first-time setup, Russian game text and film subtitles
-> from 0.4.x remain included. Combat, menus and profile saving have been exercised
-> on the development Mac. A complete playthrough, all runtime races, audio quality
-> and physical input paths are not yet qualified. [Validation](docs/VALIDATION.md).
+> **0.5.1 is an experimental macOS release.** It fixes controller vibration,
+> repeated speech while settings are open, delayed input after desktop return,
+> and mouse fire after switching from the gamepad. The unified Controls menu,
+> drawn button prompts, first-time setup, Russian text and subtitles remain included.
+> These fixes were physically checked on the development Mac with a Bluetooth
+> DualSense and keyboard/mouse. A complete playthrough, all runtime races,
+> audio quality and USB/Bluetooth hotplug remain unqualified.
+> [Validation](docs/VALIDATION.md).
 
 <p align="center">
   <img src="docs/screenshots/gameplay-firefight.jpg" alt="A firefight on an autumn street: an Uzi fires past a brick wall, leaves and smoke fly, an abandoned yellow car down the road" width="100%">
@@ -37,11 +39,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.5.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.0)**
+**[BLACK 0.5.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.1)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.5.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.5.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -167,7 +169,7 @@ unrecognised executable leaves every mod off.
   </tr>
 </table>
 
-**New in 0.5.0:** open **Controls**. Device and prompt
+Open **Controls**. Device and prompt
 selection are the first two rows, followed by **Button Bindings**, **Mouse and
 Aiming**, and **Gamepad and Vibration**. [Input details and checks](docs/INPUT.md).
 
@@ -207,8 +209,11 @@ controller connected; these images do not qualify hardware behaviour.</sub>
 Click the game to capture the mouse in play. Escape releases it and pauses;
 game menus release it automatically. Mouse motion alone does not take control
 away from a gamepad. Measure drift with the sticks released, then test the
-smallest comfortable deadzone on your own controller. Physical calibration,
-rumble, hotplug and the new mappings still need physical acceptance testing.
+smallest comfortable deadzone on your own controller. Bluetooth DualSense
+vibration/on-off, one Reload button rebind, keyboard/mouse handoff, mouse fire
+and input after desktop return have been checked on the development Mac.
+USB/Bluetooth hotplug, other controllers, trigger rebinds and broader calibration
+still need acceptance testing. Version 0.5.1 fixes vibration missing in 0.5.0.
 A manual Gamepad choice selects the controller input path; selecting a particular
 pad among several connected devices is not implemented.
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.1 — 2026-11-04
+
+- Forward the game's native XInputSetState feedback to the host controller,
+  respecting input ownership, vibration enable and intensity. Version 0.5.0
+  acknowledged feedback without sending it to the motors.
+  Keep BLACK's own vibration flags in sync with Controls after profile loads;
+  changes in the original Options/Pause menus also update the port setting.
+  SDL rumble failures now appear in diagnostics. Bluetooth DualSense vibration
+  and disabling it through Controls have been confirmed physically; USB and
+  hotplug remain unverified.
+- Silence game audio while the recomp menu pauses gameplay, with a short
+  fade and paced silent buffers. Closing clears queued silence and fades back
+  in, preventing repeated speech fragments while its stream producer is paused.
+- Restore the game/menu first responder and relative mouse capture on focus
+  return. Clear old menu input suppression after foreground/device changes, so
+  an inactive controller cannot keep blocking the selected device's buttons.
+  The user confirmed speech/menu behaviour, immediate input after desktop return
+  and mouse fire after switching from the gamepad on the development Mac.
+
 ## 0.5.0 — 2026-11-03
 
 - Unified **Controls** home puts device and prompt choice first. One binding

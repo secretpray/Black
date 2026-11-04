@@ -19,7 +19,7 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
     return SDL_SetHint(name, value);
 }
 #define SDL_SetHint black_InputSetHint
-#define xbox_InputSetState black_SDLInputSetState
+#define xbox_InputSetState black_PinnedInputSetState
 #define xbox_InputGetState black_SDLInputGetState
 #include "../runtime/src/input/xinput_device.c"
 #undef xbox_InputGetState
@@ -32,6 +32,23 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 #include "pad_mapping.h"
 #include <pthread.h>
 
+/* Unlike the pinned backend, preserve SDL's failure result for diagnostics. */
+static DWORD black_SDLInputSetState(DWORD port, const XBOX_VIBRATION *vibration)
+{
+    if (port >= XBOX_MAX_CONTROLLERS || !vibration || !g_pads[port])
+        return ERROR_DEVICE_NOT_CONNECTED;
+    int result = SDL_GameControllerRumble(g_pads[port], vibration->wLeftMotorSpeed,
+        vibration->wRightMotorSpeed, 1000);
+    if (result < 0) {
+        static unsigned failures;
+        if (failures++ < 8)
+            fprintf(stderr, "[RUMBLE] SDL failed on port %u: %s\n",
+                (unsigned)port, SDL_GetError());
+        return ERROR_NOT_SUPPORTED;
+    }
+    return ERROR_SUCCESS;
+}
+
 static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
 {
     if (port) {
@@ -39,6 +56,8 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
         return black_MenuIsOpen();
     }
     static BlackMenuPad navigation;
+    static unsigned focus_epoch;
+    static int previous_keyboard;
     XBOX_GAMEPAD *g = &state->Gamepad;
     unsigned down = 0;
     if ((g->wButtons & (XBOX_GAMEPAD_BACK | XBOX_GAMEPAD_START)) ==
@@ -56,6 +75,16 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     for (int i = 0; i < 8; ++i) analog |= g->bAnalogButtons[i];
     if (g->wButtons || analog || abs(g->sThumbLX) > 8000 || abs(g->sThumbLY) > 8000 ||
         abs(g->sThumbRX) > 8000 || abs(g->sThumbRY) > 8000) down |= BLACK_PAD_HELD;
+    unsigned epoch = black_InputFocusEpoch();
+    int keyboard = black_InputKeyboardActive();
+    if (!black_MenuIsOpen() && (epoch != focus_epoch || keyboard != previous_keyboard)) {
+        /* A previous menu/device must not keep another device's gameplay
+         * blocked until the old controller has returned to neutral. */
+        navigation.previous = down;
+        navigation.draining = 0;
+    }
+    focus_epoch = epoch;
+    previous_keyboard = keyboard;
     int capture;
     unsigned command = black_menu_pad(&navigation, down, black_MenuIsOpen(), &capture);
     if (command) black_MenuCommand(command);
@@ -67,6 +96,13 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
     static BlackInputOwner owner;
     static int owner_instance = -1;
+    static unsigned focus_epoch;
+    unsigned epoch = black_InputFocusEpoch();
+    if (epoch != focus_epoch) {
+        focus_epoch = epoch;
+        owner.previous_key_action = 0;
+        owner.last_pad = SDL_GetTicks() - 750u;
+    }
     DWORD result = black_SDLInputGetState(port, state);
     if (result == ERROR_SUCCESS && port < XBOX_MAX_CONTROLLERS &&
         g_controller_connected[port] && g_pads[port]) {
@@ -171,6 +207,16 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
      * The native menu never injects remapped commands into the game. */
     int capture = black_menu_input(port, &physical);
     if (capture || black_MenuIsOpen()) memset(&state->Gamepad,0,sizeof state->Gamepad);
+    if (getenv("RECOMP_INPUT_DEBUG") && keys.bAnalogButtons[XBOX_BUTTON_RTRIGGER]) {
+        static uint32_t last_fire;
+        uint32_t now = SDL_GetTicks();
+        if (now - last_fire >= 250) {
+            last_fire = now;
+            fprintf(stderr, "[INPUT-FIRE] keyboard=%u output=%u owner=%u capture=%d menu=%d\n",
+                keys.bAnalogButtons[XBOX_BUTTON_RTRIGGER], state->Gamepad.bAnalogButtons[XBOX_BUTTON_RTRIGGER],
+                selected, capture, black_MenuIsOpen());
+        }
+    }
     return result;
 }
 

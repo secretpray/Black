@@ -14,6 +14,35 @@ enum { BLACK_FADE_FRAMES = SDL_AUDIO_RATE / 50 };
 static pthread_mutex_t fade_lock = PTHREAD_MUTEX_INITIALIZER;
 static BlackAudioFade fade = {BLACK_FADE_FRAMES, 0, {0, 0}};
 static atomic_int fading, closed;
+static int menu_muted;
+static unsigned menu_fade_in;
+
+/* The world timer is frozen by the overlay, so streaming speech cannot refill
+ * its buffer. Silence that output without stopping APU/SDL queue pacing. */
+void black_AudioSetMenuOpen(int open)
+{
+    pthread_mutex_lock(&fade_lock);
+    open = !!open;
+    if (open != menu_muted) {
+        menu_muted = open;
+        menu_fade_in = open ? 0 : BLACK_FADE_FRAMES;
+        if (g_audio_initialized && !atomic_load(&closed)) {
+            if (open) {
+                /* Let the bounded queue drain, then ramp its last sample to
+                 * zero even if the paused game stops producing new PCM. */
+                BlackAudioFade tail_fade = {BLACK_FADE_FRAMES, 0, {fade.last[0], fade.last[1]}};
+                int16_t tail[BLACK_FADE_FRAMES * 2];
+                int count = black_audio_fade_tail(&tail_fade, tail);
+                SDL_QueueAudio(g_audio_device, tail, (Uint32)count * 4);
+                fade.last[0] = fade.last[1] = 0;
+            } else {
+                /* Discard queued silence so resuming adds no audio latency. */
+                SDL_ClearQueuedAudio(g_audio_device);
+            }
+        }
+    }
+    pthread_mutex_unlock(&fade_lock);
+}
 
 static void sleep_ms(unsigned ms)
 {
@@ -70,6 +99,18 @@ int xa2_submit_samples(const int16_t *samples, int frames)
     /* While fading, the ramp advances only for buffers SDL accepts. */
     int16_t faded[SDL_AUDIO_BUF_SAMPLES * 8 * 2];
     BlackAudioFade next = fade;
+    unsigned next_menu_fade = menu_fade_in;
+    if ((menu_muted || next_menu_fade) && samples && frames > 0) {
+        if (frames > SDL_AUDIO_BUF_SAMPLES * 8) { pthread_mutex_unlock(&fade_lock); return 0; }
+        memcpy(faded, samples, (size_t)frames * 4);
+        for (int i = 0; i < frames; ++i) {
+            unsigned gain = menu_muted ? 0 : BLACK_FADE_FRAMES - next_menu_fade;
+            for (int c = 0; c < 2; ++c)
+                faded[i * 2 + c] = (int16_t)((int32_t)faded[i * 2 + c] * (int32_t)gain / BLACK_FADE_FRAMES);
+            if (next_menu_fade) --next_menu_fade;
+        }
+        samples = faded;
+    }
     if (atomic_load(&fading) && samples && frames > 0 && frames <= SDL_AUDIO_BUF_SAMPLES * 8) {
         memcpy(faded, samples, (size_t)frames * 4);
         black_audio_fade_apply(&next, faded, frames);
@@ -78,6 +119,7 @@ int xa2_submit_samples(const int16_t *samples, int frames)
     int accepted = black_SDLSubmitSamples(samples, frames);
     if (accepted && frames > 0) {
         fade = next;
+        menu_fade_in = next_menu_fade;
         fade.last[0] = samples[frames * 2 - 2]; fade.last[1] = samples[frames * 2 - 1];
     }
     pthread_mutex_unlock(&fade_lock);

@@ -1,5 +1,6 @@
 # Rename definitions only; original calls/dispatch reach native C wrappers.
 set(BLACK_RENAMED
+    "sub_00119C00|black_OriginalVibrationMenu" "sub_00119DD0|black_OriginalVibrationPause"
     "sub_001F3A80|black_OriginalString"
     "sub_00113BF0|black_OriginalHintFormat" "sub_001314E0|black_OriginalHintTick"
     "sub_000BE3F0|black_OriginalTimerStep" "sub_00209DC0|black_OriginalFilmTick"

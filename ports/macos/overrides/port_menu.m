@@ -1032,6 +1032,11 @@ static void request_quit(void)
 { (void)note;fprintf(stderr,"[HOST-APP] native_fullscreen=0\n"); }
 - (void)windowDidResignKey:(NSNotification *)note
 { (void)note; menu_view->binding_capture = NO; menu_view->pad_capture = NO; menu_view->axis_edit=NO; black_PadCaptureCancel(); black_ControllerCancelMeasure(); black_KeyReleaseAll(); [menu_view setNeedsDisplay:YES]; }
+- (void)windowDidBecomeKey:(NSNotification *)note
+{
+    (void)note;
+    [menu_window makeFirstResponder:black_MenuIsOpen() ? (NSView *)menu_view : game_view];
+}
 @end
 static BlackMenuActions *actions;
 static NSMenuItem *settings_item;
