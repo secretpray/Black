@@ -1,7 +1,22 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.2**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.3**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## HD texture alpha in 0.5.3
+
+The user reported a black grenade crate and a grey rifle in the first mission
+with HD textures on. Runtime dumps identified the crate as `bp1_hgr_amo`: the
+Xbox alpha shades the whole crate, while the pack file's is a cut-out of the
+grenades (0 elsewhere), so scaling left the crate black and the grenades
+white. A rifle lying on the ground (`bg1_ak1_lod`) has a reflection mask on
+Xbox and alpha flat at 128 in the pack, which scaled to full reflection. The
+rifle held in the first mission looked the same with HD off: that is not a
+pack issue. Comparing 25 first-mission pairs whose game alpha varies set the
+rule: on an 8x8 grid, a mean difference over 48 with correlation under 0.8
+keeps the game's texture. In the user's live session five textures fell back,
+including both reported ones; the user confirmed the crate and the rifle on the
+ground now look right. The other 108 pack files loaded without errors.
 
 ## Controller hotplug, Bluetooth idle and HD pack check in 0.5.2
 

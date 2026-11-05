@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — 2026-11-05
+
+- **HD textures: grenade crate and pickup weapons.** PCSX2 pack files keep PS2
+  alpha, which for some textures means something else than the Xbox channel.
+  Scaling it painted the first mission's grenade crate black with white grenades
+  and weapons lying on the ground pale white. Where the game's own alpha varies,
+  BLACK now compares the two masks and keeps the game's texture when they
+  disagree. The rifle in hand, ammunition and most effects keep their HD files;
+  in the first mission five textures fall back.
+
 ## 0.5.2 — 2026-11-05
 
 - **Controller hotplug.** Controllers are matched by their SDL identity every
