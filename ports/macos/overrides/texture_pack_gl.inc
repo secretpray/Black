@@ -7,8 +7,11 @@
  * that changes, which the key leaves out), so a file is never read twice while
  * its texture is kept. The game's own texture decides alpha (texture_pack.h):
  * where it is opaque the pack's is replaced by one, elsewhere it is scaled to
- * the game's highest, so a file has an opaque and a see-through GL texture. Any
- * miss or failure keeps the game's own texture. */
+ * the game's highest, so a file has an opaque and a see-through GL texture.
+ * Where the game's alpha varies, the file's must be the same mask once scaled
+ * (black_TextureAlphaAgrees): a PS2 channel flat at 128 or cut to another
+ * shape painted weapons white and the grenade crate black, so then the game's
+ * texture stays. Any miss or failure keeps the game's own texture. */
 #include "texture_pack.h"
 #include "texture_dump.h"
 #include "input_atlas.h"
@@ -22,9 +25,15 @@
 #define BLACK_TP_KEEP_BYTES ((size_t)1024 << 20)
 
 /* A pack file's GL texture, shared by `refs` bindings; files[file * 2 + opaque]. */
-typedef struct { GLuint texture; size_t bytes; unsigned refs; bool failed; unsigned long long used; } BlackTpFile;
-/* A binding waiting for its file or holding its texture (files[variant]). */
-typedef struct { TextureBinding *binding; int file, variant; unsigned alpha; bool pending; } BlackTpSlot;
+typedef struct {
+    GLuint texture; size_t bytes; unsigned refs; bool failed, graded; unsigned long long used;
+    unsigned alpha_max; uint8_t grid[64]; /* the file's alpha, once read and graded */
+} BlackTpFile;
+/* A binding waiting for its file or holding its texture (files[variant]);
+ * `graded` with the game's alpha grid when that alpha varies. */
+typedef struct {
+    TextureBinding *binding; int file, variant; unsigned alpha; bool pending, graded; uint8_t grid[64];
+} BlackTpSlot;
 
 static struct {
     BlackTpSlot *slots;
@@ -33,7 +42,7 @@ static struct {
     unsigned file_count;
     unsigned generation;
     bool checked, s3tc, bptc;
-    unsigned long long eligible, hits, loads, misses, failed, logged, clock;
+    unsigned long long eligible, hits, loads, misses, failed, mismatched, logged, clock;
     size_t resident;
     struct timespec summary_at;
 } black_tp;
@@ -79,8 +88,8 @@ static void black_tp_audit(uint64_t key, TextureShape s, int file)
 
 static void black_tp_summary(const char *why)
 {
-    fprintf(stderr, "[TEXPACK] %s: eligible=%llu hits=%llu loads=%llu misses=%llu failed=%llu pending=%u resident=%zuMB\n",
-            why, black_tp.eligible, black_tp.hits, black_tp.loads, black_tp.misses, black_tp.failed,
+    fprintf(stderr, "[TEXPACK] %s: eligible=%llu hits=%llu loads=%llu misses=%llu failed=%llu alpha_mismatch=%llu pending=%u resident=%zuMB\n",
+            why, black_tp.eligible, black_tp.hits, black_tp.loads, black_tp.misses, black_tp.failed, black_tp.mismatched,
             black_tp.pending, black_tp.resident >> 20);
 }
 
@@ -249,6 +258,23 @@ static void black_tp_complete(unsigned index)
     if (!state) return;
     BlackTpFile *f = &black_tp.files[slot->variant];
     bool opaque = slot->variant & 1;
+    if (state > 0 && !opaque && image->alpha_graded && !f->graded) {
+        /* Kept so later bindings are judged without reading the file again. */
+        f->graded = true;
+        f->alpha_max = image->alpha_max;
+        memcpy(f->grid, image->alpha_grid, sizeof f->grid);
+    }
+    if (state > 0 && slot->graded && f->graded &&
+        !black_TextureAlphaAgrees(slot->grid, slot->alpha, f->grid, f->alpha_max)) {
+        black_tp.mismatched++;
+        if (black_tp.mismatched <= BLACK_TP_LOGGED)
+            fprintf(stderr, "[TEXPACK] keep the game's texture: %s alpha is another mask than the game's\n",
+                    black_TexturePackName(file));
+        black_TexturePackRelease(file);
+        black_tp.pending--;
+        black_tp_remove(index);
+        return;
+    }
     if (state > 0 && !f->texture) {
         size_t bytes = 0;
         GLuint texture = black_tp_upload(image, opaque, slot->alpha, slot->binding->gl_texture, &bytes);
@@ -305,9 +331,14 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
     unsigned low = 0, high = 0;
     bool known = black_TextureTopAlpha(s.color_format, s.width, s.height, data, palette, palette_length, &low, &high);
     bool opaque = known && low == 255;
-    int variant = file * 2 + opaque;
-    BlackTpFile *f = black_tp_file(variant);
+    BlackTpSlot slot = {binding, file, file * 2 + opaque, known && !opaque ? high : 0, true, false, {0}};
+    slot.graded = known && low != high && black_TextureTopAlphaGrid(s.color_format, s.width, s.height, data, slot.grid);
+    BlackTpFile *f = black_tp_file(slot.variant);
     if (!f || f->failed) return;
+    if (slot.graded && f->graded && !black_TextureAlphaAgrees(slot.grid, high, f->grid, f->alpha_max)) {
+        black_tp.mismatched++;
+        return;
+    }
     if (black_tp.count == black_tp.capacity) {
         unsigned grown = black_tp.capacity ? black_tp.capacity * 2 : 256;
         BlackTpSlot *slots = realloc(black_tp.slots, grown * sizeof *slots);
@@ -316,11 +347,12 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
         black_tp.capacity = grown;
     }
     if (f->texture) {
-        black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, variant, 0, false};
+        slot.pending = false;
+        black_tp.slots[black_tp.count++] = slot;
         black_tp_assign(binding, f);
         return;
     }
-    black_tp.slots[black_tp.count++] = (BlackTpSlot){binding, file, variant, known && !opaque ? high : 0, true};
+    black_tp.slots[black_tp.count++] = slot;
     black_tp.pending++;
     black_TexturePackRequest(file);
     black_tp_complete(black_tp.count - 1);

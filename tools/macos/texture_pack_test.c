@@ -154,7 +154,9 @@ int main(void)
     at = dds(buf, 4, 4, 1, 0x35545844u, 0, 0, 0, 0);
     memset(buf + at, 0, 16);
     buf[at] = 128; /* every texel index 0: a0 = 128 */
-    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 128) return 49;
+    /* One alpha everywhere is no mask: the renderer keeps a varying game alpha. */
+    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 128 ||
+        black_TextureAlphaMin(&image) != 128) return 49;
     black_TextureScaleAlpha(&image, 128, 255);
     if (image.level[0][0] != 255 || image.level[0][1] != 0) return 49;
     black_TextureImageFree(&image);
@@ -166,7 +168,8 @@ int main(void)
     black_TextureImageFree(&image);
     at = dds(buf, 2, 1, 1, 0, 0xffu, 0xff0000u, 0, 0);
     memcpy(buf + at, (uint8_t[]){9, 9, 9, 100, 9, 9, 9, 64}, 8);
-    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 100) return 52;
+    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 100 ||
+        black_TextureAlphaMin(&image) != 64) return 52;
     black_TextureScaleAlpha(&image, 100, 200);
     if (image.level[0][3] != 200 || image.level[0][7] != 128 || image.level[0][0] != 9) return 52;
     black_TextureScaleAlpha(&image, 100, 255);
@@ -174,13 +177,39 @@ int main(void)
     black_TextureImageFree(&image);
     at = dds(buf, 4, 4, 1, 0x32545844u, 0, 0, 0, 0); /* DXT3 */
     memset(buf + at, 0x88, 8); memset(buf + at + 8, 0, 8);
-    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 136) return 54;
+    if (!black_TextureDecodeDds(buf, at + 16, &image) || black_TextureAlphaMax(&image) != 136 ||
+        black_TextureAlphaMin(&image) != 136) return 54;
     black_TextureScaleAlpha(&image, 136, 255);
     if (image.level[0][0] != 0xff) return 54;
     black_TextureImageFree(&image);
     at = dds(buf, 4, 4, 1, 0x31545844u, 0, 0, 0, 0);
-    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 255) return 55;
+    if (!black_TextureDecodeDds(buf, at + 8, &image) || black_TextureAlphaMax(&image) != 255 ||
+        black_TextureAlphaMin(&image) != 255) return 55;
     black_TextureImageFree(&image);
+
+    /* Alpha masks: the game's DXT5 left half clear, right half opaque. The same
+     * mask on the PS2 scale (0/128) agrees; one alpha (128) or the opposite
+     * halves disagree, so the renderer keeps the game's texture. */
+    {
+        uint8_t game_top[16 * 4 * 16], game[64], pack[64];
+        for (int b = 0; b < 16; ++b) {
+            uint8_t *block = game_top + b * 16;
+            memset(block, 0, 16);
+            block[0] = (b % 4) < 2 ? 0 : 255; block[1] = block[0];
+        }
+        if (!black_TextureTopAlphaGrid(0x0f, 16, 16, game_top, game) || game[0] || game[7] != 255) return 70;
+        uint8_t rgba[16 * 16 * 4];
+        BlackTextureImage picture = {.format = BLACK_TEX_RGBA8, .width = 16, .height = 16, .levels = 1};
+        picture.level[0] = rgba; picture.level_size[0] = sizeof rgba;
+        for (int i = 0; i < 256; ++i) rgba[i * 4 + 3] = (i % 16) < 8 ? 0 : 128;
+        if (!black_TextureAlphaGrid(&picture, pack) || !black_TextureAlphaAgrees(game, 255, pack, 128)) return 71;
+        for (int i = 0; i < 256; ++i) rgba[i * 4 + 3] = 128;
+        black_TextureAlphaGrid(&picture, pack);
+        if (black_TextureAlphaAgrees(game, 255, pack, 128)) return 72;
+        for (int i = 0; i < 256; ++i) rgba[i * 4 + 3] = (i % 16) < 8 ? 128 : 0;
+        black_TextureAlphaGrid(&picture, pack);
+        if (black_TextureAlphaAgrees(game, 255, pack, 128)) return 73;
+    }
 
     /* Size limit: block formats drop top levels, RGBA8 is halved, one level stays. */
     at = dds(buf, 16, 16, 5, 0x35545844u, 0, 0, 0, 0); /* 16, 8, 4, 2, 1: 256+64+16+16+16 */

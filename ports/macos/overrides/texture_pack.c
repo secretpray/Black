@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fts.h>
 #include <limits.h>
+#include <math.h>
 #include <mach-o/dyld.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -230,29 +231,141 @@ int black_TextureTopAlpha(unsigned format, unsigned width, unsigned height, cons
     return 1;
 }
 
-unsigned black_TextureAlphaMax(const BlackTextureImage *image)
+/* Top-level alpha range; BC1 is opaque here, BC7 is not read (0..255). */
+static void alpha_range(const BlackTextureImage *image, unsigned *low, unsigned *high)
 {
-    unsigned top = 0;
+    unsigned top = 0, bottom = 255;
     uint8_t alpha[16];
     const uint8_t *p = image->level[0];
     size_t size = image->level_size[0];
-    if (!image->levels) return 0;
+    *low = 0; *high = 0;
+    if (!image->levels) return;
     if (image->format == BLACK_TEX_BC3)
         for (size_t i = 0; i + 16 <= size; i += 16) {
             bc3_alpha(p + i, alpha);
-            for (int n = 0; n < 16; ++n) if (alpha[n] > top) top = alpha[n];
+            for (int n = 0; n < 16; ++n) {
+                if (alpha[n] > top) top = alpha[n];
+                if (alpha[n] < bottom) bottom = alpha[n];
+            }
         }
     else if (image->format == BLACK_TEX_BC2)
         for (size_t i = 0; i + 16 <= size; i += 16)
-            for (int b = 0; b < 8; ++b) {
-                unsigned v = p[i + b] & 15u, w = p[i + b] >> 4;
-                if (v * 17 > top) top = v * 17;
-                if (w * 17 > top) top = w * 17;
-            }
+            for (int b = 0; b < 8; ++b)
+                for (int half = 0; half < 2; ++half) {
+                    unsigned v = (half ? p[i + b] >> 4 : p[i + b] & 15u) * 17;
+                    if (v > top) top = v;
+                    if (v < bottom) bottom = v;
+                }
     else if (image->format == BLACK_TEX_RGBA8)
-        for (size_t i = 3; i < size; i += 4) { if (p[i] > top) top = p[i]; }
-    else top = 255;
-    return top;
+        for (size_t i = 3; i < size; i += 4) {
+            if (p[i] > top) top = p[i];
+            if (p[i] < bottom) bottom = p[i];
+        }
+    else { top = 255; bottom = image->format == BLACK_TEX_BC7 ? 0 : 255; }
+    *low = bottom; *high = top;
+}
+
+/* Adds a texel's alpha to its cell of an 8x8 grid over width x height. */
+static void grid_add(unsigned sum[64], unsigned count[64], unsigned x, unsigned y,
+                     unsigned width, unsigned height, unsigned value)
+{
+    unsigned cell = (y * 8 / height) * 8 + x * 8 / width;
+    sum[cell] += value;
+    count[cell]++;
+}
+
+static void grid_finish(const unsigned sum[64], const unsigned count[64], uint8_t grid[64])
+{
+    for (int i = 0; i < 64; ++i) grid[i] = (uint8_t)(count[i] ? (sum[i] + count[i] / 2) / count[i] : 0);
+}
+
+/* DXT3/DXT5 blocks row by row, as both the game and DDS files lay them out. */
+static void block_grid(int bc3, const uint8_t *p, unsigned width, unsigned height, uint8_t grid[64])
+{
+    unsigned sum[64] = {0}, count[64] = {0};
+    uint8_t alpha[16];
+    for (unsigned by = 0; by < height / 4; ++by)
+        for (unsigned bx = 0; bx < width / 4; ++bx, p += 16) {
+            if (bc3) bc3_alpha(p, alpha);
+            else for (int n = 0; n < 16; ++n) alpha[n] = (uint8_t)((p[n / 2] >> (4 * (n & 1)) & 15u) * 17);
+            for (int n = 0; n < 16; ++n) grid_add(sum, count, bx * 4 + n % 4, by * 4 + n / 4, width, height, alpha[n]);
+        }
+    grid_finish(sum, count, grid);
+}
+
+int black_TextureAlphaGrid(const BlackTextureImage *image, uint8_t grid[64])
+{
+    if (!image->levels || image->width < 8 || image->height < 8) return 0;
+    if (image->format == BLACK_TEX_BC2 || image->format == BLACK_TEX_BC3) {
+        block_grid(image->format == BLACK_TEX_BC3, image->level[0], image->width, image->height, grid);
+        return 1;
+    }
+    if (image->format == BLACK_TEX_RGBA8) {
+        unsigned sum[64] = {0}, count[64] = {0};
+        const uint8_t *p = image->level[0];
+        for (unsigned y = 0; y < image->height; ++y)
+            for (unsigned x = 0; x < image->width; ++x, p += 4)
+                grid_add(sum, count, x, y, image->width, image->height, p[3]);
+        grid_finish(sum, count, grid);
+        return 1;
+    }
+    if (image->format == BLACK_TEX_BC1) { memset(grid, 255, 64); return 1; }
+    return 0;
+}
+
+int black_TextureTopAlphaGrid(unsigned format, unsigned width, unsigned height, const uint8_t *top,
+                              uint8_t grid[64])
+{
+    if (width < 8 || height < 8) return 0;
+    if (format == 0x0e || format == 0x0f) { block_grid(format == 0x0f, top, width, height, grid); return 1; }
+    if (format != 0x0c) return 0;
+    unsigned sum[64] = {0}, count[64] = {0};
+    for (unsigned by = 0; by < height / 4; ++by)
+        for (unsigned bx = 0; bx < width / 4; ++bx, top += 8) {
+            int punch = (top[0] | top[1] << 8) <= (top[2] | top[3] << 8);
+            uint32_t bits = le32(top + 4);
+            for (unsigned n = 0; n < 16; ++n, bits >>= 2)
+                grid_add(sum, count, bx * 4 + n % 4, by * 4 + n / 4, width, height,
+                         punch && (bits & 3) == 3 ? 0 : 255);
+        }
+    grid_finish(sum, count, grid);
+    return 1;
+}
+
+int black_TextureAlphaAgrees(const uint8_t game[64], unsigned game_high, const uint8_t pack[64],
+                             unsigned pack_high)
+{
+    double scaled[64], difference = 0, game_mean = 0, pack_mean = 0;
+    for (int i = 0; i < 64; ++i) {
+        double v = pack_high ? (double)pack[i] * game_high / pack_high : 0;
+        scaled[i] = v > 255 ? 255 : v;
+        difference += fabs(scaled[i] - game[i]);
+        game_mean += game[i];
+        pack_mean += scaled[i];
+    }
+    difference /= 64; game_mean /= 64; pack_mean /= 64;
+    if (difference <= 48) return 1;
+    double covariance = 0, game_var = 0, pack_var = 0;
+    for (int i = 0; i < 64; ++i) {
+        covariance += (game[i] - game_mean) * (scaled[i] - pack_mean);
+        game_var += (game[i] - game_mean) * (game[i] - game_mean);
+        pack_var += (scaled[i] - pack_mean) * (scaled[i] - pack_mean);
+    }
+    return game_var > 0 && pack_var > 0 && covariance / sqrt(game_var * pack_var) >= 0.8;
+}
+
+unsigned black_TextureAlphaMin(const BlackTextureImage *image)
+{
+    unsigned low, high;
+    alpha_range(image, &low, &high);
+    return low;
+}
+
+unsigned black_TextureAlphaMax(const BlackTextureImage *image)
+{
+    unsigned low, high;
+    alpha_range(image, &low, &high);
+    return high;
 }
 
 static unsigned scaled(unsigned a, unsigned from, unsigned to, unsigned limit)
@@ -311,7 +424,10 @@ int black_TextureLimitSize(BlackTextureImage *image, unsigned limit)
         if (!image_alloc(&smaller, BLACK_TEX_RGBA8, w, h, 1)) { free(buffer); return 0; }
         memcpy(smaller.storage, buffer, smaller.level_size[0]);
         free(buffer);
+        smaller.alpha_min = image->alpha_min;
         smaller.alpha_max = image->alpha_max;
+        memcpy(smaller.alpha_grid, image->alpha_grid, sizeof smaller.alpha_grid);
+        smaller.alpha_graded = image->alpha_graded;
         black_TextureImageFree(image);
         *image = smaller;
         return 1;
@@ -639,7 +755,8 @@ static void *loader(void *unused)
         int ok = black_TextureLoadFile(black_TexturePackPath(R.pack, file), &image);
         if (ok) {
             black_TextureLimitSize(&image, (unsigned)black_SettingsTextureMaxSize());
-            image.alpha_max = black_TextureAlphaMax(&image);
+            alpha_range(&image, &image.alpha_min, &image.alpha_max);
+            image.alpha_graded = black_TextureAlphaGrid(&image, image.alpha_grid);
         }
         if (!ok)
             fprintf(stderr, "[TEXPACK] cannot read %s; the game's texture stays\n",

@@ -22,7 +22,9 @@ typedef struct {
     unsigned width, height, levels;
     const uint8_t *level[BLACK_TEX_MAX_LEVELS];
     size_t level_size[BLACK_TEX_MAX_LEVELS];
-    unsigned alpha_max;          /* highest alpha of level 0, set by the loader */
+    unsigned alpha_min, alpha_max; /* alpha range of level 0, set by the loader */
+    uint8_t alpha_grid[64];      /* level 0's alpha averaged on 8x8 cells, when */
+    int alpha_graded;            /* graded (not BC7), set by the loader */
     void *storage;
 } BlackTextureImage;
 
@@ -50,6 +52,20 @@ int black_TextureTopAlpha(unsigned format, unsigned width, unsigned height, cons
                           const uint8_t *palette, size_t palette_bytes, unsigned *low, unsigned *high);
 /* Highest alpha of a picture's top level; 255 for BC1 and BC7, which are not read. */
 unsigned black_TextureAlphaMax(const BlackTextureImage *image);
+/* Its lowest: 255 for BC1, which has none to vary; 0 for BC7, which is not read. */
+unsigned black_TextureAlphaMin(const BlackTextureImage *image);
+/* Alpha averaged on an 8x8 grid of the top level: the pack picture's (not BC7)
+ * and the game's (DXT1/3/5; not I8, whose texels are swizzled). 1 when made. */
+int black_TextureAlphaGrid(const BlackTextureImage *image, uint8_t grid[64]);
+int black_TextureTopAlphaGrid(unsigned format, unsigned width, unsigned height, const uint8_t *top,
+                              uint8_t grid[64]);
+/* Whether the pack's alpha, scaled to the game's highest, is the same mask as
+ * the game's: a PS2 channel can mean something else (a weapon's reflection
+ * mask flat at 128, a cut-out where the Xbox has shading), and scaling that
+ * painted whole surfaces white or black. Mean difference over 48 with
+ * correlation under 0.8 disagrees (calibrated on mission 1's pairs). */
+int black_TextureAlphaAgrees(const uint8_t game[64], unsigned game_high, const uint8_t pack[64],
+                             unsigned pack_high);
 /* Every level's alpha times to/from, clamped (BC2, BC3 and RGBA8). */
 void black_TextureScaleAlpha(BlackTextureImage *image, unsigned from, unsigned to);
 
