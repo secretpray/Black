@@ -10,14 +10,14 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.5.1 is an experimental macOS release.** It fixes controller vibration,
-> repeated speech while settings are open, delayed input after desktop return,
-> and mouse fire after switching from the gamepad. The unified Controls menu,
-> drawn button prompts, first-time setup, Russian text and subtitles remain included.
-> These fixes were physically checked on the development Mac with a Bluetooth
-> DualSense and keyboard/mouse. A complete playthrough, all runtime races,
-> audio quality and USB/Bluetooth hotplug remain unqualified.
-> [Validation](docs/VALIDATION.md).
+> **0.5.2 is an experimental macOS release.** Controllers can be unplugged and
+> reconnected over USB or Bluetooth during play, a Bluetooth DualSense answers
+> sooner after the desktop, and turning on HD textures now checks for the pack
+> and offers to choose its folder. Vibration, Controls, button prompts, setup,
+> Russian text and subtitles from earlier releases remain included. Hotplug was
+> physically checked on the development Mac with DualSense controllers; a
+> complete playthrough, all runtime races, audio quality and other controller
+> models remain unqualified. [Validation](docs/VALIDATION.md).
 
 <p align="center">
   <img src="docs/screenshots/gameplay-firefight.jpg" alt="A firefight on an autumn street: an Uzi fires past a brick wall, leaves and smoke fly, an abandoned yellow car down the road" width="100%">
@@ -39,11 +39,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.5.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.1)**
+**[BLACK 0.5.2 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.2)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.5.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.5.2-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -90,10 +90,11 @@ PS2 and Xbox 360 files are not supported.
   with device selection first and separate input subpages.
 - An optional **FPS counter** showing the game's own frame rate.
 - Optional **HD texture replacement** from your own copy of the PCSX2 "BLACK HD
-  Reimagined" pack, through portingpete's map: put the pack's files under
-  `~/Library/Application Support/BLACK/Textures/replacement/` and turn on
-  **Port Settings → Textures**. **HD Texture Size** limits the largest side
-  to 1024, 2048 (default) or 4096 pixels. The pack is not included.
+  Reimagined" pack, through portingpete's map: turn on **Port Settings →
+  Textures** and choose the pack's folder when asked. BLACK checks it and links
+  it into `~/Library/Application Support/BLACK/Textures/replacement/` without
+  copying (files placed there yourself work too). **HD Texture Size** limits the
+  largest side to 1024, 2048 (default) or 4096 pixels. The pack is not included.
 - Game text in English, French, German, Spanish or Italian from your disc, or
   Russian: the app carries the translation text only and builds the Russian
   bank and Cyrillic letters into your own installed copy when the game starts,
@@ -210,10 +211,11 @@ Click the game to capture the mouse in play. Escape releases it and pauses;
 game menus release it automatically. Mouse motion alone does not take control
 away from a gamepad. Measure drift with the sticks released, then test the
 smallest comfortable deadzone on your own controller. Bluetooth DualSense
-vibration/on-off, one Reload button rebind, keyboard/mouse handoff, mouse fire
-and input after desktop return have been checked on the development Mac.
-USB/Bluetooth hotplug, other controllers, trigger rebinds and broader calibration
-still need acceptance testing. Version 0.5.1 fixes vibration missing in 0.5.0.
+vibration/on-off, one Reload button rebind, keyboard/mouse handoff, mouse fire,
+input after desktop return and USB/Bluetooth disconnect/reconnect (including
+two DualSense controllers) have been checked on the development Mac. Other
+controllers, trigger rebinds and broader calibration still need acceptance
+testing.
 A manual Gamepad choice selects the controller input path; selecting a particular
 pad among several connected devices is not implemented.
 

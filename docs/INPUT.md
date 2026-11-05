@@ -1,6 +1,6 @@
 # Input devices and button prompts
 
-Added in **BLACK 0.5.0**; updated in **0.5.1**, 4 November 2026.
+Added in **BLACK 0.5.0**; updated in **0.5.1** and **0.5.2**, 5 November 2026.
 
 Open settings with F1/F10, Cmd+, or Back+Start (Share+Options), then choose
 **Controls**. Its five rows fit without scrolling:
@@ -143,9 +143,28 @@ Options/Pause vibration changes update the port setting too. While settings
 pause gameplay, game audio fades to silence; closing clears queued silence and
 fades back in. Source XBE/fonts/banks and submodule pins stay unchanged.
 
-Remaining acceptance: USB/Bluetooth hotplug, other controller models, analog
-trigger rebinds, extended aiming/calibration, visible long-lived tutorial/pickup
-transitions, all control presets/languages and clean-machine updates. Muted or
+Version 0.5.2 replaces discovery: SDL instance IDs are reconciled every 250 ms
+instead of only when the device count changes, so a controller that macOS
+replaces at the same count is not lost. A detached handle closes on the poll
+that sees it; guest input goes neutral, Auto hands play to keyboard/mouse and
+prompts follow. Rumble stops before close and after open; an envelope still
+active from the old connection waits for the game's zero. Disconnects cancel
+button capture and calibration without changing saved values, and a new pad's
+held buttons do not act in the menu. PlayStation pads have their accelerometer
+enabled (not read by the game) so SDL streams full reports: in change-only mode
+an idle Bluetooth link slept and the first input after about five minutes away
+came four seconds late. The game still reads port 0; choosing one of several
+connected pads is not implemented.
+
+On the development Mac the user checked USB and Bluetooth disconnect/reconnect
+with a DualSense in play, menus and rebinding, three cycles each, vibration
+stopping and returning on the first shot, USB→Bluetooth and back in one session,
+two DualSense controllers in both orders, disconnecting during calibration and
+the desktop return (four seconds before, about two after, fullscreen).
+
+Remaining acceptance: other controller models, the remaining ~2 s after a
+fullscreen return, analog trigger rebinds, extended aiming/calibration, visible
+long-lived tutorial/pickup transitions, all control presets/languages and clean-machine updates. Muted or
 scripted checks do not qualify hardware or real audio. Full-game stability and
 checkpoint restoration remain separate.
 

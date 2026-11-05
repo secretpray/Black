@@ -1,7 +1,48 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.1**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.2**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Controller hotplug, Bluetooth idle and HD pack check in 0.5.2
+
+The user checked these on the development Mac with **DualSense controllers**
+(macOS 27.0.1, SDL2-compat 2.32.72, raw HID backend); each session quit
+normally before its bound:
+
+- **USB:** six connects and five disconnects in one session; held input went
+  neutral, keyboard took over under Auto and the PlayStation prompts returned.
+  With R2 held, fire and motors stopped on disconnect and the first shot after
+  reconnecting vibrated.
+- **Bluetooth:** three deliberate disconnect/reconnect cycles with R2 and a full
+  left stick held; capture of a rebind was cancelled with the saved binding
+  kept; vibration stopped and returned on the first shot after reconnecting.
+  Disconnecting during stick calibration reported the loss and changed nothing.
+- USB→Bluetooth and Bluetooth→USB in one session; manual Gamepad and Keyboard
+  input choices; aiming is cancelled when the pad disconnects.
+- **Two DualSense controllers** (USB and Bluetooth) in both orders: port 0 plays,
+  the second does not interfere, and its disconnect/reconnect leaves port 0's
+  input and vibration intact. Choosing which pad plays is not implemented.
+- **Desktop return, Bluetooth:** windowed, input answered in about a second after
+  up to four minutes. Fullscreen after about five minutes the first input came
+  **4 s** late, with and without Game Mode, while SDL kept the same device: the
+  idle pad's change-only reports let the link sleep. With full reports it came
+  after about **2 s** (the user felt the two seconds); report pauses at the
+  fullscreen switch remain unexplained. A complete loss of input was reported
+  once on 0.5.1 and not reproduced.
+- **HD texture pack:** a live Russian run showed the missing-pack dialog,
+  rejected a folder without textures and a folder of unrelated pictures, linked
+  the real pack into an isolated texture folder and used it without restarting;
+  turning it off and on again needed no dialog.
+
+The source passes **114 CTest checks** and GPU probes, including a synthetic
+hotplug test of identity reconciliation, retry, three replacement cycles,
+rumble stop/rearm, capture/calibration cancel, two pads and full reports, and
+texture pack checks (empty, complete, incomplete and unrelated folders, link
+replacement). All **49 Python tests** passed. The final 0.5.2 DMG was mounted
+read-only and launched in English and Russian with isolated data, system-only
+PATH and no DYLD_LIBRARY_PATH; both runs opened settings and quit normally, and
+source game files and user preferences kept their hashes. Other controller
+models remain open.
 
 ## Fixes and physical checks in 0.5.1
 
@@ -17,7 +58,7 @@ DualSense and keyboard/mouse**:
 
 The final physical candidate exited normally with code 0 before its bound.
 This qualifies those scenarios on that hardware, not every input effect,
-controller or transport. USB and deliberate Bluetooth hotplug remain open.
+controller or transport. USB and Bluetooth hotplug are covered in 0.5.2 above.
 
 The source passes **113 CTest checks** and GPU readback/colour probes. New
 production-source regressions cover the native Xbox feedback layout/completion,

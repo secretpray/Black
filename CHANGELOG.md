@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.2 — 2026-11-05
+
+- **Controller hotplug.** Controllers are matched by their SDL identity every
+  250 ms, not only when the device count changes, so a pad that macOS replaces
+  at the same count is picked up. A detached pad is closed on the poll that sees
+  it; held sticks, triggers and aim return to neutral, and keyboard/mouse take
+  over under Auto. Rumble is stopped before close and after open, and an effect
+  still active from the old connection does not resume. Disconnecting cancels
+  button capture and stick calibration without changing saved values; a new
+  pad's held buttons do not act in the menu.
+- **Bluetooth PlayStation controllers after the desktop.** With vibration off
+  the pad stayed in its change-only report mode and its Bluetooth link idled:
+  after about five minutes away, the first input arrived four seconds late. The
+  pad now streams full reports (its accelerometer is enabled, not read), and the
+  delay measured about two seconds after a fullscreen return.
+- **HD texture pack check.** Turning on Texture Replacement checks for the pack
+  first. Without one it offers to choose a folder; folders without DDS/PNG files
+  or without any file the map names are rejected with the reason, an incomplete
+  pack is reported with its coverage, and a valid folder is linked into
+  `Textures/replacement` without copying and used without restarting.
+- Russian launcher runs prepare the Russian strings and fonts without Finder.
+
 ## 0.5.1 — 2026-11-04
 
 - Forward the game's native XInputSetState feedback to the host controller,
