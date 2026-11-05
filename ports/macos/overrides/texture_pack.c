@@ -5,6 +5,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fts.h>
 #include <limits.h>
@@ -651,16 +652,26 @@ static void *loader(void *unused)
     return NULL;
 }
 
+/* <textures> is BLACK_TEXTURE_DIR or Application Support; packs go in
+ * <textures>/replacement, which is made to show where. */
+static void pack_folders(char textures[PATH_MAX], char replacement[PATH_MAX])
+{
+    const char *env = getenv("BLACK_TEXTURE_DIR"), *home = getenv("HOME");
+    if (env && *env) snprintf(textures, PATH_MAX, "%s", env);
+    else snprintf(textures, PATH_MAX, "%s/Library/Application Support/BLACK/Textures", home ? home : "");
+    snprintf(replacement, PATH_MAX, "%s/replacement", textures);
+    if (mkdir(textures, 0755) == 0 || errno == EEXIST) mkdir(replacement, 0755);
+}
+
 static void *open_pack(void *unused)
 {
     (void)unused;
     char textures[PATH_MAX], replacement[PATH_MAX], map[PATH_MAX];
-    const char *env = getenv("BLACK_TEXTURE_DIR"), *home = getenv("HOME");
-    if (env && *env) snprintf(textures, sizeof textures, "%s", env);
-    else snprintf(textures, sizeof textures, "%s/Library/Application Support/BLACK/Textures", home ? home : "");
-    snprintf(replacement, sizeof replacement, "%s/replacement", textures);
-    /* Shows where a pack goes; nothing else is written. */
-    if (mkdir(textures, 0755) == 0 || errno == EEXIST) mkdir(replacement, 0755);
+    pack_folders(textures, replacement);
+    /* A retry after a folder without a pack (black_TexturePackReload). */
+    free(R.state); free(R.wanted); free(R.image); free(R.queue);
+    R.state = NULL; R.wanted = NULL; R.image = NULL; R.queue = NULL;
+    R.head = R.tail = 0;
     BlackTexturePack *pack = NULL;
     if (!find_map(textures, map, sizeof map))
         fprintf(stderr, "[TEXPACK] no " MAP_NAME " in %s, BLACK_TEXTURE_MAP or the app; replacement stays off\n", textures);
@@ -676,6 +687,7 @@ static void *open_pack(void *unused)
     }
     if (!pack || !black_TexturePackMapped(pack)) {
         if (pack) fprintf(stderr, "[TEXPACK] %u files under %s, none of them in %s\n", count, replacement, map);
+        black_TexturePackClose(pack);
         atomic_store(&R.ready, -1);
         return NULL;
     }
@@ -749,3 +761,62 @@ void black_TexturePackRelease(int file)
 }
 
 int black_TexturePackTakeFinished(void) { return atomic_exchange(&R.finished, 0); }
+
+/* ---- checking and linking a pack (settings menu) ------------------------- */
+
+int black_TexturePackCheck(const char *folder, BlackTexturePackCheck *check)
+{
+    char textures[PATH_MAX], replacement[PATH_MAX], map[PATH_MAX];
+    memset(check, 0, sizeof *check);
+    pack_folders(textures, replacement);
+    if (!find_map(textures, map, sizeof map)) return 0;
+    check->map = 1;
+    BlackTexturePack *pack = black_TexturePackOpen(folder ? folder : replacement, map);
+    check->files = black_TexturePackFiles(pack);
+    check->mapped = black_TexturePackMapped(pack);
+    check->missing = black_TexturePackMissing(pack);
+    black_TexturePackClose(pack);
+    return check->mapped > 0;
+}
+
+/* A linked folder replaces earlier links; files copied into replacement
+ * stay. A folder already inside replacement needs no link. */
+int black_TexturePackLink(const char *folder)
+{
+    char textures[PATH_MAX], replacement[PATH_MAX], target[PATH_MAX], home[PATH_MAX], link[PATH_MAX];
+    pack_folders(textures, replacement);
+    if (!realpath(folder, target) || !realpath(replacement, home)) return 0;
+    size_t length = strlen(home);
+    if (!strncmp(target, home, length) && (target[length] == '/' || !target[length])) return 1;
+    DIR *dir = opendir(home);
+    for (struct dirent *entry; dir && (entry = readdir(dir)) != NULL;) {
+        struct stat info;
+        snprintf(link, sizeof link, "%s/%s", home, entry->d_name);
+        if (lstat(link, &info) == 0 && S_ISLNK(info.st_mode)) unlink(link);
+    }
+    if (dir) closedir(dir);
+    const char *name = strrchr(target, '/');
+    name = name && name[1] ? name + 1 : "pack";
+    if (snprintf(link, sizeof link, "%s/%s", home, name) >= (int)sizeof link) return 0;
+    if (symlink(target, link) != 0) {
+        fprintf(stderr, "[TEXPACK] cannot link %s into %s: %s\n", target, home, strerror(errno));
+        return 0;
+    }
+    fprintf(stderr, "[TEXPACK] linked %s as %s\n", target, link);
+    return 1;
+}
+
+int black_TexturePackState(void)
+{
+    if (!black_SettingsTextureReplacement()) return 0;
+    pthread_once(&R.once, start);
+    return atomic_load_explicit(&R.ready, memory_order_acquire);
+}
+
+int black_TexturePackReload(void)
+{
+    pthread_once(&R.once, start);
+    int none = -1;
+    if (atomic_compare_exchange_strong(&R.ready, &none, 0)) start();
+    return none != 1;
+}

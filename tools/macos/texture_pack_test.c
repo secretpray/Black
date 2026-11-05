@@ -1,5 +1,6 @@
 /* Texture replacement: the map's key, map lines, the shipped map, DDS/PNG
- * decoding and finding pack files by name under any folder layout. */
+ * decoding, finding pack files by name under any folder layout, and checking
+ * and linking a pack folder. */
 #include "../../ports/macos/overrides/texture_pack.h"
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
@@ -262,6 +263,34 @@ int main(void)
     black_TexturePackClose(pack);
     snprintf(path, sizeof path, "%s/missing", root);
     if (black_TexturePackOpen(path, map_path)) return 25;
+    /* Checking a folder before it is used, and linking it into replacement. */
+    char textures[1024], other[1024];
+    snprintf(textures, sizeof textures, "%s/textures", root);
+    setenv("BLACK_TEXTURE_DIR", textures, 1);
+    setenv("BLACK_TEXTURE_MAP", map_path, 1);
+    BlackTexturePackCheck check;
+    if (black_TexturePackCheck(NULL, &check) || !check.map || check.files || check.mapped) return 28;
+    snprintf(path, sizeof path, "%s/pack", root);
+    if (!black_TexturePackCheck(path, &check) || check.files != 2 || check.mapped != 3 || check.missing != 1)
+        return 29;
+    /* Pictures the map does not name are not a pack for it. */
+    snprintf(other, sizeof other, "%s/other", root); mkdir(other, 0755);
+    snprintf(path, sizeof path, "%s/other/unrelated.dds", root);
+    if (!write_file(path, buf, at + 40)) return 18;
+    if (black_TexturePackCheck(other, &check) || check.files != 1 || check.mapped) return 30;
+    snprintf(path, sizeof path, "%s/textures/replacement/own.png", root);
+    if (!write_png(path)) return 19;
+    if (!black_TexturePackLink(other)) return 31;
+    snprintf(path, sizeof path, "%s/pack", root);
+    if (!black_TexturePackLink(path) || !black_TexturePackCheck(NULL, &check) || check.files != 3) return 32;
+    /* The new link replaced the old one; the copied file stayed. */
+    struct stat info;
+    snprintf(path, sizeof path, "%s/textures/replacement/other", root);
+    if (lstat(path, &info) == 0) return 33;
+    snprintf(path, sizeof path, "%s/textures/replacement/own.png", root);
+    if (lstat(path, &info) != 0 || !S_ISREG(info.st_mode)) return 34;
+    snprintf(path, sizeof path, "%s/textures/replacement", root);
+    if (!black_TexturePackLink(path)) return 35;
     char command[1200];
     snprintf(command, sizeof command, "rm -rf '%s'", root);
     if (system(command)) return 26;

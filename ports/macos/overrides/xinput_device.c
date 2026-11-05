@@ -3,11 +3,15 @@
  * polling the keyboard in that case. The include retains upstream's license.
  * This translation unit replaces, rather than duplicates, xinput_device.c. */
 #include <SDL.h>
+#include "../runtime/src/input/xinput_xbox.h"
 #include <stdio.h>
 #include <string.h>
 #include "port_menu.h"
 #include "controller_monitor.h"
 #include "flash_menu.h"
+#include "input_profile.h"
+static int black_rumble_needs_zero[XBOX_MAX_CONTROLLERS];
+static int black_rumble_raw_active[XBOX_MAX_CONTROLLERS];
 static SDL_bool black_InputSetHint(const char *name, const char *value)
 {
     if (!strcmp(name, SDL_HINT_JOYSTICK_HIDAPI_PS5)) {
@@ -21,7 +25,7 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 #define SDL_SetHint black_InputSetHint
 #define xbox_InputSetState black_PinnedInputSetState
 #define xbox_InputGetState black_SDLInputGetState
-#include "../runtime/src/input/xinput_device.c"
+#include BLACK_INPUT_BACKEND_SOURCE
 #undef xbox_InputGetState
 #undef xbox_InputSetState
 #undef SDL_SetHint
@@ -35,10 +39,23 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 /* Unlike the pinned backend, preserve SDL's failure result for diagnostics. */
 static DWORD black_SDLInputSetState(DWORD port, const XBOX_VIBRATION *vibration)
 {
-    if (port >= XBOX_MAX_CONTROLLERS || !vibration || !g_pads[port])
+    if (port >= XBOX_MAX_CONTROLLERS || !vibration || !g_pads[port] ||
+        !SDL_GameControllerGetAttached(g_pads[port]))
         return ERROR_DEVICE_NOT_CONNECTED;
-    int result = SDL_GameControllerRumble(g_pads[port], vibration->wLeftMotorSpeed,
-        vibration->wRightMotorSpeed, 1000);
+    Uint16 left = black_rumble_needs_zero[port] ? 0 : vibration->wLeftMotorSpeed;
+    Uint16 right = black_rumble_needs_zero[port] ? 0 : vibration->wRightMotorSpeed;
+    int result = SDL_GameControllerRumble(g_pads[port], left, right, 1000);
+    if (getenv("RECOMP_INPUT_DEBUG")) {
+        static XBOX_VIBRATION previous[XBOX_MAX_CONTROLLERS];
+        static int previous_gate[XBOX_MAX_CONTROLLERS];
+        if (previous[port].wLeftMotorSpeed != left || previous[port].wRightMotorSpeed != right ||
+            previous_gate[port] != black_rumble_needs_zero[port]) {
+            fprintf(stderr, "[RUMBLE-HOST] port=%u left=%u right=%u stale_gate=%d result=%d\n",
+                (unsigned)port, left, right, black_rumble_needs_zero[port], result);
+            previous[port] = (XBOX_VIBRATION){left, right};
+            previous_gate[port] = black_rumble_needs_zero[port];
+        }
+    }
     if (result < 0) {
         static unsigned failures;
         if (failures++ < 8)
@@ -58,6 +75,7 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     static BlackMenuPad navigation;
     static unsigned focus_epoch;
     static int previous_keyboard;
+    static int navigation_instance = -1;
     XBOX_GAMEPAD *g = &state->Gamepad;
     unsigned down = 0;
     if ((g->wButtons & (XBOX_GAMEPAD_BACK | XBOX_GAMEPAD_START)) ==
@@ -75,6 +93,14 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     for (int i = 0; i < 8; ++i) analog |= g->bAnalogButtons[i];
     if (g->wButtons || analog || abs(g->sThumbLX) > 8000 || abs(g->sThumbLY) > 8000 ||
         abs(g->sThumbRX) > 8000 || abs(g->sThumbRY) > 8000) down |= BLACK_PAD_HELD;
+    int instance = g_pads[0] && g_controller_connected[0] ?
+        SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_pads[0])) : -1;
+    if (instance != navigation_instance) {
+        navigation_instance = instance;
+        /* A replacement's held buttons must not confirm/toggle the menu.
+         * The old device's drain must not block keyboard gameplay either. */
+        navigation = (BlackMenuPad){.previous = down, .draining = instance >= 0 && down != 0};
+    }
     unsigned epoch = black_InputFocusEpoch();
     int keyboard = black_InputKeyboardActive();
     if (!black_MenuIsOpen() && (epoch != focus_epoch || keyboard != previous_keyboard)) {
@@ -83,6 +109,7 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
         navigation.previous = down;
         navigation.draining = 0;
     }
+    if (!black_MenuIsOpen() && instance < 0) navigation.draining = 0;
     focus_epoch = epoch;
     previous_keyboard = keyboard;
     int capture;
@@ -94,6 +121,8 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
 
 static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
+    if (port >= XBOX_MAX_CONTROLLERS || !state) return ERROR_DEVICE_NOT_CONNECTED;
+    memset(state, 0, sizeof *state);
     static BlackInputOwner owner;
     static int owner_instance = -1;
     static unsigned focus_epoch;
@@ -105,7 +134,7 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
     }
     DWORD result = black_SDLInputGetState(port, state);
     if (result == ERROR_SUCCESS && port < XBOX_MAX_CONTROLLERS &&
-        g_controller_connected[port] && g_pads[port]) {
+        g_controller_connected[port] && g_pads[port] && SDL_GameControllerGetAttached(g_pads[port])) {
         /* Replace upstream's startup averaging, personal RY=5011 seed and
          * +/-6000 right-stick cap. Preserve its buttons, SDL discovery and
          * rumble, while reading standard centered SDL axes at full range.
@@ -160,9 +189,13 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
         black_InputTakeMenuKeyboard();
         black_ControllerPublish(NULL, -1, NULL, NULL, SDL_GetTicks());
         black_PadCapturePoll(0,-1,0);
+        black_InputSetKeyboardActive(black_SettingsInputDevice() != BLACK_INPUT_GAMEPAD);
     }
-    if (result != ERROR_SUCCESS) return result;
-    if (port != 0 || !g_controller_connected[0]) {
+    if (result != ERROR_SUCCESS) {
+        black_menu_input(port, state);
+        return result;
+    }
+    if (port != 0 || !connected) {
         if (!port) {
             int keyboard = black_SettingsInputDevice() != BLACK_INPUT_GAMEPAD;
             black_InputSetKeyboardActive(keyboard);
@@ -236,6 +269,12 @@ DWORD xbox_InputSetState(DWORD port, const XBOX_VIBRATION *vibration)
 {
     pthread_mutex_lock(&black_input_lock);
     XBOX_VIBRATION scaled = {0};
+    /* Rearm from the game's envelope, not a zero produced by mute/owner
+     * scaling; otherwise an old effect could resume after reconnect. */
+    if (port < XBOX_MAX_CONTROLLERS && vibration) {
+        black_rumble_raw_active[port] = vibration->wLeftMotorSpeed || vibration->wRightMotorSpeed;
+        if (!black_rumble_raw_active[port]) black_rumble_needs_zero[port] = 0;
+    }
     if (vibration && black_SettingsVibration() && (port || !black_InputKeyboardActive())) {
         unsigned percent = black_SettingsRumbleIntensity();
         unsigned left = (unsigned)vibration->wLeftMotorSpeed * percent / 100;

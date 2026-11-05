@@ -6,6 +6,7 @@ extern void black_InputGameViewRemove(const char *);
 #import "../../ports/macos/overrides/game_translation.h"
 #import <Cocoa/Cocoa.h>
 #import "../../ports/macos/overrides/input_glyphs.h"
+#include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/input_atlas.h"
 #include <stdio.h>
 #include <string.h>
@@ -172,6 +173,7 @@ int main(int argc,char **argv)
         if (!black_ApplyGameText(game, NO, &e) || ![[NSData dataWithContentsOfURL:us] isEqual:bank]) return fail(13, "MainUS.bin made English again");
         NSURL *originals=[game URLByAppendingPathComponent:@"original-fonts"], *fonts=[game URLByAppendingPathComponent:@"language/fonts"];
         NSFileManager *fm=NSFileManager.defaultManager;
+        setenv("BLACK_SETTINGS_FILE",[game URLByAppendingPathComponent:@"test-settings.ini"].path.fileSystemRepresentation,1);
         [fm createDirectoryAtURL:originals withIntermediateDirectories:YES attributes:nil error:nil];
         for(NSString *name in @[@"Big.bin",@"Small.bin"]) [before writeToURL:[originals URLByAppendingPathComponent:name] atomically:YES];
         [fm createSymbolicLinkAtURL:fonts withDestinationURL:originals error:nil];
@@ -184,6 +186,39 @@ int main(int argc,char **argv)
             if(![[NSData dataWithContentsOfURL:patched] isEqual:symbols]) return fail(21,"private font has exactly the new symbols");
         }
         black_InputGameViewRemove(view); free(view);
+        /* The CLI skips Finder bootstrap. Its private view must still combine
+         * Russian text/fonts and button artwork, without editing symlink sources.
+         * Synthetic localized fonts carry the same retail-backup contract. */
+        for(NSString *name in @[@"Big.bin",@"Small.bin"]) {
+            [after writeToURL:[originals URLByAppendingPathComponent:name] atomically:YES];
+            NSString *kept=[name.stringByDeletingPathExtension stringByAppendingString:@".retail.bin"];
+            [before writeToURL:[originals URLByAppendingPathComponent:kept] atomically:YES];
+        }
+        NSURL *json=[game URLByAppendingPathComponent:@"view-ru.json"];
+        [[NSJSONSerialization dataWithJSONObject:@{@"000000A0":@"НАЖМИТЕ СТАРТ",@"000000A1":NSNull.null} options:0 error:nil]
+            writeToURL:json atomically:YES];
+        setenv("BLACK_RUSSIAN_STRINGS",json.path.fileSystemRepresentation,1);
+        black_SettingsSetGameLanguage(BLACK_LANG_RUSSIAN);
+        view=black_InputGameView(game.path.fileSystemRepresentation);
+        if(!view)return fail(30,"Russian private view without Finder bootstrap");
+        fontView=[NSURL fileURLWithPath:@(view)];
+        if(![[NSData dataWithContentsOfURL:[fontView URLByAppendingPathComponent:@"language/strings/MainUS.bin"]] isEqual:ru] ||
+           ![[NSData dataWithContentsOfURL:us] isEqual:bank])return fail(31,"private Russian bank; source English unchanged");
+        for(NSString *name in @[@"Big.bin",@"Small.bin"]) {
+            if(![[NSData dataWithContentsOfURL:[fontView URLByAppendingPathComponent:[@"language/fonts" stringByAppendingPathComponent:name]]] isEqual:combined] ||
+               ![[NSData dataWithContentsOfURL:[originals URLByAppendingPathComponent:name]] isEqual:after])
+                return fail(32,"Cyrillic plus input artwork; source localized font unchanged");
+        }
+        black_InputGameViewRemove(view);free(view);
+        black_SettingsSetGameLanguage(BLACK_LANG_ENGLISH);
+        [ru writeToURL:us atomically:YES];
+        view=black_InputGameView(game.path.fileSystemRepresentation);
+        if(!view || ![[NSData dataWithContentsOfFile:[@(view) stringByAppendingPathComponent:@"language/strings/MainUS.bin"]] isEqual:bank] ||
+           ![[NSData dataWithContentsOfURL:us] isEqual:ru])return fail(33,"private English reset; localized source unchanged");
+        black_InputGameViewRemove(view);free(view);
+        black_SettingsSetGameLanguage(BLACK_LANG_RUSSIAN);unsetenv("BLACK_RUSSIAN_STRINGS");
+        view=black_InputGameView(game.path.fileSystemRepresentation);
+        if(view)return fail(34,"missing requested translation must not yield a mixed-language view");
         [NSFileManager.defaultManager removeItemAtURL:game error:nil];
         puts("Russian text: Cyrillic font records, sorted buckets, Latin kept, idempotent; bank IDs and nulls; MainUS switch: PASS");
     }

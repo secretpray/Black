@@ -77,6 +77,19 @@ unsigned black_TexturePackFiles(const BlackTexturePack *pack);
 unsigned black_TexturePackMapped(const BlackTexturePack *pack);
 unsigned black_TexturePackMissing(const BlackTexturePack *pack);
 
+/* A folder's pack against the map in use (NULL: the replacement folder).
+ * files: its DDS/PNG; mapped: map textures it has a file for; missing: map
+ * textures whose file it lacks; map: 0 when no map was found. 1 when usable. */
+typedef struct { unsigned files, mapped, missing; int map; } BlackTexturePackCheck;
+int black_TexturePackCheck(const char *folder, BlackTexturePackCheck *check);
+/* Links a pack folder into replacement in place of earlier links; 1 on success. */
+int black_TexturePackLink(const char *folder);
+/* The running pack: 0 off or still reading, 1 ready, -1 none was found. */
+int black_TexturePackState(void);
+/* Reads the replacement folder again after none was found; 0 when a pack is
+ * already running, so a different one applies on the next launch. */
+int black_TexturePackReload(void);
+
 /* Renderer side, all on the GL thread. The setting and the pack in the
  * background: the value changes whenever the replaced textures should be made
  * again (on/off, pack ready, size limit); 0 while off or still being read. */

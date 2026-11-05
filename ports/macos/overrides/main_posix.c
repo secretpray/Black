@@ -22,6 +22,10 @@ int main(int argc,char **argv)
     if (argc <= 1 && !installed) return 0;
     const char *game = argc > 1 ? argv[1] : installed;
     char *view = black_InputGameView(game);
+    if (!view && black_SettingsGameLanguage() == BLACK_LANG_RUSSIAN) {
+        fprintf(stderr, "[LANG] Russian requires a prepared private game view; refusing mixed English text and missing Cyrillic\n");
+        free(installed); return 1;
+    }
     char **args = calloc((size_t)(argc > 1 ? argc : 2) + 1,sizeof(char *));
     if (!args) { black_InputGameViewRemove(view); free(view); free(installed); return 1; }
     args[0] = argv[0]; args[1] = view ? view : (char *)game;

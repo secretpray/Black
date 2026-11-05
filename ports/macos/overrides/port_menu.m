@@ -13,6 +13,7 @@
 #include "game_language.h"
 #include "subtitles.h"
 #include "menu_text.h"
+#include "texture_pack.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -103,6 +104,19 @@ static NSString *T(NSString *english)
         tables[language] = [table copy];
     }
     return tables[language][english] ?: english;
+}
+
+/* Dialog text: written in sentence case, looked up by its capitals and shown
+ * as translated, not in capitals. Numbers go in as %@. */
+static NSString *D(NSString *english)
+{
+    int language = menu_text_language();
+    if (language <= BLACK_TEXT_EN || language >= BLACK_TEXT_COUNT) return english;
+    const char *key = english.uppercaseString.UTF8String;
+    for (size_t i = 0; i < sizeof black_menu_text / sizeof black_menu_text[0]; ++i)
+        if (!strcmp(black_menu_text[i].english, key) && *black_menu_text[i].text[language - 1])
+            return [NSString stringWithUTF8String:black_menu_text[i].text[language - 1]];
+    return english;
 }
 
 #include "menu_pages.h"
@@ -231,6 +245,7 @@ static NSString *dz_name(int right)
 - (void)refreshValues;
 - (void)layoutRows;
 - (void)captureBinding:(int)key;
+- (void)offerTexturePack;
 @end
 /* Native transparent controls retain accessibility and mouse hit targets;
  * their visible labels/focus state are drawn in the game's typography. */
@@ -658,6 +673,7 @@ static NSTimeInterval transition, last_draw;
     } else if (selected == ROW_TEXTURES) {
         int current = black_SettingsTextureReplacement(), value = cycle ? !current : direction > 0;
         if (value == current) return;
+        if (value) { [self offerTexturePack]; return; }
         black_SettingsSetTextureReplacement(value);
     } else if (selected == ROW_TEXTURE_SIZE) {
         static const int sizes[] = {1024, 2048, 4096};
@@ -702,6 +718,103 @@ static NSTimeInterval transition, last_draw;
     changed = CACurrentMediaTime();
     [self refreshValues];
     [self setNeedsDisplay:YES];
+}
+/* Texture Replacement turns on only with a pack the map can use: the one in
+ * replacement, or a folder the player chooses, checked and then linked. */
+static NSAlert *pack_alert;
+- (void)texturePackAlert:(NSString *)message info:(NSString *)info buttons:(NSArray<NSString *> *)buttons
+                    then:(void (^)(NSInteger choice))then
+{
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = D(message);
+    alert.informativeText = info;
+    for (NSString *title in buttons) [alert addButtonWithTitle:D(title)];
+    pack_alert = alert; /* owned until answered */
+    [alert beginSheetModalForWindow:menu_window completionHandler:^(NSModalResponse response) {
+        [pack_alert autorelease];
+        pack_alert = nil;
+        if (then) then(response - NSAlertFirstButtonReturn);
+    }];
+}
+- (void)useTexturePack:(BOOL)linked
+{
+    black_SettingsSetTextureReplacement(1);
+    if (!black_TexturePackReload() && linked)
+        [self texturePackAlert:@"The new pack applies next launch" info:D(@"Another pack is already in use in this session.")
+                       buttons:@[@"OK"] then:nil];
+    changed = CACurrentMediaTime();
+    [self refreshValues];
+    [self setNeedsDisplay:YES];
+}
+- (void)offerTexturePack
+{
+    BlackTexturePackCheck check;
+    int usable = black_TexturePackCheck(NULL, &check);
+    if (!check.map) {
+        [self texturePackAlert:@"The texture map is missing" info:D(@"This copy of BLACK has no black-hd-reimagined.map. Reinstall the app.")
+                       buttons:@[@"OK"] then:nil];
+        return;
+    }
+    if (usable && !check.missing) { [self useTexturePack:NO]; return; }
+    if (usable) {
+        NSString *info = [NSString stringWithFormat:D(@"Files for %@ of %@ textures are there; the rest keep the game's own. Choose the full pack's folder or use this one."),
+            @(check.mapped), @(check.mapped + check.missing)];
+        [self texturePackAlert:@"The HD pack is incomplete" info:info buttons:@[@"Choose Folder…", @"Use This Pack", @"Cancel"]
+                          then:^(NSInteger choice) {
+            if (choice == 0) [self chooseTexturePack];
+            else if (choice == 1) [self useTexturePack:NO];
+        }];
+        return;
+    }
+    [self texturePackAlert:@"No HD texture pack found"
+                      info:D(@"Texture Replacement needs your own copy of the BLACK HD Reimagined pack for PCSX2 (SLUS-21376). Choose its folder: BLACK checks it and links it without copying.")
+                   buttons:@[@"Choose Folder…", @"Cancel"]
+                      then:^(NSInteger choice) { if (choice == 0) [self chooseTexturePack]; }];
+}
+- (void)chooseTexturePack
+{
+    NSOpenPanel *panel = NSOpenPanel.openPanel;
+    panel.canChooseDirectories = YES;
+    panel.canChooseFiles = NO;
+    panel.allowsMultipleSelection = NO;
+    panel.message = D(@"Choose the folder of the BLACK HD Reimagined pack.");
+    panel.prompt = D(@"Check");
+    [panel beginSheetModalForWindow:menu_window completionHandler:^(NSModalResponse response) {
+        if (response != NSModalResponseOK || !panel.URL) return;
+        /* The sheet must be gone before the next one. */
+        dispatch_async(dispatch_get_main_queue(), ^{ [self checkTexturePack:panel.URL.path]; });
+    }];
+}
+- (void)checkTexturePack:(NSString *)folder
+{
+    BlackTexturePackCheck check;
+    int usable = black_TexturePackCheck(folder.fileSystemRepresentation, &check);
+    void (^again)(NSInteger) = ^(NSInteger choice) { if (choice == 0) [self chooseTexturePack]; };
+    if (!check.files) {
+        [self texturePackAlert:@"No textures in this folder" info:D(@"It has no DDS or PNG files, in it or in its subfolders.")
+                       buttons:@[@"Choose Another…", @"Cancel"] then:again];
+        return;
+    }
+    if (!usable) {
+        NSString *info = [NSString stringWithFormat:D(@"None of its %@ pictures is named in the texture map, so none would replace a texture. This needs the BLACK HD Reimagined pack."),
+            @(check.files)];
+        [self texturePackAlert:@"This is not the BLACK HD Reimagined pack" info:info
+                       buttons:@[@"Choose Another…", @"Cancel"] then:again];
+        return;
+    }
+    void (^link)(void) = ^{
+        if (black_TexturePackLink(folder.fileSystemRepresentation)) [self useTexturePack:YES];
+        else [self texturePackAlert:@"Could not link the folder" info:D(@"Check that BLACK may write to Application Support/BLACK/Textures.")
+                            buttons:@[@"OK"] then:nil];
+    };
+    if (check.missing) {
+        NSString *info = [NSString stringWithFormat:D(@"Files for %@ of %@ textures are there; the rest keep the game's own."),
+            @(check.mapped), @(check.mapped + check.missing)];
+        [self texturePackAlert:@"The HD pack is incomplete" info:info buttons:@[@"Use This Pack", @"Choose Another…", @"Cancel"]
+                          then:^(NSInteger choice) { if (choice == 0) link(); else if (choice == 1) [self chooseTexturePack]; }];
+        return;
+    }
+    link();
 }
 - (void)drawRect:(NSRect)dirty
 {
@@ -925,8 +1038,9 @@ static NSTimeInterval transition, last_draw;
         help = @"LANGUAGE OF THIS SETTINGS PANEL. AUTO FOLLOWS THE GAME LANGUAGE.";
         detail = @"LIVE. RUSSIAN IS FOR THIS PANEL ONLY: THE GAME HAS NO RUSSIAN TEXT.";
     } else if (selected == ROW_TEXTURES) {
-        help = @"YOUR BLACK HD REIMAGINED PACK IN APPLICATION SUPPORT/BLACK/TEXTURES/REPLACEMENT.";
-        detail = @"LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.";
+        help = @"YOUR OWN BLACK HD REIMAGINED PACK. TURNING IT ON CHECKS THE PACK OR ASKS FOR ITS FOLDER.";
+        detail = black_TexturePackState() < 0 ? @"NO PACK WAS FOUND, SO THE GAME'S TEXTURES STAY. TURN IT OFF AND ON TO CHOOSE A FOLDER." :
+            @"LIVE. PORTINGPETE'S MAP FINDS EACH FILE; MISSING ONES KEEP THE GAME'S TEXTURE.";
     } else if (selected == ROW_TEXTURE_SIZE) {
         help = @"LARGEST SIDE OF AN HD TEXTURE. LARGER FILES USE A SMALLER LEVEL.";
         detail = @"LIVE. 1024 USES ABOUT A QUARTER OF THE MEMORY OF 2048; MOST OF THE PACK IS 2048.";
@@ -1234,6 +1348,15 @@ void black_MenuPump(void)
         }
     }
     unsigned command = black_MenuTakeCommands();
+    /* A pack dialog or folder panel takes the pad: A answers, B cancels. */
+    NSWindow *sheet = menu_window.attachedSheet;
+    if (sheet) {
+        if (pack_alert && sheet == pack_alert.window) {
+            if (command & BLACK_MENU_CHANGE) [pack_alert.buttons.firstObject performClick:nil];
+            else if (command & BLACK_MENU_BACK) [pack_alert.buttons.lastObject performClick:nil];
+        } else if ((command & BLACK_MENU_BACK) && [sheet isKindOfClass:NSSavePanel.class]) [(NSSavePanel *)sheet cancel:nil];
+        command = 0;
+    }
     if(menu_view->pad_capture&&(command&BLACK_MENU_BACK)){
         menu_view->pad_capture=NO;black_PadCaptureCancel();[menu_view setNeedsDisplay:YES];return;
     }

@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 import black
 import save_evidence
@@ -18,7 +19,7 @@ class SaveEvidence(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.saves = self.root / "out/macos/user/data/xboxrecomp"
         self.profile = self.saves / "UserData/45410083/slot/profile.dat"
         self.profile.parent.mkdir(parents=True)
@@ -87,7 +88,7 @@ class SaveEvidence(unittest.TestCase):
                 save_evidence.backup(self.saves, other)
         self.assertFalse((other / "saves-before.json").exists())
 
-    def launch(self, wait_effect=None, backup_error=None, dev=False):
+    def launch(self, wait_effect=None, backup_error=None, dev=False, test_state=None):
         binary = self.root / "out/build/macos-arm64/black-recomp"
         binary.parent.mkdir(parents=True, exist_ok=True)
         binary.write_bytes(b"synthetic executable, never run")
@@ -96,7 +97,9 @@ class SaveEvidence(unittest.TestCase):
         def wait(timeout=None):
             if wait_effect:
                 raise wait_effect
-            self.profile.write_bytes(b"written by synthetic process")
+            target = (test_state / "data/xboxrecomp/UserData/45410083/slot/profile.dat"
+                      if test_state else self.profile)
+            target.write_bytes(b"written by synthetic process")
             return 0
 
         process.wait.side_effect = wait
@@ -104,6 +107,8 @@ class SaveEvidence(unittest.TestCase):
         arguments = ["black.py", "run", "--opengl", "--windowed", "--backup-saves", "--smoke-seconds", "10"]
         if dev:
             arguments += ["--dev-unlock-levels", "0"]
+        if test_state:
+            arguments += ["--test-state-dir", str(test_state)]
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.object(black, "ROOT", self.root))
             stack.enter_context(patch.object(black, "WORK", self.root / "out/macos"))
@@ -122,8 +127,11 @@ class SaveEvidence(unittest.TestCase):
             else:
                 black.main()
                 popen.assert_called_once()
+                self.assertEqual(popen.call_args.kwargs["env"]["BLACK_RUSSIAN_STRINGS"],
+                                 str(self.root / "resources/translations/ru/strings.json"))
                 self.assertEqual(stopped.call_count, int(wait_effect is not None))
-        return next((self.root / "out/macos/user").glob("run-*"))
+        if not backup_error:
+            return Path(popen.call_args.kwargs["env"]["BLACK_RUN_DIRECTORY"])
 
     def test_normal_exit_records_written_files_and_original_backup(self):
         run_dir = self.launch()
@@ -154,6 +162,49 @@ class SaveEvidence(unittest.TestCase):
         self.assertEqual(report["save_directory"], str(run_dir / "data/xboxrecomp"))
         self.assertFalse(report["snapshot"]["root_exists"])
         self.assertEqual(self.profile.read_bytes(), original)
+
+    def test_persistent_test_state_reopens_same_copy_without_touching_live_saves(self):
+        state = self.root / "out/macos/validation/save-reopen/state"
+        copied = state / "data/xboxrecomp/UserData/45410083/slot/profile.dat"
+        copied.parent.mkdir(parents=True)
+        copied.write_bytes(self.profile.read_bytes())
+        original = save_evidence.inventory(self.saves)
+        first = self.launch(test_state=state)
+        second = self.launch(test_state=state)
+        self.assertNotEqual(first, second)
+        backup = json.loads((second / "saves-before.json").read_text())
+        self.assertEqual(backup["snapshot"]["files"]["UserData/45410083/slot/profile.dat"]["sha256"],
+                         save_evidence.sha256(copied))
+        for run_dir in (first, second):
+            launch = json.loads((run_dir / "launch.json").read_text())
+            self.assertEqual(launch["save_directory"], str(state / "data/xboxrecomp"))
+            self.assertEqual(launch["runtime_environment"]["BLACK_SETTINGS_FILE"], str(state / "settings.ini"))
+            self.assertNotIn("BLACK_DEV_UNLOCK_LEVELS", launch["runtime_environment"])
+        self.assertEqual(save_evidence.inventory(self.saves), original)
+
+    def test_test_state_rejects_live_external_linked_or_unbounded_paths(self):
+        validation = self.root / "out/macos/validation"
+        validation.mkdir(parents=True)
+        state = validation / "separate/state"
+        args = SimpleNamespace(test_state_dir=str(state), smoke_seconds=10,
+                               backup_saves=True, dev_unlock_levels=None, settings_file=None)
+        with patch.object(black, "WORK", self.root / "out/macos"):
+            self.assertEqual(black.launch_state(args), state)
+            for path in (self.root / "outside", self.saves, validation):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    black.launch_state(SimpleNamespace(**{**vars(args), "test_state_dir": str(path)}))
+            for changes in ({"smoke_seconds": None}, {"backup_saves": False},
+                            {"dev_unlock_levels": 0}, {"settings_file": str(self.root / "live.ini")}):
+                with self.subTest(changes=changes), self.assertRaises(ValueError):
+                    black.launch_state(SimpleNamespace(**{**vars(args), **changes}))
+            link = validation / "linked"
+            link.symlink_to(state, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                black.launch_state(SimpleNamespace(**{**vars(args), "test_state_dir": str(link)}))
+            state.mkdir(parents=True)
+            (state / "data").symlink_to(self.saves.parent, target_is_directory=True)
+            with self.assertRaises(ValueError):
+                black.launch_state(args)
 
 
 if __name__ == "__main__":

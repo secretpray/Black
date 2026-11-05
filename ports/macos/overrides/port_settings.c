@@ -403,7 +403,14 @@ void black_InputFocusChanged(int focused)
         fprintf(stderr, "[INPUT-FOCUS] active=%d epoch=%u\n", focused, atomic_load(&input_focus_epoch));
 }
 unsigned black_InputFocusEpoch(void) { return atomic_load(&input_focus_epoch); }
-void black_InputSetKeyboardActive(int active) { atomic_store(&keyboard_active, !!active); }
+int black_InputFocused(void) { return atomic_load(&input_focused); }
+void black_InputSetKeyboardActive(int active)
+{
+    active = !!active;
+    int previous = atomic_exchange(&keyboard_active, active);
+    if (previous != active && getenv("RECOMP_INPUT_DEBUG"))
+        fprintf(stderr, "[INPUT-OWNER] %s policy=%d\n", active ? "keyboard" : "gamepad", black_SettingsInputDevice());
+}
 
 int black_SettingsHoldAim(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&hold_aim); }

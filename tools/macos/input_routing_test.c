@@ -17,7 +17,8 @@
 #include <string.h>
 #include <unistd.h>
 static SDL_GameController *g_pads[4];
-static int g_controller_connected[4], axes[6], instance=10, attached=1, stopped;
+static int g_controller_connected[4], axes[6], instance=10, attached=1, stopped, no_keyboard_result;
+static SDL_GameControllerType controller_type = SDL_CONTROLLER_TYPE_PS5;
 static uint32_t ticks;
 static XBOX_GAMEPAD physical, keyboard;
 static DWORD black_SDLInputGetState(DWORD port,XBOX_INPUT_STATE *state)
@@ -25,7 +26,7 @@ static DWORD black_SDLInputGetState(DWORD port,XBOX_INPUT_STATE *state)
     if(port>=4 || !state)return ERROR_DEVICE_NOT_CONNECTED;
     memset(state,0,sizeof *state);
     state->Gamepad=g_controller_connected[port]?physical:keyboard;
-    return ERROR_SUCCESS;
+    return !g_controller_connected[port] && no_keyboard_result ? ERROR_DEVICE_NOT_CONNECTED : ERROR_SUCCESS;
 }
 static int xbox_KeyboardMergeState(XBOX_GAMEPAD *state){*state=keyboard;return 1;}
 static int fake_attached(SDL_GameController *p){(void)p;return attached;}
@@ -34,7 +35,7 @@ static const char *fake_name(SDL_GameController *p){(void)p;return "Synthetic Pl
 static SDL_Joystick *fake_joystick(SDL_GameController *p){return (SDL_Joystick *)p;}
 static int fake_instance(SDL_Joystick *p){(void)p;return instance;}
 static uint32_t fake_ticks(void){return ticks;}
-static SDL_GameControllerType fake_type(SDL_GameController *p){(void)p;return SDL_CONTROLLER_TYPE_PS5;}
+static SDL_GameControllerType fake_type(SDL_GameController *p){(void)p;return controller_type;}
 static int fake_rumble(SDL_GameController *p,Uint16 l,Uint16 r,Uint32 ms)
 {(void)p;(void)ms;if(!l&&!r)++stopped;return 0;}
 #define SDL_GameControllerGetAttached fake_attached
@@ -95,6 +96,51 @@ int main(void)
     black_MenuSetOpen(1);poll();black_MenuSetOpen(0);
     black_InputFocusChanged(0);black_InputFocusChanged(1);
     physical.bAnalogButtons[1]=255;pad=poll();assert(pad.bAnalogButtons[1]==255);
+    /* Hotplug while a settings chord/fire/aim/stick is held. A replacement's
+     * held accept cannot confirm a binding, even if no empty poll intervened. */
+    physical=(XBOX_GAMEPAD){0};keyboard=(XBOX_GAMEPAD){0};poll();
+    for(int policy=BLACK_INPUT_AUTO;policy<=BLACK_INPUT_KEYBOARD;++policy) {
+        black_SettingsSetInputDevice(policy);
+        for(int cycle=0;cycle<3;++cycle) {
+            black_MenuSetOpen(1);physical.wButtons=XBOX_GAMEPAD_START|XBOX_GAMEPAD_BACK;
+            axes[SDL_CONTROLLER_AXIS_LEFTX]=24000;axes[SDL_CONTROLLER_AXIS_TRIGGERRIGHT]=32767;
+            physical.wButtons|=XBOX_GAMEPAD_RIGHT_THUMB;poll();black_MenuTakeCommands();
+            black_PadCaptureBegin();poll();
+            g_pads[0]=NULL;g_controller_connected[0]=0;
+            physical=(XBOX_GAMEPAD){0};memset(axes,0,sizeof axes);keyboard=(XBOX_GAMEPAD){0};
+            pad=poll();assert(black_PadCaptureTake()==-1 && black_SettingsPadBinding(0)==7);
+            assert(!memcmp(&pad,&(XBOX_GAMEPAD){0},sizeof pad));
+            assert(black_InputKeyboardActive()==(policy!=BLACK_INPUT_GAMEPAD));
+            if(policy!=BLACK_INPUT_GAMEPAD) assert(black_InputPromptFamily()==BLACK_PROMPTS_KEYBOARD);
+            BlackControllerMonitor monitor=black_ControllerMonitor();assert(!monitor.connected);
+            black_MenuSetOpen(0);keyboard.bAnalogButtons[XBOX_BUTTON_RTRIGGER]=255;
+            pad=poll();assert(pad.bAnalogButtons[XBOX_BUTTON_RTRIGGER]==(policy==BLACK_INPUT_GAMEPAD?0:255));
+            keyboard=(XBOX_GAMEPAD){0};poll();
+            g_pads[0]=(SDL_GameController *)(uintptr_t)1;g_controller_connected[0]=1;++instance;
+            controller_type=cycle==1?SDL_CONTROLLER_TYPE_XBOXONE:SDL_CONTROLLER_TYPE_PS5;
+            black_MenuSetOpen(1);physical.bAnalogButtons[0]=255;poll();
+            assert(!black_MenuTakeCommands()); /* reconnect already holding accept */
+            assert(black_InputKeyboardActive()==(policy==BLACK_INPUT_KEYBOARD));
+            assert(black_InputPromptFamily()==(policy==BLACK_INPUT_KEYBOARD?BLACK_PROMPTS_KEYBOARD:
+                cycle==1?BLACK_PROMPTS_XBOX:BLACK_PROMPTS_PLAYSTATION));
+            physical=(XBOX_GAMEPAD){0};poll();physical.bAnalogButtons[0]=255;poll();
+            assert(black_MenuTakeCommands()==BLACK_MENU_CHANGE);
+            physical=(XBOX_GAMEPAD){0};poll();black_MenuSetOpen(0);poll();poll();
+            ticks+=1000;black_InputNoteMenuKeyboard();poll();assert(black_InputKeyboardActive()==(policy!=BLACK_INPUT_GAMEPAD));
+            axes[SDL_CONTROLLER_AXIS_LEFTX]=24000;poll();assert(black_InputKeyboardActive()==(policy==BLACK_INPUT_KEYBOARD));
+            memset(axes,0,sizeof axes);poll();
+        }
+    }
+    /* An idle no-pad backend may return an error: output and owner must still
+     * be reset, including ports other than zero and non-null invalid calls. */
+    g_pads[0]=NULL;g_controller_connected[0]=0;no_keyboard_result=1;
+    XBOX_INPUT_STATE cleared;memset(&cleared,0xFF,sizeof cleared);
+    assert(black_InputGetState(0,&cleared)==ERROR_DEVICE_NOT_CONNECTED);
+    assert(black_InputKeyboardActive() && !cleared.Gamepad.sThumbLX && !cleared.Gamepad.wButtons);
+    assert(black_InputPromptFamily()==BLACK_PROMPTS_KEYBOARD);
+    black_SettingsSetInputDevice(BLACK_INPUT_GAMEPAD);
+    assert(black_InputGetState(0,&cleared)==ERROR_DEVICE_NOT_CONNECTED && !black_InputKeyboardActive());
+    assert(black_InputGetState(0,NULL)==ERROR_DEVICE_NOT_CONNECTED);
     assert(black_InputGetState(5,NULL)==ERROR_DEVICE_NOT_CONNECTED);
     unlink(path);rmdir(folder);puts("Production input routing: selection/reconnect/prompts/remap/menu/capture: PASS (synthetic SDL)");
 }

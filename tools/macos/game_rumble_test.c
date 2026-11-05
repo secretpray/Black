@@ -10,6 +10,10 @@
 #include <unistd.h>
 static pthread_mutex_t black_input_lock = PTHREAD_MUTEX_INITIALIZER;
 static SDL_GameController *g_pads[XBOX_MAX_CONTROLLERS] = {(SDL_GameController *)1};
+static int black_rumble_needs_zero[XBOX_MAX_CONTROLLERS];
+static int black_rumble_raw_active[XBOX_MAX_CONTROLLERS];
+static SDL_bool test_attached(SDL_GameController *pad) { return pad ? SDL_TRUE : SDL_FALSE; }
+#define SDL_GameControllerGetAttached test_attached
 static XBOX_VIBRATION observed;
 static int calls, fail_host;
 static int test_rumble(SDL_GameController *pad, Uint16 left, Uint16 right, Uint32 ms)

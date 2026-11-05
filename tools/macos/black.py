@@ -367,8 +367,30 @@ def launch_graphics(path):
     return values
 
 
+def launch_state(args):
+    """Keep repeatable save qualification away from the user's active data."""
+    if not args.test_state_dir:
+        return WORK / "user"
+    if not args.smoke_seconds or not args.backup_saves or args.dev_unlock_levels is not None:
+        raise ValueError("--test-state-dir requires --smoke-seconds and --backup-saves, without --dev-unlock-levels")
+    state = Path(os.path.abspath(Path(args.test_state_dir).expanduser()))
+    validation = (WORK / "validation").resolve()
+    if state == validation or not state.is_relative_to(validation) or state != state.resolve():
+        raise ValueError("--test-state-dir must be a separate directory below out/macos/validation, without symbolic links")
+    # A nested data/ symlink could otherwise route XDG writes into live saves.
+    for path in (state / "data", state / "data/xboxrecomp", state / ".run.lock", state / "settings.ini"):
+        if path.is_symlink():
+            raise ValueError(f"Test state refuses a symbolic link: {path}")
+    if args.settings_file:
+        settings = Path(os.path.abspath(Path(args.settings_file).expanduser()))
+        if not settings.is_relative_to(state) or settings != settings.resolve():
+            raise ValueError("Test settings must be inside --test-state-dir without symbolic links")
+    return state
+
+
 def play(args):
-    settings_path = Path(args.settings_file).expanduser().resolve() if args.settings_file else WORK / "user/settings.ini"
+    state = launch_state(args)
+    settings_path = Path(args.settings_file).expanduser().resolve() if args.settings_file else state / "settings.ini"
     graphics = launch_graphics(settings_path)
     if args.scale is None:
         args.scale = graphics["render_scale"]
@@ -417,7 +439,6 @@ def play(args):
             opengl = "" if args.metal else " --opengl"
             raise ValueError(f"DSP is not built for {name}; run python3 tools/macos/black.py build{opengl} --real-dsp")
     # Separate local saves from source/game data and the TGP Windows build.
-    state = WORK / "user"
     state.mkdir(parents=True, exist_ok=True)
     with (state / ".run.lock").open("w") as guard:
         try:
@@ -451,6 +472,9 @@ def play_locked(args, settings_path, data, name, binary, state):
     env["BLACK_SETTINGS_FILE"] = str(settings_path)
     env["BLACK_RUN_DIRECTORY"] = str(run_dir)
     env["BLACK_GAME_DIR"] = data["game_dir"]
+    # CLI/game-mode runs pass argv[1], bypassing Finder's translation setup.
+    # Native code prepares banks/fonts in its disposable per-run view.
+    env["BLACK_RUSSIAN_STRINGS"] = str(ROOT / "resources/translations/ru/strings.json")
     # Texture replacement reads the pack from BLACK_TEXTURE_DIR/replacement
     # (default: ~/Library/Application Support/BLACK/Textures) through this map.
     env["BLACK_TEXTURE_MAP"] = str(ROOT / "resources/textures/black-hd-reimagined.map")
@@ -627,6 +651,7 @@ def main():
             add_renderer(sub)
         if name == "run":
             sub.add_argument("--backup-saves", action="store_true", help="Verify a compressed backup of the entire save root before launch; record file hashes/changes after exit (no restore or progress edits)")
+            sub.add_argument("--test-state-dir", help="Persistent save/settings sandbox below out/macos/validation for repeated bounded runs; requires --backup-saves, no developer unlocks; never imports data automatically")
             sub.add_argument("--scale", type=int, choices=range(1, 7), help="Override saved render scale (default 2)")
             sub.add_argument("--fov", type=int, choices=range(45, 141), help="Override saved field of view (default 70)")
             sub.add_argument("--aa", choices=tuple(AA_MODES), help="Override saved anti-aliasing: off, fxaa or smaa (default)")

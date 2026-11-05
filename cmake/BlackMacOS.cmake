@@ -59,8 +59,11 @@ add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides
 target_compile_options(black-texture-pack PRIVATE -Wall -Wextra)
 target_link_libraries(black-texture-pack PUBLIC black-port-ui
     "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
+# The settings menu checks and links a pack before turning replacement on.
+target_link_libraries(black-port-ui PUBLIC black-texture-pack)
 include("${CMAKE_SOURCE_DIR}/cmake/BlackRuntimeOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackAPUOverlay.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/BlackInputOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackInterruptOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackVoiceOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackGraphicsTrace.cmake")
@@ -196,6 +199,14 @@ target_compile_definitions(black-controller-backend PRIVATE
     BLACK_CONTROLLER_BACKEND_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc")
 target_link_libraries(black-controller-backend PRIVATE black-port-ui SDL2::SDL2 Threads::Threads)
 add_test(NAME macos_controller_backend COMMAND black-controller-backend)
+add_executable(black-input-hotplug tools/macos/input_hotplug_test.c)
+target_include_directories(black-input-hotplug PRIVATE "${BLACK_MAC_RUNTIME}/src"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
+target_compile_definitions(black-input-hotplug PRIVATE
+    BLACK_CONTROLLER_BACKEND_SOURCE="${CMAKE_BINARY_DIR}/runtime-overlay/controller_backend_test.inc")
+target_link_libraries(black-input-hotplug PRIVATE black-port-ui SDL2::SDL2 Threads::Threads)
+add_test(NAME macos_input_hotplug COMMAND black-input-hotplug)
+set_tests_properties(macos_input_hotplug PROPERTIES TIMEOUT 5)
 include("${CMAKE_SOURCE_DIR}/cmake/BlackRumbleTests.cmake")
 add_executable(black-input-owner tools/macos/input_owner_test.c)
 add_test(NAME macos_input_owner COMMAND black-input-owner)

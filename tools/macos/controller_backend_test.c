@@ -10,6 +10,10 @@
 static pthread_mutex_t black_input_lock = PTHREAD_MUTEX_INITIALIZER;
 static XBOX_VIBRATION observed;
 static SDL_GameController *g_pads[XBOX_MAX_CONTROLLERS] = {(SDL_GameController *)1};
+static int black_rumble_needs_zero[XBOX_MAX_CONTROLLERS], attached = 1;
+static int black_rumble_raw_active[XBOX_MAX_CONTROLLERS];
+static SDL_bool test_attached(SDL_GameController *pad) { (void)pad; return attached ? SDL_TRUE : SDL_FALSE; }
+#define SDL_GameControllerGetAttached test_attached
 static int rumble_failure;
 static int black_test_rumble(SDL_GameController *pad, Uint16 left, Uint16 right, Uint32 duration)
 {
@@ -52,6 +56,18 @@ int main(void)
     rumble_failure = 1;
     SDL_SetError("test rumble backend failure");
     if (xbox_InputSetState(0, &request) != ERROR_NOT_SUPPORTED) return 17;
+    rumble_failure = 0;
+    black_rumble_needs_zero[0] = 1;
+    if (xbox_InputSetState(0, &request) || observed.wLeftMotorSpeed || observed.wRightMotorSpeed) return 18;
+    black_InputSetKeyboardActive(1);
+    xbox_InputSetState(0, &request); /* scaled zero must not rearm */
+    black_InputSetKeyboardActive(0);
+    if (!black_rumble_needs_zero[0]) return 19;
+    XBOX_VIBRATION zero = {0};
+    if (xbox_InputSetState(0, &zero) || black_rumble_needs_zero[0] ||
+        xbox_InputSetState(0, &request) || observed.wRightMotorSpeed != 12000) return 20;
+    attached = 0;
+    if (xbox_InputSetState(0, &request) != ERROR_DEVICE_NOT_CONNECTED) return 21;
     unlink(path); rmdir(directory);
     puts("Production SDL hint selection and rumble gating: PASS (synthetic device sink)");
     return 0;
