@@ -3,6 +3,22 @@
 Release: **BLACK 0.5.3**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
+## Title screen text after 0.5.3
+
+Since the first macOS build the title screen showed only the two bracket lines
+where the Xbox shows PRESS START; the copyright line and the title logo were
+missing too. Those fields draw with a `LEQUAL` depth test inside a depth-only
+mask the menu draws first: a black triangle rectangle with colour writes off.
+The pinned host's "menu black panel" workaround (`black_panel_filter`) collapsed
+every such rectangle to a point before PGRAPH, a fix for an older renderer that
+painted the mask black. With xemu's PGRAPH the mask only writes depth, so the
+collapse hid the text. `ports/macos/overrides/main_posix.c` now turns that
+filter off (`RECOMP_KEEP_BLACK_PANEL=1`) without changing the submodule. Checked
+in English and Russian with the HD pack: PRESS START, the copyright and the
+logo are back, and the main menu and mission select show no black panel. The
+user confirmed the screen live. The pause, options and profile menus were not
+reviewed for a black panel yet.
+
 ## HD texture alpha in 0.5.3
 
 The user reported a black grenade crate and a pale rifle in the first mission

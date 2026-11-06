@@ -31,6 +31,12 @@ int main(int argc,char **argv)
     args[0] = argv[0]; args[1] = view ? view : (char *)game;
     for (int i = 2; i < argc; ++i) args[i] = argv[i];
     setenv("BLACK_GAME_DIR",args[1],1);
+    /* The pinned host collapses every black axis-aligned triangle rectangle in
+     * inline vertex data (its "menu black panel" workaround for an older
+     * renderer). With xemu's PGRAPH that rectangle is the menus' depth-only
+     * mask (colour writes off): collapsing it hid PRESS START, the copyright
+     * and the title logo, which are drawn only inside it. */
+    setenv("RECOMP_KEEP_BLACK_PANEL","1",1);
     int result = black_OriginalMain(argc > 1 ? argc : 2,args);
     black_InputGameViewRemove(view); free(view); free(args); free(installed);
     return result;
