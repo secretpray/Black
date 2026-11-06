@@ -16,8 +16,9 @@ collapse hid the text. `ports/macos/overrides/main_posix.c` now turns that
 filter off (`RECOMP_KEEP_BLACK_PANEL=1`) without changing the submodule. Checked
 in English and Russian with the HD pack: PRESS START, the copyright and the
 logo are back, and the main menu and mission select show no black panel. The
-user confirmed the screen live. The pause, options and profile menus were not
-reviewed for a black panel yet.
+user confirmed the screen live. Later scripted captures of the options
+menu, the operator profile and the pause menu in the first mission also show no
+black panel.
 
 ## HD texture alpha in 0.5.3
 
