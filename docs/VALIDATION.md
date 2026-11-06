@@ -1,9 +1,9 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.3**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.4**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Title screen text after 0.5.3
+## Title screen text in 0.5.4
 
 Since the first macOS build the title screen showed only the two bracket lines
 where the Xbox shows PRESS START; the copyright line and the title logo were

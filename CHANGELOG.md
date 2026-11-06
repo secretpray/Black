@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4 — 2026-11-06
+
+- **Title screen text.** Since the first macOS build the title screen showed only
+  the bracket lines where the Xbox shows PRESS START, and the copyright line and
+  the logo were missing. They are drawn inside a depth-only mask that an old
+  "menu black panel" workaround in the pinned host collapsed to a point. With
+  xemu's renderer the mask only writes depth, so BLACK now turns the workaround
+  off.
+
 ## 0.5.3 — 2026-11-05
 
 - **HD textures: grenade crate and pickup weapons.** PCSX2 pack files keep PS2
