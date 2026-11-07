@@ -31,6 +31,23 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
         black_trace_replace(content "    if (!no_dl)\n        pgraph_gl_download_dirty_surfaces(d);\n    capture_hires(d);"
             "    uint64_t black_download_start = black_trace_ns();\n    if (!no_dl)\n        pgraph_gl_download_dirty_surfaces(d);\n    uint64_t black_capture_start = black_trace_ns();\n    black_trace(BLACK_TRACE_DOWNLOAD, s_flips, black_download_start, black_capture_start, no_dl, black_draws);\n    capture_hires(d);\n    uint64_t black_flip_end = black_trace_ns();\n    black_trace(BLACK_TRACE_CAPTURE, s_flips, black_capture_start, black_flip_end, 0, 0);\n    black_trace(BLACK_TRACE_FLIP, s_flips, black_flip_start, black_flip_end, black_draws, 0);")
     elseif(name STREQUAL "surface.c")
+        # BLACK's depth/colour aliases converted on the GPU (ports/macos/overrides/xemu_surface_alias.inc).
+        black_trace_replace(content "static void surface_get_dimensions(PGRAPHState *pg, unsigned int *width, unsigned int *height);\n"
+            "static void surface_get_dimensions(PGRAPHState *pg, unsigned int *width, unsigned int *height);\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/xemu_surface_alias.inc\"\n")
+        black_trace_replace(content "        surface->height != shape->height) {\n        return false;\n    }\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        // FIXME: Support zeta to color\n        return false;\n    }\n"
+            "        surface->height != shape->height) {\n        return false;\n    }\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        return black_alias_zeta_texture_ok(surface, shape);\n    }\n")
+        black_trace_replace(content "    // FIXME: Better checks/handling on formats and surface-texture compat\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        // FIXME: Support zeta to color\n        return false;\n    }\n"
+            "    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        return black_alias_zeta_texture_ok(surface, shape);\n    }\n")
+        black_trace_replace(content "    glUseProgram(r->s2t_rndr.prog);\n    glProgramUniform1i(r->s2t_rndr.prog, r->s2t_rndr.tex_loc,\n                       texture_unit);\n    glProgramUniform2f(r->s2t_rndr.prog,\n                       r->s2t_rndr.surface_size_loc, width, height);\n"
+            "    black_alias_use_program(r, surface, texture_unit, width, height);\n")
+        black_trace_replace(content "    glDrawArrays(GL_TRIANGLES, 0, 3);\n\n    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_target, 0,\n"
+            "    glDrawArrays(GL_TRIANGLES, 0, 3);\n    black_alias_after_draw(surface);\n\n    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_target, 0,\n")
+        black_trace_replace(content "        bool should_create = true;\n"
+            "        bool should_create = true;\n        BlackSurfaceAlias black_alias = { 0, false };\n")
+        black_trace_replace(content "                compare_surfaces(found, &entry);\n                pgraph_gl_surface_download_if_dirty(d, found);\n                pgraph_gl_surface_invalidate(d, found);\n"
+            "                compare_surfaces(found, &entry);\n                if (!black_alias_take(d, found, &entry, color, &black_alias)) {\n                    pgraph_gl_surface_download_if_dirty(d, found);\n                    pgraph_gl_surface_invalidate(d, found);\n                }\n")
+        black_trace_replace(content "            found = surface_put(d, entry.vram_addr, &entry);\n"
+            "            found = surface_put(d, entry.vram_addr, &entry);\n            black_alias_finish(d, found, &black_alias);\n")
         black_trace_replace(content "                                       uint8_t *pixels)\n{\n    PGRAPHState *pg = &d->pgraph;"
             "                                       uint8_t *pixels)\n{\n    uint64_t black_read_start = black_trace_ns();\n    PGRAPHState *pg = &d->pgraph;")
         black_trace_replace(content "    bind_current_surface(d);\n}\n\nstatic void surface_download(NV2AState *d, SurfaceBinding *surface, bool force)"
