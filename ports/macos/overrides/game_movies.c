@@ -7,7 +7,10 @@
 #include "subtitles.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 extern void black_OriginalFilmTick(void);
+int black_InputFilmButton(void);
+void black_FilmHintSet(int visible);
 void black_ModsFrontEnd(void);
 
 /* Developer qualification only (launcher --dev-unlock-levels N, which also
@@ -67,6 +70,22 @@ void sub_00209DC0(void)
             MEM8(player + 0x1B9) = 1;
             fprintf(stderr, "[FILM] %s: ordinary completion requested after 3 playing polls\n", name);
         }
-    } else black_SubtitleFilm(0, 0, "", 0);
+        /* Flags +0x198 bit 0: a looping film (the menu backgrounds). */
+        static BlackFilmPress press;
+        int playing_once = MEM32(player + 0x1A8) == 0x1C && !(MEM32(player + 0x198) & 1);
+        if (black_film_press_policy(&press, black_SettingsSkipAnyFilm(), black_InputFilmButton(),
+            playing_once, name) && !MEM8(player + 0x1B9)) {
+            MEM8(player + 0x1B9) = 1;
+            fprintf(stderr, "[FILM] %s: skipped by button\n", name);
+        }
+        static BlackFilmHint hint;
+        struct timespec t;
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        black_FilmHintSet(black_film_hint_policy(&hint, black_SettingsSkipAnyFilm(), playing_once,
+            MEM8(player + 0x1B9), MEM32(player), name, t.tv_sec + t.tv_nsec / 1e9));
+    } else {
+        black_SubtitleFilm(0, 0, "", 0);
+        black_FilmHintSet(0);
+    }
     black_OriginalFilmTick();
 }

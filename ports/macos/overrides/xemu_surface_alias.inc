@@ -116,12 +116,17 @@ static void black_alias_depth_sampling(GLuint texture, bool exact)
                     exact ? GL_NEAREST : GL_LINEAR);
 }
 
-/* render_surface_to's program choice: the stock copy for colour, the depth
- * unpacking one for a Z24S8 surface (already bound on texture_unit). */
-static void black_alias_use_program(PGRAPHGLState *r, SurfaceBinding *surface,
+/* render_surface_to's program choice: the stock copy for colour (or the
+ * effect box filter, xemu_effect_filter.inc), the depth unpacking one for a
+ * Z24S8 surface (already bound on texture_unit). */
+static void black_alias_use_program(PGRAPHState *pg, PGRAPHGLState *r,
+                                    SurfaceBinding *surface,
                                     int texture_unit, unsigned int width,
                                     unsigned int height)
 {
+    if (surface->color && black_box_use_program(pg, surface, texture_unit)) {
+        return;
+    }
     if (surface->color) {
         glUseProgram(r->s2t_rndr.prog);
         glProgramUniform1i(r->s2t_rndr.prog, r->s2t_rndr.tex_loc,
@@ -139,6 +144,7 @@ static void black_alias_use_program(PGRAPHGLState *r, SurfaceBinding *surface,
 
 static void black_alias_after_draw(SurfaceBinding *surface)
 {
+    black_box_after_draw(surface);
     if (!surface->color) {
         black_alias_depth_sampling(surface->gl_buffer, false);
     }

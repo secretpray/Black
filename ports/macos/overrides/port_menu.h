@@ -8,6 +8,8 @@ int black_SettingsSkipIntros(void);
 int black_SettingsSetSkipIntros(int enabled);
 int black_SettingsSkipMissionIntros(void);
 int black_SettingsSetSkipMissionIntros(int enabled);
+int black_SettingsSkipAnyFilm(void);
+int black_SettingsSetSkipAnyFilm(int enabled);
 int black_SettingsRenderScale(void);
 int black_SettingsSetRenderScale(int scale);
 int black_SettingsFov(void);

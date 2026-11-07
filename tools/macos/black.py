@@ -532,6 +532,14 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["RECOMP_FPSLOG"] = "1"
     if args.presenter_pacing == "legacy":
         env["BLACK_LEGACY_PACING"] = "1"
+    if args.gamma == "off":
+        env["BLACK_GAMMA"] = "off"
+    if args.gamma_trace:
+        env["BLACK_GAMMA_TRACE"] = "1"
+    if args.effect_filter == "off":
+        env["BLACK_EFFECT_FILTER"] = "off"
+    if args.diagnostics:
+        env["BLACK_EFFECT_FILTER_TRACE"] = "1"
     if args.gpu_readback == "on-demand":
         env["RECOMP_NO_FLIP_DOWNLOAD"] = "1"
     if args.capture:
@@ -685,6 +693,9 @@ def main():
             sub.add_argument("--diagnostics", action="store_true")
             sub.add_argument("--frame-times", action="store_true", help="Log game FPS and longest frame every two seconds without full diagnostics")
             sub.add_argument("--profile-frames", action="store_true", help="Buffered per-frame CPU/GPU-readback/presenter timing, no images")
+            sub.add_argument("--gamma", choices=("game", "off"), default="game", help="Apply the game's own brightness/gamma ramp at presentation (default), or keep identity for A/B")
+            sub.add_argument("--effect-filter", choices=("box", "off"), default="box", help="Average BLACK's small glow/blur targets over one Xbox texel when the render scale is above 1 (default), or keep the stock copy for A/B")
+            sub.add_argument("--gamma-trace", action="store_true", help="Log each new game gamma ramp")
             sub.add_argument("--presenter-pacing", choices=("steady", "legacy"), default="steady", help="Host presentation pacing; legacy reproduces the upstream extra sleep for comparison")
             sub.add_argument("--gpu-readback", choices=("auto", "always", "on-demand"), default="auto", help="Surface downloads to guest RAM: auto (on-demand at scale >= 2, always at 1x), always (every flip, the old behaviour) or on-demand")
             sub.add_argument("--frame-source", choices=("snapshot", "legacy"), default="snapshot", help="Completed GPU snapshots also at native resolution; legacy selects guest RAM buffers for comparison")

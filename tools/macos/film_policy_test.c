@@ -76,6 +76,52 @@ int main(void)
         for (int poll=0;poll<5;++poll)
             if(black_film_skip_policy(&state,1,50,"C_N_US",0x1C,0,1,0,0)) return 21;
     }
-    puts("Selected film / third playing poll / background and Off paths: PASS");
+    /* Skip any film by button: a press the game ignores for 10 polls stops
+     * the same film; one it answers moves on to another film, not stopped. */
+    {
+        BlackFilmPress p = {0};
+        char lo[9] = "LO_N_US", next[9] = "AK_N";
+        for (int i = 0; i < 3; ++i) if (black_film_press_policy(&p, 1, 0, 1, lo)) return 22;
+        if (black_film_press_policy(&p, 1, 1, 1, lo)) return 23;            /* press */
+        for (int i = 1; i < BLACK_FILM_PRESS_WAIT; ++i)
+            if (black_film_press_policy(&p, 1, i < 4, 1, lo)) return 24;     /* held, then released */
+        if (!black_film_press_policy(&p, 1, 0, 1, lo)) return 25;           /* tenth poll: stop */
+        for (int i = 0; i < 20; ++i) if (black_film_press_policy(&p, 1, 0, 1, lo)) return 26;
+        /* Held from before the film: no new press, nothing happens. */
+        p = (BlackFilmPress){0};
+        black_film_press_policy(&p, 1, 1, 0, lo);
+        for (int i = 0; i < 20; ++i) if (black_film_press_policy(&p, 1, 1, 1, lo)) return 27;
+        /* The game answered: another film plays at the tenth poll. */
+        p = (BlackFilmPress){0};
+        black_film_press_policy(&p, 1, 1, 1, lo);
+        for (int i = 1; i < BLACK_FILM_PRESS_WAIT; ++i) black_film_press_policy(&p, 1, 0, 1, next);
+        if (black_film_press_policy(&p, 1, 0, 1, next)) return 28;
+        /* Looping menu backgrounds, idle player and Off are left alone. */
+        p = (BlackFilmPress){0};
+        black_film_press_policy(&p, 1, 1, 0, lo);
+        for (int i = 0; i < 20; ++i) if (black_film_press_policy(&p, 1, 0, 0, lo)) return 29;
+        p = (BlackFilmPress){0};
+        black_film_press_policy(&p, 1, 1, 1, lo);
+        for (int i = 1; i < BLACK_FILM_PRESS_WAIT; ++i) black_film_press_policy(&p, 1, 0, 1, lo);
+        if (black_film_press_policy(&p, 1, 0, 0, lo)) return 30;           /* ended by itself */
+        p = (BlackFilmPress){0};
+        black_film_press_policy(&p, 0, 1, 1, lo);
+        for (int i = 0; i < 20; ++i) if (black_film_press_policy(&p, 0, 0, 1, lo)) return 31;
+    }
+    /* The skip hint appears 2.5 s into a film that plays once and goes with it. */
+    {
+        BlackFilmHint h = {0};
+        char lo[9] = "LO_N_US", c[9] = "C_N_US";
+        if (black_film_hint_policy(&h, 1, 1, 0, 7, lo, 10.0)) return 40;
+        if (black_film_hint_policy(&h, 1, 1, 0, 7, lo, 12.4)) return 41;
+        if (!black_film_hint_policy(&h, 1, 1, 0, 7, lo, 12.5)) return 42;
+        if (black_film_hint_policy(&h, 1, 1, 1, 7, lo, 13.0)) return 43;   /* stop requested */
+        if (black_film_hint_policy(&h, 1, 1, 0, 8, c, 13.0)) return 44;    /* next film restarts */
+        if (!black_film_hint_policy(&h, 1, 1, 0, 8, c, 15.6)) return 45;
+        if (black_film_hint_policy(&h, 1, 0, 0, 8, c, 16.0)) return 46;    /* ended, menu loop */
+        if (black_film_hint_policy(&h, 1, 1, 0, 8, c, 16.1)) return 47;    /* same film again: new start */
+        if (black_film_hint_policy(&h, 0, 1, 0, 8, c, 30.0)) return 48;    /* option Off */
+    }
+    puts("Selected film / third playing poll / background and Off paths / skip by button / hint: PASS");
     return 0;
 }

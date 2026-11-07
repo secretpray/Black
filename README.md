@@ -89,6 +89,11 @@ PS2 and Xbox 360 files are not supported.
 - Native ARM64 game code, NV2A rendering through ANGLE Metal and the DSP audio path.
 - Saved 1–6× render scale, camera FOV, SMAA/FXAA, anisotropic filtering and MetalFX
   spatial upscaling. Graphics changes take effect on the next launch.
+- The game's own brightness and gamma ramp, with its fades to and from black,
+  as the Xbox's video output applies it.
+- At render scales above 1×, the game's small glow and blur buffers are averaged
+  over one Xbox texel before its blur samples them, as on the console's
+  resolution.
 - A panel in the game’s own green-grey menu style, using fonts from your own game.
   The panel has **Port Settings**, **Controls** and **Mods** tabs,
   with device selection first and separate input subpages.
@@ -120,11 +125,13 @@ PS2 and Xbox 360 files are not supported.
   <img src="docs/screenshots/settings-mods.jpg" alt="Settings, Mods page: GAME USA XBE, Films with Skip Intro Movies, and Player with God Mode, Infinite Medkits and Infinite Grenades" width="85%">
 </p>
 
-The **Mods** page collects cheats and modifications, all **off by default**:
+The **Mods** page collects cheats and modifications, all **off by default**
+except **Skip Films with a Button**:
 
 | Group | Mod | What it does |
 | --- | --- | --- |
-| Films | Skip Intro Movies / Skip Mission Intros | Skips the startup films and mission briefings |
+| Films | Skip Films with a Button (on by default) | A, Start or Enter skips any film, also the logos and the films the game lets you skip only after that mission; a hint shows the button after 2.5 seconds; looping menu backgrounds stay |
+| Films | Auto-Skip Intro Films / Auto-Skip Mission Briefings | Skips the startup films and mission briefings without a press |
 | Player | God Mode | Refills your health and holds the game's own invulnerability flag, so no hit gets through |
 | Player | Infinite Medkits / Infinite Grenades | Keeps three medkits (the game's limit) and nine grenades |
 | Player | Infinite Ammo | Your magazine and reserve never go down, with any weapon you hold |

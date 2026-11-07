@@ -14,7 +14,7 @@
 
 static pthread_once_t initialized = PTHREAD_ONCE_INIT;
 static pthread_mutex_t save_lock = PTHREAD_MUTEX_INITIALIZER;
-static atomic_int skip_intros, skip_missions, save_failed, menu_open;
+static atomic_int skip_intros, skip_missions, skip_any_film = 1, save_failed, menu_open;
 static atomic_int render_scale = 2, field_of_view = 70;
 /* anti_aliasing: 0 off, 1 FXAA, 2 SMAA. anisotropic_filtering: 0 keeps the
  * game's own level, else 2, 4, 8 or 16. */
@@ -67,6 +67,10 @@ static void load_settings(void)
             if (sscanf(line, " skip_mission_intros = %15s %c", value, &extra) == 1) {
                 if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&skip_missions, 1);
                 else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&skip_missions, 0);
+            }
+            if (sscanf(line, " skip_any_film = %15s %c", value, &extra) == 1) {
+                if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&skip_any_film, 1);
+                else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&skip_any_film, 0);
             }
             char *end;
             const char *keys[] = {"left_stick_deadzone", "right_stick_deadzone",
@@ -205,6 +209,14 @@ int black_SettingsSkipMissionIntros(void)
     return atomic_load(&skip_missions);
 }
 
+/* A, START or Enter skips any film, also one the game does not let you skip
+ * yet; on by default. */
+int black_SettingsSkipAnyFilm(void)
+{
+    pthread_once(&initialized, load_settings);
+    return atomic_load(&skip_any_film);
+}
+
 int black_SettingsRenderScale(void)
 {
     pthread_once(&initialized, load_settings);
@@ -252,8 +264,8 @@ static int save_setting(atomic_int *setting, int value)
         if (fd >= 0) {
             FILE *file = fdopen(fd, "w");
             if (file) {
-                int written = fprintf(file, "# BLACK recomp settings\nskip_intro_movies=%d\nskip_mission_intros=%d\nrender_scale=%d\nfield_of_view=%d\nanti_aliasing=%d\nanisotropic_filtering=%d\nupscaler=%d\nleft_stick_deadzone=%d\nright_stick_deadzone=%d\ntrigger_deadzone=%d\nvibration=%d\ndualsense_hidapi=%d\n# Controller sensitivity units: 50 = original 1x\ncontroller_sensitivity=%d\ncontroller_vertical_sensitivity=%d\ncontroller_aim_horizontal_sensitivity=%d\ncontroller_aim_vertical_sensitivity=%d\ninvert_controller_x=%d\nrumble_intensity=%d\ncontroller_hold_aim=%d\naim_assist=%d\n",
-                    atomic_load(&skip_intros), atomic_load(&skip_missions),
+                int written = fprintf(file, "# BLACK recomp settings\nskip_intro_movies=%d\nskip_mission_intros=%d\nskip_any_film=%d\nrender_scale=%d\nfield_of_view=%d\nanti_aliasing=%d\nanisotropic_filtering=%d\nupscaler=%d\nleft_stick_deadzone=%d\nright_stick_deadzone=%d\ntrigger_deadzone=%d\nvibration=%d\ndualsense_hidapi=%d\n# Controller sensitivity units: 50 = original 1x\ncontroller_sensitivity=%d\ncontroller_vertical_sensitivity=%d\ncontroller_aim_horizontal_sensitivity=%d\ncontroller_aim_vertical_sensitivity=%d\ninvert_controller_x=%d\nrumble_intensity=%d\ncontroller_hold_aim=%d\naim_assist=%d\n",
+                    atomic_load(&skip_intros), atomic_load(&skip_missions), atomic_load(&skip_any_film),
                     atomic_load(&render_scale), atomic_load(&field_of_view),
                     atomic_load(&anti_aliasing), atomic_load(&anisotropic_filtering),
                     atomic_load(&upscaler), atomic_load(&stick_deadzone[0]), atomic_load(&stick_deadzone[1]),
@@ -300,6 +312,7 @@ static int save_setting(atomic_int *setting, int value)
 
 int black_SettingsSetSkipIntros(int enabled) { return save_setting(&skip_intros, !!enabled); }
 int black_SettingsSetSkipMissionIntros(int enabled) { return save_setting(&skip_missions, !!enabled); }
+int black_SettingsSetSkipAnyFilm(int enabled) { return save_setting(&skip_any_film, !!enabled); }
 int black_SettingsSetRenderScale(int scale)
 { return scale >= 1 && scale <= 6 ? save_setting(&render_scale, scale) : 0; }
 int black_SettingsSetFov(int degrees)
@@ -466,6 +479,7 @@ int black_SettingsResetMods(void)
     pthread_once(&initialized, load_settings);
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) atomic_store(&mods[i], 0);
     atomic_store(&skip_missions, 0);
+    atomic_store(&skip_any_film, 1);
     return save_setting(&skip_intros, 0);
 }
 void black_ModsSetRevision(const char *name, int supported)

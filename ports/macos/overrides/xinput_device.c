@@ -2,6 +2,7 @@
  * a connected controller. Upstream returns the controller state before ever
  * polling the keyboard in that case. The include retains upstream's license.
  * This translation unit replaces, rather than duplicates, xinput_device.c. */
+#include <stdatomic.h>
 #include <SDL.h>
 #include "../runtime/src/input/xinput_xbox.h"
 #include <stdio.h>
@@ -257,10 +258,19 @@ static DWORD black_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
  * timer. The menu must keep reading the host independently. Serialize SDL
  * and the existing keyboard/script state with normal USB-side polling. */
 static pthread_mutex_t black_input_lock = PTHREAD_MUTEX_INITIALIZER;
+/* A or START as the game sees port 0 (pad, keyboard or script, after the
+ * remap and with the settings panel's capture), for the film skip. */
+static atomic_int black_film_button;
+int black_InputFilmButton(void) { return atomic_load(&black_film_button); }
+
 DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
     pthread_mutex_lock(&black_input_lock);
     DWORD result = black_InputGetState(port, state);
+    if (!port)
+        atomic_store(&black_film_button, result == ERROR_SUCCESS && state &&
+            (state->Gamepad.bAnalogButtons[XBOX_BUTTON_A] > 30 ||
+             (state->Gamepad.wButtons & XBOX_GAMEPAD_START)));
     pthread_mutex_unlock(&black_input_lock);
     return result;
 }

@@ -1,6 +1,7 @@
 /* Native macOS adaptation of TGP's src/common/menu.cpp settings layout and
  * palette. Cocoa controls and local BLACK fonts retain the pinned Mac ABI. */
 #import <Cocoa/Cocoa.h>
+#include <stdatomic.h>
 #import <QuartzCore/QuartzCore.h>
 #include "port_menu.h"
 #import "black_ui.h"
@@ -129,7 +130,7 @@ static int group_of(int row)
     if(black_menu_link(row)||row==ROW_EDIT_DEVICE)return 17;
     if (row >= ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS) return 13;
     if (row >= ROW_MOD_FIRST) return 12;
-    if (row >= ROW_INTROS) return 11;
+    if (row >= ROW_ANY_FILM) return 11;
     if (row >= ROW_BIND_FIRST) return 10;
     if (row >= ROW_MOUSE_X) return 9;
     if (row >= ROW_PAD_FIRST) return 16;
@@ -173,7 +174,7 @@ static NSArray *row_labels(void)
         @"Mouse Aim Horizontal Sensitivity", @"Mouse Aim Vertical Sensitivity", @"Invert Mouse X", @"Invert Mouse Y",
         @"Mouse Hold to Aim", @"Walk Speed"]];
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
-    [labels addObjectsFromArray:@[@"Skip Intro Movies", @"Skip Mission Intros"]];
+    [labels addObjectsFromArray:@[@"Skip Films with a Button", @"Auto-Skip Intro Films", @"Auto-Skip Mission Briefings"]];
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
     [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming"]];
     return labels;
@@ -280,10 +281,39 @@ uint32_t black_GameFrameCount(void);
 }
 @end
 
+/* "A: SKIP" in the bottom right corner while a film can be skipped by
+ * button (game_movies.c), with the prompt of the active device, in the same
+ * small game font and shadow as the FPS counter. */
+static atomic_int film_hint;
+static _Atomic double film_hint_seen;
+void black_FilmHintSet(int visible)
+{
+    atomic_store(&film_hint, !!visible);
+    if (visible) atomic_store(&film_hint_seen, CACurrentMediaTime());
+}
+@interface BlackFilmHintView : NSView
+@end
+@implementation BlackFilmHintView
+- (BOOL)isFlipped { return YES; }
+- (NSView *)hitTest:(NSPoint)point { (void)point; return nil; }
+- (void)drawRect:(NSRect)dirty
+{
+    (void)dirty;
+    CGFloat unit = self.bounds.size.height / 480, cap = MAX(8, 7 * unit), margin = 12 * unit;
+    char accept[32];
+    black_InputGlyphUTF8(black_InputButtonGlyph(0, 1), accept, sizeof accept);
+    NSString *value = [NSString stringWithFormat:T(@"%@: SKIP"), @(accept)];
+    CGFloat x = self.bounds.size.width - margin - text_width(value, cap, 0), y = self.bounds.size.height - margin - cap * 1.5;
+    text(value, x + 1, y + 1, cap, 0x000000, 0);
+    text(value, x, y, cap, 0xbababa, 0);
+}
+@end
+
 static NSWindow *menu_window;
 static NSView *game_view, *container;
 static BlackMenuView *menu_view;
 static BlackFpsView *fps_view;
+static BlackFilmHintView *film_hint_view;
 static id event_monitor;
 static void (*capture_input)(int);
 static int shown, closing;
@@ -327,8 +357,9 @@ static NSTimeInterval transition, last_draw;
                 black_menu_pair(i)?@"Choose X or Y with Left and Right, press Enter to edit. Back finishes editing.":
                 i==ROW_EDIT_DEVICE?@"Choose the bindings to edit; gameplay device is unchanged.":i <= ROW_RESET ? help[i] : i < ROW_MOUSE_X ?
                 @"Choose the input device and prompt family, or reassign a controller button. Escape cancels capture; Delete clears a binding." :
-                i >= ROW_INTROS && i <= ROW_MOD_LAST ? (i == ROW_INTROS ? @"Skip startup logos and intro films." :
-                    i == ROW_MISSIONS ? @"Skip mission briefings." :
+                i >= ROW_ANY_FILM && i <= ROW_MOD_LAST ? (i == ROW_INTROS ? @"Skip startup logos and intro films without a press." :
+                    i == ROW_MISSIONS ? @"Skip mission briefings without a press." :
+                    i == ROW_ANY_FILM ? @"A, Start or Enter skips any film; a hint shows the button." :
                     [mod_help[i - ROW_MOD_FIRST][0] stringByAppendingFormat:@" %@", mod_help[i - ROW_MOD_FIRST][1]].capitalizedString) :
                 is_binding(i) ? @"Two key slots. Left and Right choose a slot. Enter waits for a key or mouse button. Escape cancels, Delete clears." :
                 @"Mouse and keyboard preferences. Applied live and saved automatically."];
@@ -387,6 +418,7 @@ static NSTimeInterval transition, last_draw;
 
     [rows[ROW_INTROS] setAccessibilityValue:black_SettingsSkipIntros() ? @"On" : @"Off"];
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
+    [rows[ROW_ANY_FILM] setAccessibilityValue:black_SettingsSkipAnyFilm() ? @"On" : @"Off"];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
     [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
@@ -640,11 +672,13 @@ static NSTimeInterval transition, last_draw;
         int value = cycle ? !current : direction > 0;
         if (value == current) return;
         if (hid) black_SettingsSetDualSenseHid(value); else black_SettingsSetVibration(value);
-    } else if ((selected == ROW_INTROS || selected == ROW_MISSIONS)) {
-        int current = selected == ROW_MISSIONS ? black_SettingsSkipMissionIntros() : black_SettingsSkipIntros();
+    } else if (selected == ROW_INTROS || selected == ROW_MISSIONS || selected == ROW_ANY_FILM) {
+        int current = selected == ROW_MISSIONS ? black_SettingsSkipMissionIntros() :
+            selected == ROW_ANY_FILM ? black_SettingsSkipAnyFilm() : black_SettingsSkipIntros();
         int value = cycle ? !current : direction > 0;
         if (current == value) return;
         if (selected == ROW_MISSIONS) black_SettingsSetSkipMissionIntros(value);
+        else if (selected == ROW_ANY_FILM) black_SettingsSetSkipAnyFilm(value);
         else black_SettingsSetSkipIntros(value);
     } else if (selected == ROW_GAME_LANG) {
         /* Step over the languages this disc has no string bank for. */
@@ -931,6 +965,7 @@ static NSAlert *pack_alert;
             index == ROW_AF ? af_name(black_SettingsAniso()) :
             index == ROW_INTROS ? (black_SettingsSkipIntros() ? @"ON" : @"OFF") :
             index == ROW_MISSIONS ? (black_SettingsSkipMissionIntros() ? @"ON" : @"OFF") :
+            index == ROW_ANY_FILM ? (black_SettingsSkipAnyFilm() ? @"ON" : @"OFF") :
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
         CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : left;
         CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : 122;
@@ -1068,8 +1103,12 @@ static NSAlert *pack_alert;
         help = @"CAMERA ANGLE IN DEGREES. ORIGINAL: 70.";
         detail = [NSString stringWithFormat:T(@"APPLIES NEXT LAUNCH. CURRENT: %d."), atoi(getenv("RECOMP_FOV") ?: "70")];
     } else {
-        help = selected == ROW_MISSIONS ? @"SKIP THE BRIEFING FILM BEFORE EACH MISSION." : @"SKIP EA, CRITERION AND STARTUP FILMS.";
-        detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." : @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
+        help = selected == ROW_MISSIONS ? @"SKIP THE BRIEFING FILM BEFORE EACH MISSION, WITHOUT A PRESS." :
+            selected == ROW_ANY_FILM ? @"A, START OR ENTER SKIPS ANY FILM, ALSO ONE NOT YET UNLOCKED." :
+            @"SKIP EA, CRITERION AND STARTUP FILMS, WITHOUT A PRESS.";
+        detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." :
+            selected == ROW_ANY_FILM ? @"A HINT SHOWS THE BUTTON. OFF: ONLY FILMS THE GAME ITSELF LETS YOU SKIP." :
+            @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
     line(84, 430, 792, HIGHLIGHT, 1);
     fitted_text(T(help), 96, 443, 11, 768, TEXT, 0);
@@ -1209,6 +1248,10 @@ void black_MenuAttach(void *window, void (*capture)(int))
     fps_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     fps_view.hidden = YES;
     [container addSubview:fps_view];
+    film_hint_view = [[BlackFilmHintView alloc] initWithFrame:container.bounds];
+    film_hint_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    film_hint_view.hidden = YES;
+    [container addSubview:film_hint_view];
     [container addSubview:menu_view];
     black_SubtitleAttach(container);
     [menu_window makeFirstResponder:game_view];
@@ -1339,6 +1382,16 @@ void black_MenuPump(void)
             fps_view.hidden = NO; [fps_view setNeedsDisplay:YES];
         }
     } else if (!fps_view.hidden) { fps_view.hidden = YES; fps_time = 0; }
+    {
+        /* A stalled game thread leaves no stale hint behind. */
+        BOOL hint = atomic_load(&film_hint) && !shown && CACurrentMediaTime() - atomic_load(&film_hint_seen) < .5;
+        static unsigned hint_glyph;
+        unsigned glyph = black_InputButtonGlyph(0, 1);
+        if (hint != !film_hint_view.hidden || (hint && glyph != hint_glyph)) {
+            film_hint_view.hidden = !hint; hint_glyph = glyph;
+            if (hint) [film_hint_view setNeedsDisplay:YES];
+        }
+    }
     if (menu_view->pad_capture) {
         int captured = black_PadCaptureTake();
         if (captured >= -1) {

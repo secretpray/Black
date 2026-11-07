@@ -35,6 +35,7 @@ static id<MTLTexture> black_PostProcess(id<MTLCommandBuffer> command, id<MTLText
 static int update_pixels(void);
 static void render_frame(void);
 static int black_StableFrameAvailable(void);
+static id<MTLTexture> black_GammaTexture(void);
 extern unsigned xnv2a_flip_count(void) __attribute__((weak));
 
 static int black_PresenterSleep(const struct timespec *request, struct timespec *remaining)
@@ -78,6 +79,42 @@ static int black_PresenterSleep(const struct timespec *request, struct timespec 
 #undef xbox_FramebufferWindowStop
 #include "port_menu.h"
 #include "flash_menu.h"
+#include "display_gamma.h"
+
+/* The DAC table as a 256x1 lookup for the scaling pass; uploaded only when
+ * the game wrote a different one. BLACK_GAMMA=off keeps identity for A/B. */
+static id<MTLTexture> black_GammaTexture(void)
+{
+    static id<MTLTexture> texture;
+    static uint32_t uploaded = UINT32_MAX;
+    static int disabled = -1;
+    if (disabled < 0) {
+        const char *mode = getenv("BLACK_GAMMA");
+        disabled = mode && !strcmp(mode, "off");
+    }
+    if (!texture) {
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                         width:BLACK_GAMMA_ENTRIES height:1 mipmapped:NO];
+        texture = [s_device newTextureWithDescriptor:desc];
+    }
+    uint8_t rgb[BLACK_GAMMA_ENTRIES * 3];
+    uint32_t version = black_GammaSnapshot(rgb);
+    if (disabled) version = 0;
+    if (texture && version != uploaded) {
+        uint8_t rgba[BLACK_GAMMA_ENTRIES * 4];
+        for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES; ++i) {
+            rgba[i * 4] = disabled ? (uint8_t)i : rgb[i * 3];
+            rgba[i * 4 + 1] = disabled ? (uint8_t)i : rgb[i * 3 + 1];
+            rgba[i * 4 + 2] = disabled ? (uint8_t)i : rgb[i * 3 + 2];
+            rgba[i * 4 + 3] = 255;
+        }
+        [texture replaceRegion:MTLRegionMake2D(0, 0, BLACK_GAMMA_ENTRIES, 1)
+                   mipmapLevel:0 withBytes:rgba bytesPerRow:sizeof rgba];
+        uploaded = version;
+    }
+    return texture;
+}
 
 /* SMAA on the frame as rendered, then MetalFX to the exact size of the area
  * the presentation pass fills (the same fit as its viewport), which then

@@ -29,6 +29,7 @@ foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER MOD_RECOIL
     set(BLACK_FOUND_${point} 0)
 endforeach()
 set(BLACK_FOUND_LANGUAGE 0)
+set(BLACK_FOUND_GAMMA 0)
 set(BLACK_GAME_OVERLAY_SOURCES "")
 foreach(source IN LISTS BLACK_GENERATED)
     file(READ "${source}" original)
@@ -124,6 +125,23 @@ foreach(source IN LISTS BLACK_GENERATED)
             string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\n${mod_declaration}" edited "${edited}")
         endif()
     endforeach()
+    # Gamma ramp (ports/macos/overrides/display_gamma.c): BLACK's renderer
+    # 0x1762B0 builds its brightness ramp and, when it changed, copies it to
+    # the device's pending slot (+0x1E04 + slot * 0x300) and flags it for the
+    # vertical blank. That blank only loads the DAC while a flip waits for
+    # it, which this runtime's presentation no longer does after the first
+    # frames; the presenter takes the ramp from here instead.
+    set(gamma_anchor "    MEM32(eax + 0x240C) = edx;\n    MEM32(eax + edx * 4 + 0x2404) = 1;\n")
+    string(REPLACE "${gamma_anchor}" "" without_gamma "${edited}")
+    string(LENGTH "${edited}" before_length)
+    string(LENGTH "${without_gamma}" after_length)
+    string(LENGTH "${gamma_anchor}" anchor_length)
+    math(EXPR matches "(${before_length} - ${after_length}) / ${anchor_length}")
+    if(matches GREATER 0)
+        math(EXPR BLACK_FOUND_GAMMA "${BLACK_FOUND_GAMMA} + ${matches}")
+        string(REPLACE "${gamma_anchor}" "${gamma_anchor}    black_GammaSetRamp((const uint8_t *)XBOX_PTR(eax + edx * 0x300u + 0x1E04u));\n" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_GammaSetRamp(const uint8_t *);" edited "${edited}")
+    endif()
     # Game language (ports/macos/overrides/game_language.c): the USA start-up
     # 0x1F8100 stores the language word 1 (US) on both of its paths.
     string(FIND "${edited}" "void sub_001F8100(void)\n{" language_function)
@@ -228,6 +246,9 @@ foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST)
         message(FATAL_ERROR "Expected exactly one verified TGP ${point} hook")
     endif()
 endforeach()
+if(NOT BLACK_FOUND_GAMMA EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified gamma ramp copy in 0x1762B0")
+endif()
 if(NOT BLACK_FOUND_LANGUAGE EQUAL 2)
     message(FATAL_ERROR "Expected the USA start-up 0x1F8100 to store the language word twice")
 endif()

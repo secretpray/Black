@@ -33,13 +33,13 @@ foreach(relative IN ITEMS nv2a_glue.c hw/xbox/nv2a/pgraph/gl/surface.c hw/xbox/n
     elseif(name STREQUAL "surface.c")
         # BLACK's depth/colour aliases converted on the GPU (ports/macos/overrides/xemu_surface_alias.inc).
         black_trace_replace(content "static void surface_get_dimensions(PGRAPHState *pg, unsigned int *width, unsigned int *height);\n"
-            "static void surface_get_dimensions(PGRAPHState *pg, unsigned int *width, unsigned int *height);\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/xemu_surface_alias.inc\"\n")
+            "static void surface_get_dimensions(PGRAPHState *pg, unsigned int *width, unsigned int *height);\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/xemu_effect_filter.inc\"\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/xemu_surface_alias.inc\"\n")
         black_trace_replace(content "        surface->height != shape->height) {\n        return false;\n    }\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        // FIXME: Support zeta to color\n        return false;\n    }\n"
             "        surface->height != shape->height) {\n        return false;\n    }\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        return black_alias_zeta_texture_ok(surface, shape);\n    }\n")
         black_trace_replace(content "    // FIXME: Better checks/handling on formats and surface-texture compat\n\n    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        // FIXME: Support zeta to color\n        return false;\n    }\n"
             "    int surface_fmt = surface->shape.color_format;\n    int texture_fmt = shape->color_format;\n\n    if (!surface->color) {\n        return black_alias_zeta_texture_ok(surface, shape);\n    }\n")
         black_trace_replace(content "    glUseProgram(r->s2t_rndr.prog);\n    glProgramUniform1i(r->s2t_rndr.prog, r->s2t_rndr.tex_loc,\n                       texture_unit);\n    glProgramUniform2f(r->s2t_rndr.prog,\n                       r->s2t_rndr.surface_size_loc, width, height);\n"
-            "    black_alias_use_program(r, surface, texture_unit, width, height);\n")
+            "    black_alias_use_program(pg, r, surface, texture_unit, width, height);\n")
         black_trace_replace(content "    glDrawArrays(GL_TRIANGLES, 0, 3);\n\n    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_target, 0,\n"
             "    glDrawArrays(GL_TRIANGLES, 0, 3);\n    black_alias_after_draw(surface);\n\n    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, gl_target, 0,\n")
         black_trace_replace(content "        bool should_create = true;\n"
@@ -163,6 +163,14 @@ black_trace_replace(presenter "static void render_frame(void)\n{"
     "static void black_OriginalRenderFrame(void)\n{")
 black_trace_replace(presenter "    [command presentDrawable:drawable];"
     "    if (black_trace_enabled()) {\n        uint32_t black_present_id = (uint32_t)s_fb_frames_presented;\n        uint64_t black_submit_ns = black_trace_ns();\n        uint32_t black_flip_id = xnv2a_flip_count ? xnv2a_flip_count() : 0;\n        [drawable addPresentedHandler:^(id<MTLDrawable> shown) {\n            black_trace(BLACK_TRACE_DISPLAY, black_present_id, black_submit_ns, black_trace_ns(),\n                (uint64_t)(shown.presentedTime * 1000000000.0), black_flip_id);\n        }];\n    }\n    [command presentDrawable:drawable];")
+# The DAC gamma ramp (display_gamma.c) is the last step of the scaling pass,
+# as the Xbox applies it to every pixel it sends to the screen.
+black_trace_replace(presenter "    \"fragment float4 fs(Out in [[stage_in]], texture2d<float> tex [[texture(0)]]) {\\n\""
+    "    \"static float black_ramp(texture2d<float> r, float c, int k) {\\n\"\n    \"  float x = saturate(c) * 255.0; uint i = uint(floor(x)); uint j = min(i + 1u, 255u);\\n\"\n    \"  return mix(r.read(uint2(i, 0))[k], r.read(uint2(j, 0))[k], x - float(i));\\n\"\n    \"}\\n\"\n    \"fragment float4 fs(Out in [[stage_in]], texture2d<float> tex [[texture(0)]], texture2d<float> ramp [[texture(1)]]) {\\n\"")
+black_trace_replace(presenter "    \"  return float4(m, 1.0);\\n\""
+    "    \"  m = float3(black_ramp(ramp, m.r, 0), black_ramp(ramp, m.g, 1), black_ramp(ramp, m.b, 2));\\n\"\n    \"  return float4(m, 1.0);\\n\"")
+black_trace_replace(presenter "    [encoder setFragmentTexture:source atIndex:0];"
+    "    [encoder setFragmentTexture:source atIndex:0];\n    [encoder setFragmentTexture:black_GammaTexture() atIndex:1];")
 set(presenter_dest "${CMAKE_BINARY_DIR}/graphics-overlay/fb_present_posix.m")
 set(previous "")
 if(EXISTS "${presenter_dest}")

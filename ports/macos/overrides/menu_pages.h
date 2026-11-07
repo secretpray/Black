@@ -11,7 +11,7 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, 
        ROW_PAD_FIRST, ROW_PAD_LAST = ROW_PAD_FIRST + BLACK_PAD_CONTROLS - 1,
        ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
        ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1,
-       ROW_INTROS, ROW_MISSIONS, ROW_MOD_FIRST, ROW_MOD_LAST = ROW_MOD_FIRST + BLACK_MOD_COUNT - 1,
+       ROW_ANY_FILM, ROW_INTROS, ROW_MISSIONS, ROW_MOD_FIRST, ROW_MOD_LAST = ROW_MOD_FIRST + BLACK_MOD_COUNT - 1,
        ROW_NAV_BINDINGS, ROW_NAV_MOUSE, ROW_NAV_PAD, ROW_NAV_ADVANCED, ROW_NAV_DIAGNOSTICS,
        ROW_EDIT_DEVICE, ROW_MOUSE_LOOK_PAIR, ROW_MOUSE_AIM_PAIR, ROW_PAD_LOOK_PAIR, ROW_PAD_AIM_PAIR, MENU_ROWS };
 
@@ -20,7 +20,7 @@ enum { PAGE_PORT, PAGE_CONTROLS, PAGE_KEYS, PAGE_PAD_BINDINGS, PAGE_MOUSE,
 enum { MENU_TABS = 3, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 264 };
 static inline int black_menu_count(int page)
 {
-    static const int counts[]={10,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,2+BLACK_MOD_COUNT};
+    static const int counts[]={10,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT};
     return page>=0&&page<MENU_PAGES?counts[page]:0;
 }
 static inline int black_menu_row(int page,int index)
@@ -39,7 +39,7 @@ static inline int black_menu_row(int page,int index)
     case PAGE_PAD:return pad[index];
     case PAGE_ADVANCED:return advanced[index];
     case PAGE_DIAGNOSTICS:return ROW_MEASURE;
-    case PAGE_MODS:return ROW_INTROS+index;
+    case PAGE_MODS:return ROW_ANY_FILM+index;
     default:return -1;
     }
 }

@@ -40,6 +40,7 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/controller_monitor.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_trace.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_wait.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/display_gamma.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_settings.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_install.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/app_bootstrap.m"
@@ -144,6 +145,9 @@ add_test(NAME macos_controller_monitor COMMAND black-controller-monitor)
 add_executable(black-controller-look tools/macos/controller_look_test.c)
 target_link_libraries(black-controller-look PRIVATE black-port-ui)
 add_test(NAME macos_controller_look COMMAND black-controller-look)
+add_executable(black-display-gamma tools/macos/display_gamma_test.c)
+target_link_libraries(black-display-gamma PRIVATE black-port-ui)
+add_test(NAME macos_display_gamma COMMAND black-display-gamma)
 add_executable(black-controller-aim tools/macos/controller_aim_test.c)
 target_link_libraries(black-controller-aim PRIVATE black-port-ui)
 add_test(NAME macos_controller_aim COMMAND black-controller-aim)
