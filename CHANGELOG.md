@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.5 — 2026-11-07
+
+- **Frame rate in later areas.** After the level streamed in its next part the
+  game could fall to 15-18 fps and stay there. BLACK reads its depth buffer as a
+  colour texture and reuses colour targets as depth for its light passes; the
+  emulated GPU took every such alias through guest RAM at the render scale. Both
+  directions are now converted on the GPU, and the first mission holds 30 fps.
+- **Bloom and sun shafts.** The same round trip lost the bright glare in
+  openings and the sun shafts. They now render where the Xbox shows them.
+
 ## 0.5.4 — 2026-11-06
 
 - **Title screen text.** Since the first macOS build the title screen showed only

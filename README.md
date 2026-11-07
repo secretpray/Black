@@ -10,9 +10,11 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.5.4 is an experimental macOS release.** The title screen shows PRESS START,
-> the copyright line and the logo again. From 0.5.3: HD textures no longer paint
-> the grenade crate black or pickup weapons white. From 0.5.2: controllers can be
+> **0.5.5 is an experimental macOS release.** Later areas of a mission no longer
+> drop to 15-18 fps, and bloom and sun shafts render as on the Xbox. From 0.5.4:
+> the title screen shows PRESS START, the copyright line and the logo again.
+> From 0.5.3: HD textures no longer paint the grenade crate black or pickup
+> weapons white. From 0.5.2: controllers can be
 > unplugged and reconnected over USB or Bluetooth during play, a Bluetooth
 > DualSense answers sooner after the desktop, and turning on HD textures checks
 > for the pack and offers to choose its folder. Vibration, Controls, button prompts, setup,
@@ -41,11 +43,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.5.4 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.4)**
+**[BLACK 0.5.5 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.5)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.5.4-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.5.5-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 

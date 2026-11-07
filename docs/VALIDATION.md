@@ -1,7 +1,32 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.4**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.5.5**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Frame rate, bloom and sun shafts in 0.5.5
+
+In the first mission the user saw the game fall from 30 to 15-18 fps after the
+level streamed in its next part, and stay there. Profiles of the live game
+showed the emulated GPU thread busy on `glReadPixels` and `glTexImage2D` while
+the game waited for it. BLACK reuses render-target memory under another format:
+it reads the 640x480 Z24S8 depth buffer through an A8R8G8B8 texture header, and
+it writes downsampled depth as colour into a 160x120 target that its light-cone
+passes then bind as their depth buffer. Stock xemu has no GPU path for either
+alias ("FIXME: Support zeta to color"), so each one went through guest RAM at
+the render scale every frame, and the result of that round trip also lost the
+bloom and sun shafts. `ports/macos/overrides/xemu_surface_alias.inc`, applied
+to the build-local copy of xemu's `surface.c`, converts both directions with
+shaders in the Xbox byte layout (A = Z[23:16], R = Z[15:8], G = Z[7:0]) for
+same-sized, unswizzled A8R8G8B8 and fixed-point Z24S8 targets whose GPU copy is
+current; everything else keeps the stock path.
+
+The conversion runs from the first seconds of the first mission (the 160x120
+target at `0x0365C000` changes format every frame). The bright glare in the
+opening gate matches a frame of an Xbox playthrough video. The user then played
+the whole first mission with the fix: no slowdown, bloom and sun shafts where
+they belong, and no artefacts seen. Of 1190 two-second FPS samples in that run
+one was below 25 (3 fps while a part loaded); before the fix the same area ran
+at 15-18 fps. **114 CTest checks** and **49 Python tests** passed.
 
 ## Title screen text in 0.5.4
 
