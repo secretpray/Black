@@ -30,10 +30,40 @@ static pthread_once_t api_once = PTHREAD_ONCE_INIT;
 static void initialize_api(void)
 { menu.api=(BlackFlashApi){NULL,read_guest,write_guest,call_guest,alloc_guest,trace_guest,getenv("RECOMP_INPUT_DEBUG")!=NULL}; prompts.api=menu.api; }
 static void initialize(void) { pthread_once(&api_once,initialize_api); }
+/* The Home quit dialog's "quit to main menu" (port_menu.m): it sends START
+ * unless the pause menu is already up; here, once that page can take a
+ * call, its own GoToQuitConfirm asks the player, in the game's dialog. */
+#include <stdatomic.h>
+#include <time.h>
+#include "port_menu.h"
+static double monotonic(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
+static _Atomic double pause_seen;
+int black_GameInMission(void)
+{
+    uint32_t game = MEM32(0x2D45F0), state = game ? MEM32(game + 0x21070) : 0;
+    return state && state != game + 0x20220;
+}
+int black_GamePaused(void) { return monotonic() - atomic_load(&pause_seen) < 0.3; }
+static void quit_to_menu(uint32_t ui)
+{
+    static double asked;
+    if (black_FlashOnPage(&menu, ui, "PauseMenu")) atomic_store(&pause_seen, monotonic());
+    if (black_QuitToMenuTake()) asked = monotonic();
+    if (!asked) return;
+    int called = black_FlashPauseQuit(&menu, ui);
+    if (called > 0) {
+        fprintf(stderr, "[HOME] pause menu: the game's quit confirmation\n");
+        asked = 0;
+    } else if (monotonic() - asked > 5) {
+        fprintf(stderr, "[HOME] quit to main menu: no pause menu within 5 s\n");
+        asked = 0;
+    }
+}
 void black_GameMenu(uint32_t ui)
 {
     initialize();uint32_t previous_ebp=g_ebp,previous_seh=g_seh_ebp;g_ebp=ui;g_seh_ebp=ui;
     black_FlashMenuTick(&menu,ui,black_GamePointerTake());
+    quit_to_menu(ui);
     black_PromptTick(&prompts);
     g_ebp=previous_ebp;g_seh_ebp=previous_seh;
     if(menu.fault&&getenv("RECOMP_INPUT_DEBUG")){

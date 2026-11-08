@@ -3,7 +3,7 @@
 #include <stdint.h>
 enum { BLACK_MENU_TOGGLE = 1, BLACK_MENU_CHANGE = 2, BLACK_MENU_BACK = 4,
        BLACK_MENU_OFF = 8, BLACK_MENU_ON = 16, BLACK_MENU_UP = 32, BLACK_MENU_DOWN = 64,
-       BLACK_MENU_PREV_TAB = 128, BLACK_MENU_NEXT_TAB = 256 };
+       BLACK_MENU_PREV_TAB = 128, BLACK_MENU_NEXT_TAB = 256, BLACK_MENU_QUIT = 512 };
 int black_SettingsSkipIntros(void);
 int black_SettingsSetSkipIntros(int enabled);
 int black_SettingsSkipMissionIntros(void);
@@ -37,8 +37,16 @@ int black_SettingsSetTextureReplacement(int enabled);
 int black_SettingsTextureMaxSize(void);
 int black_SettingsSetTextureMaxSize(int size);
 int black_SettingsSaveFailed(void);
-int black_MenuIsOpen(void);
+int black_MenuIsOpen(void);          /* settings panel or quit dialog */
+int black_SettingsPanelOpen(void);
 void black_MenuSetOpen(int open);
+int black_QuitDialogOpen(void);
+void black_QuitDialogSetOpen(int open);
+void black_QuitToMenuRequest(void);
+int black_QuitToMenuTake(void);
+int black_GameInMission(void);
+int black_GamePaused(void);
+void black_InputPulseStart(void);
 void black_MenuCommand(unsigned commands);
 unsigned black_MenuTakeCommands(void);
 /* Input preferences apply live except driver selection, which needs restart. */

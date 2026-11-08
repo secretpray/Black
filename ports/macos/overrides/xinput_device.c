@@ -116,6 +116,15 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     int capture;
     unsigned command = black_menu_pad(&navigation, down, black_MenuIsOpen(), &capture);
     if (command) black_MenuCommand(command);
+    /* Home / Guide / PS: tap toggles the settings, a hold opens the quit
+     * dialog (menu_input.h). The game never sees it. */
+    static BlackHomeButton home;
+    int guide = instance >= 0 && SDL_GameControllerGetButton(g_pads[0], SDL_CONTROLLER_BUTTON_GUIDE);
+    unsigned home_command = black_home_button(&home, guide, black_InputFocused(), SDL_GetTicks());
+    if (home_command) {
+        black_MenuCommand(home_command);
+        fprintf(stderr, "[HOME] %s\n", home_command == BLACK_MENU_QUIT ? "hold: quit dialog" : "tap: settings");
+    }
     if (capture) memset(g, 0, sizeof *g);
     return capture;
 }
@@ -262,11 +271,24 @@ static pthread_mutex_t black_input_lock = PTHREAD_MUTEX_INITIALIZER;
  * remap and with the settings panel's capture), for the film skip. */
 static atomic_int black_film_button;
 int black_InputFilmButton(void) { return atomic_load(&black_film_button); }
+/* A short START press for the game: the quit dialog opens the pause menu
+ * this way before asking the game to quit to its main menu. */
+static atomic_int black_start_pulse;
+void black_InputPulseStart(void) { atomic_store(&black_start_pulse, 6); }
 
 DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
     pthread_mutex_lock(&black_input_lock);
     DWORD result = black_InputGetState(port, state);
+    if (!port && result == ERROR_SUCCESS && state && !black_MenuIsOpen()) {
+        int pulse = atomic_load(&black_start_pulse);
+        /* Released for the last polls, so the game sees one press. */
+        if (pulse > 0) {
+            if (pulse > 2) state->Gamepad.wButtons |= XBOX_GAMEPAD_START;
+            else state->Gamepad.wButtons &= ~XBOX_GAMEPAD_START;
+            atomic_store(&black_start_pulse, pulse - 1);
+        }
+    }
     if (!port)
         atomic_store(&black_film_button, result == ERROR_SUCCESS && state &&
             (state->Gamepad.bAnalogButtons[XBOX_BUTTON_A] > 30 ||

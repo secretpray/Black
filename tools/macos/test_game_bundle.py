@@ -19,6 +19,7 @@ class GameBundle(unittest.TestCase):
         info = plistlib.loads((executable.parents[1] / "Info.plist").read_bytes())
         self.assertTrue(info["LSSupportsGameMode"])
         self.assertEqual(info["LSApplicationCategoryType"], "public.app-category.action-games")
+        self.assertIs(info["GCSupportsControllerUserInteraction"], True)
         self.assertEqual(info["CFBundleExecutable"], executable.name)
         self.assertEqual(info["CFBundleIconFile"], "BLACK.icns")
         self.assertEqual((executable.parents[1] / "Resources/BLACK.icns").read_bytes(), game_bundle.ICON.read_bytes())

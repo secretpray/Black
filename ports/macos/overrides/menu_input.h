@@ -29,4 +29,25 @@ static inline unsigned black_menu_pad(BlackMenuPad *pad, unsigned down, int open
     if (!down && !open) pad->draining = 0;
     return command;
 }
+/* Home / Xbox Guide / PS: a tap (released before the hold) toggles the
+ * settings panel; held BLACK_HOME_HOLD_MS it opens the quit dialog once,
+ * and its release then does nothing. Only while the game window has focus;
+ * a hold that loses focus is cancelled, and a button already down when focus
+ * returns waits for its release. */
+#define BLACK_HOME_HOLD_MS 1500u
+typedef struct { int down, spent; uint32_t since; } BlackHomeButton;
+static inline unsigned black_home_button(BlackHomeButton *h, int down, int focused, uint32_t now_ms)
+{
+    unsigned command = 0;
+    if (!focused) {
+        h->down = down; h->spent = 1;
+        return 0;
+    }
+    if (down && !h->down) { h->since = now_ms; h->spent = 0; }
+    else if (down && !h->spent && now_ms - h->since >= BLACK_HOME_HOLD_MS) { h->spent = 1; command = BLACK_MENU_QUIT; }
+    else if (!down && h->down && !h->spent) command = BLACK_MENU_TOGGLE;
+    if (!down) h->spent = 0;
+    h->down = down;
+    return command;
+}
 #endif

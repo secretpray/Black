@@ -2,6 +2,7 @@
  * palette. Cocoa controls and local BLACK fonts retain the pinned Mac ABI. */
 #import <Cocoa/Cocoa.h>
 #include <stdatomic.h>
+#import <GameController/GameController.h>
 #import <QuartzCore/QuartzCore.h>
 #include "port_menu.h"
 #import "black_ui.h"
@@ -126,6 +127,7 @@ static NSString *const page_names[MENU_PAGES]={@"PORT SETTINGS",@"CONTROLS",@"BU
 static int is_binding(int row){return row>=ROW_BIND_FIRST&&row<=ROW_BIND_LAST;}
 static int group_of(int row)
 {
+    if(row==ROW_QUIT)return 18;
     if(black_menu_pair(row))return 3;
     if(black_menu_link(row)||row==ROW_EDIT_DEVICE)return 17;
     if (row >= ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS) return 13;
@@ -148,7 +150,7 @@ static int group_of(int row)
 }
 static NSString *group_name(int group)
 { return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS",
-    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES", @"DEVICE", @"CONTROLLER BINDINGS", @"CONTROLS"])[group]; }
+    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES", @"DEVICE", @"CONTROLLER BINDINGS", @"CONTROLS", @"GAME"])[group]; }
 static int visible_start(int page,int selected)
 {return MAX(0,black_menu_index(page,selected)-MENU_TAB_MAX_ROWS+1);}
 static CGFloat row_y(int page,int row,int selected)
@@ -176,7 +178,7 @@ static NSArray *row_labels(void)
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
     [labels addObjectsFromArray:@[@"Skip Films with a Button", @"Auto-Skip Intro Films", @"Auto-Skip Mission Briefings"]];
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
-    [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming"]];
+    [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming",@"Quit Game"]];
     return labels;
 }
 /* BLACK's own menu palette (black_ui.h): grey text on the selected row, green-grey
@@ -228,7 +230,7 @@ static NSString *dz_name(int right)
 @public
     NSButton *rows[MENU_ROWS];
     NSButton *categories[MENU_TABS];
-    NSButton *back, *defaults;
+    NSButton *back, *defaults, *quit;
     int selected, binding_slot, page, axis_slot, editor_page;
     BOOL axis_edit;
     BOOL binding_capture;
@@ -309,11 +311,186 @@ void black_FilmHintSet(int visible)
 }
 @end
 
+/* Holding Home (menu_input.h), or Port Settings > Quit Game: a short dialog
+ * in the panel's look over the frozen game. Continue is selected first; in a
+ * mission Quit to Main Menu hands over to the pause menu's own confirmation
+ * (game_flash.c); Quit Game closes BLACK as Cmd+Q does. */
+enum { QUIT_CONTINUE, QUIT_MAIN_MENU, QUIT_GAME };
+static int quit_options[3], quit_count, quit_selected;
+static NSString *quit_label(int option)
+{ return option == QUIT_MAIN_MENU ? @"QUIT TO MAIN MENU" : option == QUIT_GAME ? @"QUIT GAME" : @"CONTINUE"; }
+static NSString *quit_help(int option)
+{
+    return option == QUIT_MAIN_MENU ? @"THE GAME THEN ASKS TO CONFIRM. CHECKPOINT PROGRESS IS LOST." :
+        option == QUIT_GAME ? @"CLOSES BLACK. PROGRESS SINCE THE LAST SAVE IS LOST." : @"BACK TO THE GAME.";
+}
+/* Laid out as BLACK's own pause page, measured on its frames in these
+ * 960x600 panel units: the light rails at 160 and 352-371 with a black band
+ * between them, the gold BLACK mark at 432, options at 15 units, 31 apart,
+ * in the page's grey-green, the selector line from the rail to the screen
+ * edge, prompts at the bottom left. It slides in from the right as the
+ * game's pages do; the selector glides between options. */
+static const CGFloat quit_rail_left = 160, quit_rail_right = 371, quit_column = 426;
+enum { QUIT_TITLE_Y = 110, QUIT_MESSAGE_Y = 146, QUIT_GAP = 22, QUIT_ROW_STEP = 31, QUIT_ROW_HEIGHT = 30 };
+static const unsigned quit_row_colour = 0x6f9585;
+static NSRect quit_row_rect(int index)
+{ return NSMakeRect(quit_column, QUIT_MESSAGE_Y + 12 + QUIT_GAP + index * QUIT_ROW_STEP, 313, QUIT_ROW_HEIGHT); }
+static double quit_opened, quit_closed, quit_moved, quit_from_y;
+static int quit_closing;
+static BOOL reduced_motion(void);
+static double quit_ease(double t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return 1 - pow(1 - t, 3); }
+@interface BlackQuitView : NSView
+@end
+static void quit_choose(int index);
+static NSArray<NSString *> *quit_lines(NSString *message, CGFloat size, CGFloat width)
+{
+    NSMutableArray *lines = [NSMutableArray array];
+    NSString *current = @"";
+    for (NSString *word in [message componentsSeparatedByString:@" "]) {
+        NSString *next = current.length ? [current stringByAppendingFormat:@" %@", word] : word;
+        if (current.length && text_width(next, size, 0) > width) { [lines addObject:current]; current = word; }
+        else current = next;
+    }
+    if (current.length) [lines addObject:current];
+    return lines;
+}
+/* The BLACK mark: wide heavy capitals in a worn gold, lighter at the top,
+ * over a dark offset, close to the title screen's logo without its art. */
+static void quit_mark(CGFloat x, CGFloat y)
+{
+    NSFont *font = [NSFont fontWithName:@"Arial-Black" size:34] ?: [NSFont systemFontOfSize:34 weight:NSFontWeightHeavy];
+    NSDictionary *shadow = @{NSFontAttributeName: font, NSKernAttributeName: @(-0.5),
+        NSForegroundColorAttributeName: [NSColor colorWithWhite:0 alpha:.85]};
+    NSSize plain = [@"BLACK" sizeWithAttributes:shadow];
+    NSImage *dark = [[[NSImage alloc] initWithSize:plain] autorelease];
+    [dark lockFocus]; [@"BLACK" drawAtPoint:NSZeroPoint withAttributes:shadow]; [dark unlockFocus];
+    [dark drawInRect:NSMakeRect(x + 2, y + 2, 203, plain.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+        fraction:1 respectFlipped:YES hints:nil];
+    NSMutableAttributedString *mark = [[[NSMutableAttributedString alloc] initWithString:@"BLACK" attributes:@{
+        NSFontAttributeName: font, NSKernAttributeName: @(-0.5), NSForegroundColorAttributeName: NSColor.blackColor}] autorelease];
+    NSSize size = mark.size;
+    /* Clip to the glyphs, then fill them with the gradient. */
+    NSImage *mask = [[[NSImage alloc] initWithSize:size] autorelease];
+    [mask lockFocus]; [mark drawAtPoint:NSZeroPoint]; [mask unlockFocus];
+    NSImage *gold = [[[NSImage alloc] initWithSize:size] autorelease];
+    [gold lockFocus];
+    NSGradient *g = [[[NSGradient alloc] initWithColorsAndLocations:
+        black_ui_color(0x7c6a44, 1), 0.0, black_ui_color(0xb59a62, 1), 0.55, black_ui_color(0xe2cf9c, 1), 1.0, nil] autorelease];
+    [g drawInRect:NSMakeRect(0, 0, size.width, size.height) angle:90];
+    [mask drawInRect:NSMakeRect(0, 0, size.width, size.height) fromRect:NSZeroRect operation:NSCompositingOperationDestinationIn fraction:1];
+    [gold unlockFocus];
+    /* The game's mark is wider than any system face: stretch it to its 203 units. */
+    CGFloat wide = 203 / size.width;
+    [gold drawInRect:NSMakeRect(x, y, size.width * wide, size.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+        fraction:1 respectFlipped:YES hints:nil];
+}
+@implementation BlackQuitView
+- (BOOL)isFlipped { return YES; }
+- (NSAffineTransform *)panelTransform
+{
+    NSSize size = self.bounds.size;
+    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
+    NSAffineTransform *t = [NSAffineTransform transform];
+    [t translateXBy:(size.width - 960 * scale) / 2 yBy:(size.height - 600 * scale) / 2];
+    [t scaleBy:scale];
+    return t;
+}
+- (void)drawRect:(NSRect)dirty
+{
+    (void)dirty;
+    double now = CACurrentMediaTime(), still = reduced_motion();
+    double in = still ? 1 : quit_ease((now - quit_opened) / 0.22);
+    double out = quit_closing ? (still ? 0 : 1 - quit_ease((now - quit_closed) / 0.14)) : 1;
+    CGFloat alpha = in * out, slide = (1 - in) * 48;
+    NSSize size = self.bounds.size;
+    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0), ox = (size.width - 960 * scale) / 2, oy = (size.height - 600 * scale) / 2;
+    CGFloat left = -ox / scale - 2, right = 960 + ox / scale + 2, top = -oy / scale - 2, bottom = 600 + oy / scale + 2;
+    [NSGraphicsContext saveGraphicsState];
+    [[self panelTransform] concat];
+    CGContextSetAlpha(NSGraphicsContext.currentContext.CGContext, alpha);
+    /* As on the pause page: the scene dimmed, the band between the rails black. */
+    fill(NSMakeRect(left, top, quit_rail_left - left, bottom - top), BLACK_UI_BACKDROP, .84);
+    fill(NSMakeRect(quit_rail_left, top, quit_rail_right - quit_rail_left, bottom - top), 0x010201, .93);
+    fill(NSMakeRect(quit_rail_right, top, right - quit_rail_right, bottom - top), BLACK_UI_BACKDROP, .82);
+    fill(NSMakeRect(quit_rail_left - 2, top, 6, bottom - top), BLACK_UI_RAIL, .95);
+    fill(NSMakeRect(quit_rail_left + 11, top, 1.5, bottom - top), BLACK_UI_RAIL, .8);
+    fill(NSMakeRect(quit_rail_right - 19, top, 1.5, bottom - top), BLACK_UI_RAIL, .8);
+    fill(NSMakeRect(quit_rail_right - 14, top, 1.5, bottom - top), BLACK_UI_RAIL, .8);
+    fill(NSMakeRect(quit_rail_right - 6, top, 6, bottom - top), BLACK_UI_RAIL, .95);
+    for (CGFloat y = top + 4; y < bottom; y += 12.5) {
+        fill(NSMakeRect(quit_rail_left - 10, y, 8, 1), BLACK_UI_RAIL, .5);
+        fill(NSMakeRect(quit_rail_right, y, 8, 1), BLACK_UI_RAIL, .5);
+    }
+    NSAffineTransform *shift = [NSAffineTransform transform];
+    [shift translateXBy:slide yBy:0]; [shift concat];
+    /* The gold mark, the page title under it. */
+    CGFloat x = quit_column + 6;
+    quit_mark(x, 62);
+    text(T(@"QUIT"), x, QUIT_TITLE_Y, 22, 0xe6e6e6, 1);
+    int option = quit_options[quit_selected];
+    fitted_text(T(quit_count == 3 ? @"LEAVE THE MISSION OR QUIT BLACK?" : @"QUIT BLACK?"), x, QUIT_MESSAGE_Y, 12, 300, 0xd8d8d8, 0);
+    /* The selector glides to the chosen option. */
+    CGFloat target = quit_row_rect(quit_selected).origin.y;
+    double glide = still ? 1 : quit_ease((now - quit_moved) / 0.12);
+    CGFloat bar_y = quit_from_y + (target - quit_from_y) * glide;
+    black_ui_selector(NSMakeRect(quit_column, bar_y, 313, QUIT_ROW_HEIGHT), quit_rail_right - slide, right);
+    for (int i = 0; i < quit_count; ++i) {
+        NSRect r = quit_row_rect(i);
+        fitted_text(T(quit_label(quit_options[i])), x, r.origin.y + 7.5, 15, r.size.width - 20,
+            i == quit_selected ? 0xf2f2f2 : quit_row_colour, 0);
+    }
+    NSArray<NSString *> *note = quit_lines(T(quit_help(option)), 10, 300);
+    CGFloat note_y = NSMaxY(quit_row_rect(quit_count - 1)) + QUIT_GAP - 6;
+    for (NSUInteger i = 0; i < note.count && i < 2; ++i) text(note[i], x, note_y + i * 15, 10, quit_row_colour, 0);
+    /* Prompts as the pause page shows them: the buttons in one column, the words aligned after it. */
+    char accept[32], cancel[32];
+    black_InputGlyphUTF8(black_InputButtonGlyph(0, 1), accept, sizeof accept);
+    black_InputGlyphUTF8(black_InputButtonGlyph(1, 1), cancel, sizeof cancel);
+    NSString *keys[3] = {@"", @(accept), @(cancel)};
+    NSString *words[3] = {T(@"SELECT"), T(@"CONFIRM"), T(@"BACK")};
+    CGFloat column = 26;
+    for (int i = 1; i < 3; ++i) column = MAX(column, text_width(keys[i], 14, 0));
+    CGFloat px = quit_rail_right + 29 - slide;
+    for (int i = 0; i < 3; ++i) {
+        CGFloat y = 498 + i * 33;
+        if (i == 0) {
+            /* The pause page's up and down triangles. */
+            for (int t = 0; t < 2; ++t) {
+                CGFloat tx = px + column - 25 + t * 13, mid = tx + 5.5;
+                NSBezierPath *path = [NSBezierPath bezierPath];
+                if (!t) { [path moveToPoint:NSMakePoint(mid, y + 1)]; [path lineToPoint:NSMakePoint(tx + 11, y + 13)]; [path lineToPoint:NSMakePoint(tx, y + 13)]; }
+                else { [path moveToPoint:NSMakePoint(tx, y + 1)]; [path lineToPoint:NSMakePoint(tx + 11, y + 1)]; [path lineToPoint:NSMakePoint(mid, y + 13)]; }
+                [path closePath]; [black_ui_color(0xf2f2f2, 1) setFill]; [path fill];
+            }
+        } else text(keys[i], px + column - text_width(keys[i], 14, 0), y, 14, 0xf2f2f2, 0);
+        text(words[i], px + column + 10, y, 14, 0xf2f2f2, 0);
+    }
+    [NSGraphicsContext restoreGraphicsState];
+}
+- (void)mouseDown:(NSEvent *)event
+{
+    NSAffineTransform *t = [self panelTransform]; [t invert];
+    NSPoint p = [t transformPoint:[self convertPoint:event.locationInWindow fromView:nil]];
+    for (int i = 0; i < quit_count; ++i) if (NSPointInRect(p, quit_row_rect(i))) { quit_choose(i); return; }
+}
+- (void)mouseMoved:(NSEvent *)event
+{
+    NSAffineTransform *t = [self panelTransform]; [t invert];
+    NSPoint p = [t transformPoint:[self convertPoint:event.locationInWindow fromView:nil]];
+    for (int i = 0; i < quit_count; ++i)
+        if (NSPointInRect(p, quit_row_rect(i)) && quit_selected != i) {
+            quit_from_y = quit_row_rect(quit_selected).origin.y; quit_moved = CACurrentMediaTime();
+            quit_selected = i; [self setNeedsDisplay:YES];
+        }
+}
+@end
+
 static NSWindow *menu_window;
 static NSView *game_view, *container;
 static BlackMenuView *menu_view;
 static BlackFpsView *fps_view;
 static BlackFilmHintView *film_hint_view;
+static BlackQuitView *quit_view;
 static id event_monitor;
 static void (*capture_input)(int);
 static int shown, closing;
@@ -353,7 +530,7 @@ static NSTimeInterval transition, last_draw;
             rows[i].target = self; rows[i].action = @selector(changeOption:);
             rows[i].focusRingType = NSFocusRingTypeNone;
             [rows[i] setAccessibilityLabel:labels[i]];
-            [rows[i] setAccessibilityHelp:black_menu_link(i)?@"Open a controls subpage. Back returns to this row.":
+            [rows[i] setAccessibilityHelp:i==ROW_QUIT?@"Open the quit dialog: main menu or quit BLACK. Holding Home does the same.":black_menu_link(i)?@"Open a controls subpage. Back returns to this row.":
                 black_menu_pair(i)?@"Choose X or Y with Left and Right, press Enter to edit. Back finishes editing.":
                 i==ROW_EDIT_DEVICE?@"Choose the bindings to edit; gameplay device is unchanged.":i <= ROW_RESET ? help[i] : i < ROW_MOUSE_X ?
                 @"Choose the input device and prompt family, or reassign a controller button. Escape cancels capture; Delete clears a binding." :
@@ -379,6 +556,10 @@ static NSTimeInterval transition, last_draw;
         defaults.title = @"Defaults"; defaults.target = self; defaults.action = @selector(restoreDefaults:);
         [defaults setAccessibilityHelp:@"Restore defaults for the selected page only."];
         [self addSubview:defaults]; [defaults release];
+        quit = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
+        quit.title = @"Quit Game"; quit.target = self; quit.action = @selector(quitGame:);
+        [quit setAccessibilityHelp:@"Open the quit dialog: main menu or quit BLACK. Holding Home does the same."];
+        [self addSubview:quit]; [quit release];
         page=PAGE_PORT;editor_page=PAGE_KEYS;
         [self selectRow:ROW_SCALE];
     }
@@ -404,6 +585,7 @@ static NSTimeInterval transition, last_draw;
     for (int i = 0; i < MENU_TABS; ++i)
         categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * scale, TAB_WIDTH * scale, 38 * scale);
     back.frame = NSMakeRect(ox + 84 * scale, oy + 526 * scale, 126 * scale, 30 * scale);
+    quit.frame = NSMakeRect(ox + 222 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
     defaults.hidden=page==PAGE_CONTROLS||page==PAGE_DIAGNOSTICS;
     defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
 }
@@ -455,6 +637,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_MEASURE] setAccessibilityValue:[NSString stringWithFormat:@"Measurement state %d", black_ControllerMonitor().calibration]];
 }
 - (void)goBack:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_BACK); }
+- (void)quitGame:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_QUIT); }
 - (void)restoreDefaults:(id)sender
 {
     (void)sender;black_ControllerCancelMeasure();
@@ -509,7 +692,7 @@ static NSTimeInterval transition, last_draw;
     [self layoutRows];
     for(int i=0;i<MENU_TABS;++i)[categories[i] setAccessibilityValue:i==black_menu_tab(page)?@"Selected":@""];
     [self refreshValues];
-    if(menu_window&&black_MenuIsOpen())[menu_window makeFirstResponder:rows[selected]];
+    if(menu_window&&black_SettingsPanelOpen())[menu_window makeFirstResponder:rows[selected]];
     [self setNeedsDisplay:YES];
 }
 - (void)changeCategory:(id)sender{[self openPage:(int)[sender tag] row:-1];}
@@ -548,7 +731,7 @@ static NSTimeInterval transition, last_draw;
             }
             return;
         }
-        if(black_menu_link(selected)||selected==ROW_EDIT_DEVICE){[self adjustOption:1 cycle:YES];return;}
+        if(black_menu_link(selected)||selected==ROW_EDIT_DEVICE||selected==ROW_QUIT){[self adjustOption:1 cycle:YES];return;}
         if(black_menu_pair(selected)){
             if(x>=600&&x<876){axis_slot=x>=738;axis_edit=YES;
                 CGFloat local=x-(axis_slot?738:600);
@@ -566,6 +749,7 @@ static NSTimeInterval transition, last_draw;
 }
 - (void)adjustOption:(int)direction cycle:(BOOL)cycle
 {
+    if(selected==ROW_QUIT){if(cycle)black_MenuCommand(BLACK_MENU_QUIT);return;}
     if(black_menu_link(selected)){
         if(!cycle)return;
         int target=selected==ROW_NAV_BINDINGS?editor_page:selected==ROW_NAV_MOUSE?PAGE_MOUSE:
@@ -899,7 +1083,7 @@ static NSAlert *pack_alert;
         if (focus) black_ui_selector(NSMakeRect(84, y, width, 38), rail, page == PAGE_DIAGNOSTICS ? 700 : edge);
         fitted_text(T([row_labels()[index] uppercaseString]), 96, y + 13, 13,
             is_binding(index)||black_menu_pair(index) ? 490 : index==ROW_DEVICE||index==ROW_PROMPTS||index==ROW_EDIT_DEVICE ? 390 : left-108, focus ? TEXT : DIM, 0);
-        if(black_menu_link(index)){
+        if(black_menu_link(index)||index==ROW_QUIT){
             text(@">",850,y+13,13,focus?TEXT:DIM,0);continue;
         }
         if(black_menu_pair(index)){
@@ -976,7 +1160,10 @@ static NSAlert *pack_alert;
         fitted_text(T(value), value_left + 32, y + 13, 12, value_width - 61, focus ? TEXT : DIM, 0);
     }
     NSString *help, *detail;
-    if(black_menu_link(selected)){
+    if(selected==ROW_QUIT){
+        help=@"QUIT TO THE GAME'S MAIN MENU OR QUIT BLACK.";
+        detail=@"ENTER / A OPENS. HOLDING HOME, GUIDE OR PS OPENS IT TOO.";
+    }else if(black_menu_link(selected)){
         help=selected==ROW_NAV_BINDINGS?@"EDIT KEYBOARD OR GAMEPAD BINDINGS IN ONE PLACE.":
             selected==ROW_NAV_MOUSE?@"MOUSE LOOK, AIMING AND WALK SPEED.":
             selected==ROW_NAV_PAD?@"GAMEPAD LOOK, AIMING AND VIBRATION.":
@@ -1146,11 +1333,14 @@ static NSAlert *pack_alert;
     line(84, 514, 792, HIGHLIGHT, 1);
     fill(NSMakeRect(84, 526, 126, 30), BUTTON, .88); line(96, 553, 102, DIM, 1);
     centered_text(T(@"BACK"), 147, 536, 12, TEXT);
+    fill(NSMakeRect(222, 526, 138, 30), BUTTON, .88); line(234, 553, 114, DIM, 1);
+    { NSString *label = T(@"QUIT GAME"); CGFloat w = text_width(label, 12, 0);
+      text(label, 291 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }
     if(!defaults.hidden){
     fill(NSMakeRect(738, 526, 138, 30), BUTTON, .88); line(750, 553, 114, DIM, 1);
     { NSString *label = T(page==PAGE_KEYS||page==PAGE_PAD_BINDINGS?@"RESET BINDINGS":page==PAGE_MOUSE?@"RESET MOUSE":page==PAGE_PAD?@"RESET GAMEPAD":page==PAGE_ADVANCED?@"RESET ADVANCED":@"DEFAULTS"); CGFloat w = text_width(label, 12, 0);
       text(label, 807 - MIN(w, 122) / 2, 536, w > 122 ? 12 * 122 / w : 12, TEXT, 0); }}
-    fitted_text([NSString stringWithFormat:T(@"LEFT / RIGHT: ADJUST    %@: CHANGE    %@: BACK"),@(accept),@(cancel)], 232, 538, 10, 494, DIM, 0);
+    fitted_text([NSString stringWithFormat:T(@"LEFT / RIGHT: ADJUST    %@: CHANGE    %@: BACK"),@(accept),@(cancel)], 372, 538, 10, 354, DIM, 0);
     [NSGraphicsContext restoreGraphicsState];
 }
 - (void)mouseDown:(NSEvent *)event { (void)event; }
@@ -1188,7 +1378,7 @@ static void request_quit(void)
 - (void)windowDidBecomeKey:(NSNotification *)note
 {
     (void)note;
-    [menu_window makeFirstResponder:black_MenuIsOpen() ? (NSView *)menu_view : game_view];
+    [menu_window makeFirstResponder:black_SettingsPanelOpen() ? (NSView *)menu_view : game_view];
 }
 @end
 static BlackMenuActions *actions;
@@ -1217,6 +1407,82 @@ static void set_open(int open)
         black_ControllerCancelMeasure(); menu_view->binding_capture = NO; menu_view->pad_capture = NO; black_PadCaptureCancel();
         closing = 1; transition = CACurrentMediaTime();
     }
+}
+
+/* While the game window has focus, ask GameController to hand Home / Guide /
+ * PS to the game (tap: settings, hold: quit dialog) instead of the system
+ * gesture (Game Center / Games). A preference of this process only: the
+ * user's shortcut settings stay as they are and macOS may still keep the
+ * button. Out of focus the system gesture is restored. */
+static void home_priority(BOOL focused)
+{
+    static int last = -1;
+    static NSUInteger seen = NSUIntegerMax;
+    NSArray<GCController *> *controllers = GCController.controllers;
+    if (last == focused && seen == controllers.count) return;
+    last = focused; seen = controllers.count;
+    unsigned exposed = 0;
+    for (GCController *controller in controllers) {
+        GCControllerButtonInput *home = controller.physicalInputProfile.buttons[GCInputButtonHome];
+        if (!home) continue;
+        ++exposed;
+        home.preferredSystemGestureState = focused ? GCSystemGestureStateDisabled : GCSystemGestureStateEnabled;
+    }
+    if (exposed) fprintf(stderr, "[HOME] system gesture %s (%u controller%s)\n",
+        focused ? "deferred to the game" : "restored", exposed, exposed == 1 ? "" : "s");
+}
+
+static void quit_close(void)
+{
+    if (!black_QuitDialogOpen()) return;
+    /* The game resumes at once; the page fades over it (black_MenuPump). */
+    quit_closing = 1; quit_closed = CACurrentMediaTime();
+    black_QuitDialogSetOpen(0);
+    if (!black_SettingsPanelOpen() && capture_input) capture_input(0);
+    [menu_window makeFirstResponder:game_view];
+    fprintf(stderr, "[HOME] quit dialog closed\n");
+}
+static void quit_open(void)
+{
+    if (black_QuitDialogOpen() || !quit_view) return;
+    if (black_SettingsPanelOpen()) {
+        /* Over the panel: the panel goes at once, the dialog takes its place. */
+        menu_view.hidden = YES; shown = closing = 0; black_MenuSetOpen(0);
+    }
+    quit_count = 0;
+    quit_options[quit_count++] = QUIT_CONTINUE;
+    if (black_GameInMission()) quit_options[quit_count++] = QUIT_MAIN_MENU;
+    quit_options[quit_count++] = QUIT_GAME;
+    quit_selected = 0;
+    quit_closing = 0; quit_opened = quit_moved = CACurrentMediaTime();
+    quit_from_y = quit_row_rect(0).origin.y;
+    black_QuitDialogSetOpen(1);
+    if (capture_input) capture_input(1);
+    [quit_view setFrameSize:container.bounds.size];
+    quit_view.hidden = NO; [quit_view setNeedsDisplay:YES];
+    [menu_window makeFirstResponder:quit_view];
+    fprintf(stderr, "[HOME] quit dialog opened%s\n", black_GameInMission() ? " in a mission" : "");
+}
+static void quit_choose(int index)
+{
+    if (index < 0 || index >= quit_count) return;
+    int option = quit_options[index];
+    quit_close();
+    if (option == QUIT_MAIN_MENU) {
+        black_QuitToMenuRequest();
+        if (!black_GamePaused()) black_InputPulseStart();
+        fprintf(stderr, "[HOME] quit to main menu requested\n");
+    } else if (option == QUIT_GAME) request_quit();
+}
+/* Pad and keyboard commands while the dialog is up. */
+static void quit_command(unsigned command)
+{
+    if (command & (BLACK_MENU_BACK | BLACK_MENU_TOGGLE)) quit_close();
+    else if (command & (BLACK_MENU_UP | BLACK_MENU_DOWN)) {
+        quit_from_y = quit_row_rect(quit_selected).origin.y; quit_moved = CACurrentMediaTime();
+        quit_selected = (quit_selected + ((command & BLACK_MENU_DOWN) ? 1 : quit_count - 1)) % quit_count;
+        [quit_view setNeedsDisplay:YES];
+    } else if (command & BLACK_MENU_CHANGE) quit_choose(quit_selected);
 }
 
 void black_MenuAttach(void *window, void (*capture)(int))
@@ -1253,6 +1519,10 @@ void black_MenuAttach(void *window, void (*capture)(int))
     film_hint_view.hidden = YES;
     [container addSubview:film_hint_view];
     [container addSubview:menu_view];
+    quit_view = [[BlackQuitView alloc] initWithFrame:container.bounds];
+    quit_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    quit_view.hidden = YES;
+    [container addSubview:quit_view];
     black_SubtitleAttach(container);
     [menu_window makeFirstResponder:game_view];
     event_monitor = [[NSEvent addLocalMonitorForEventsMatchingMask:
@@ -1261,14 +1531,14 @@ void black_MenuAttach(void *window, void (*capture)(int))
         if (event.window != menu_window) return event;
         BOOL mouse = event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown ||
             event.type == NSEventTypeOtherMouseDown || event.type == NSEventTypeScrollWheel;
-        if (black_MenuIsOpen() && !(event.modifierFlags & NSEventModifierFlagCommand) &&
+        if (black_SettingsPanelOpen() && !(event.modifierFlags & NSEventModifierFlagCommand) &&
             ((event.type == NSEventTypeKeyDown && !event.isARepeat) ||
              event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeRightMouseDown || event.type == NSEventTypeOtherMouseDown ||
              (event.type == NSEventTypeScrollWheel && event.scrollingDeltaY != 0)))
             black_InputNoteMenuKeyboard();
         if (mouse) {
-            if (black_MenuIsOpen() && menu_view->pad_capture) return nil;
-            if (black_MenuIsOpen() && menu_view->binding_capture) {
+            if (black_SettingsPanelOpen() && menu_view->pad_capture) return nil;
+            if (black_SettingsPanelOpen() && menu_view->binding_capture) {
                 if (event.type == NSEventTypeScrollWheel) {
                     if (event.scrollingDeltaY != 0) [menu_view captureBinding:event.scrollingDeltaY > 0 ? BLACK_WHEEL_UP : BLACK_WHEEL_DOWN];
                 } else if (event.type == NSEventTypeLeftMouseDown) [menu_view captureBinding:BLACK_MOUSE_LEFT];
@@ -1284,7 +1554,7 @@ void black_MenuAttach(void *window, void (*capture)(int))
             if (down && !event.isARepeat) request_quit();
             return nil;
         }
-        if (black_MenuIsOpen() && menu_view->pad_capture) {
+        if (black_SettingsPanelOpen() && menu_view->pad_capture) {
             if (down && !event.isARepeat && (code == 53 || code == 117 || code == 122 || code == 109)) {
                 if (code == 117) black_SettingsSetPadBinding(menu_view->selected - ROW_PAD_FIRST,-1);
                 menu_view->pad_capture = NO; black_PadCaptureCancel();
@@ -1292,7 +1562,7 @@ void black_MenuAttach(void *window, void (*capture)(int))
             }
             return nil;
         }
-        if (black_MenuIsOpen() && menu_view->binding_capture) {
+        if (black_SettingsPanelOpen() && menu_view->binding_capture) {
             if (event.modifierFlags & NSEventModifierFlagCommand) return nil;
             if (down && !event.isARepeat) [menu_view captureBinding:code == 53 ? -2 : code == 117 ? -1 : code];
             if (event.type == NSEventTypeFlagsChanged) {
@@ -1302,12 +1572,22 @@ void black_MenuAttach(void *window, void (*capture)(int))
             }
             return nil;
         }
+        if (black_QuitDialogOpen()) {
+            if (event.modifierFlags & NSEventModifierFlagCommand) return event;
+            if (down && !event.isARepeat) {
+                if (code == 53 || code == 11 || code == 122 || code == 109) black_MenuCommand(BLACK_MENU_BACK);
+                else if (code == 36 || code == 76 || code == 49) black_MenuCommand(BLACK_MENU_CHANGE);
+                else if (code == 126) black_MenuCommand(BLACK_MENU_UP);
+                else if (code == 125) black_MenuCommand(BLACK_MENU_DOWN);
+            }
+            return nil;
+        }
         BOOL shortcut = code == 122 || code == 109 || (code == 43 && (event.modifierFlags & NSEventModifierFlagCommand));
         if (shortcut) {
             if (down && !event.isARepeat) black_MenuCommand(BLACK_MENU_TOGGLE);
             return nil;
         }
-        if (!black_MenuIsOpen()) return event;
+        if (!black_SettingsPanelOpen()) return event;
         if (down && !event.isARepeat) {
             if (code == 117 && menu_view->selected >= ROW_PAD_FIRST && menu_view->selected <= ROW_PAD_LAST) {
                 black_SettingsSetPadBinding(menu_view->selected-ROW_PAD_FIRST,-1);
@@ -1362,6 +1642,20 @@ void black_MenuPump(void)
             [NSApp postEvent:event atStart:NO];
         }
     }
+    /* Same kind of check for the Home hold: the dialog's own command, then its
+     * Quit to Main Menu (or Quit Game outside a mission) a second later. */
+    const char *test_home = getenv("BLACK_TEST_HOME_QUIT");
+    static int home_step;
+    if (test_home && menu_window && home_step < 2) {
+        if (!test_start) test_start = CACurrentMediaTime();
+        double at = atof(test_home), now = CACurrentMediaTime() - test_start;
+        if (home_step == 0 && now >= at) { home_step = 1; black_MenuCommand(BLACK_MENU_QUIT); }
+        else if (home_step == 1 && strstr(test_home, "stay")) home_step = 2;
+        else if (home_step == 1 && now >= at + 1 && black_QuitDialogOpen()) {
+            home_step = 2; quit_selected = quit_count - (quit_count == 3 ? 2 : 1);
+            black_MenuCommand(BLACK_MENU_CHANGE);
+        }
+    }
     if (!menu_window) return;
     int measured[2];
     if (black_ControllerTakeMeasurement(measured)) {
@@ -1400,6 +1694,7 @@ void black_MenuPump(void)
             [menu_view refreshValues]; [menu_view setNeedsDisplay:YES];
         }
     }
+    home_priority(NSApp.active && menu_window.keyWindow);
     unsigned command = black_MenuTakeCommands();
     /* A pack dialog or folder panel takes the pad: A answers, B cancels. */
     NSWindow *sheet = menu_window.attachedSheet;
@@ -1413,11 +1708,18 @@ void black_MenuPump(void)
     if(menu_view->pad_capture&&(command&BLACK_MENU_BACK)){
         menu_view->pad_capture=NO;black_PadCaptureCancel();[menu_view setNeedsDisplay:YES];return;
     }
-    if (command & BLACK_MENU_TOGGLE) set_open(!black_MenuIsOpen());
+    if (!quit_view.hidden) {
+        double now = CACurrentMediaTime();
+        if (quit_closing && now - quit_closed >= 0.14) { quit_view.hidden = YES; quit_closing = 0; }
+        else if (quit_closing || now - quit_opened < 0.25 || now - quit_moved < 0.15) [quit_view setNeedsDisplay:YES];
+    }
+    if (command & BLACK_MENU_QUIT) { quit_open(); command = 0; }
+    if (black_QuitDialogOpen()) { if (command) quit_command(command); command = 0; }
+    if (command & BLACK_MENU_TOGGLE) set_open(!black_SettingsPanelOpen());
     else if (command & BLACK_MENU_BACK) {
         if(![menu_view navigateBack])set_open(0);
     }
-    else if (black_MenuIsOpen() && !closing) {
+    else if (black_SettingsPanelOpen() && !closing) {
         if (command & (BLACK_MENU_UP | BLACK_MENU_DOWN)) {
             [menu_view stepRow:(command & BLACK_MENU_DOWN) ? 1 : -1];
         } else if (command & (BLACK_MENU_PREV_TAB | BLACK_MENU_NEXT_TAB)) {

@@ -210,6 +210,20 @@ static int get_text(BlackFlashMenu *m,const char *name,char out[256])
 }
 static void page_call(BlackFlashMenu *m,const char *function)
 { uint32_t args[]={put(m,1,function),0,0};call(m,0x101420,put(m,0,"_level4"),0,0,args,3); }
+/* The pause menu's own Quit (InGameOn.bin): GoToQuitConfirm sets the
+ * confirmation's yes to the game code QuitLevel and opens the game's
+ * ConfirmWarning page. 1 once called, -1 on the pause menu before it can take
+ * a call, 0 elsewhere. */
+int black_FlashPauseQuit(BlackFlashMenu *m,uint32_t ui)
+{
+    m->reads=m->calls=0;m->fault=0;char page[64]={0};
+    if(!page_name(m,ui,page)||strcasecmp(page,"PauseMenu"))return 0;
+    if(r32(m,0x2ed408)!=1||!r32(m,0x2ec988)||r32(m,ui+0x381c)!=2||r32(m,ui+0x388c)||r32(m,ui+0x374)||!scratch(m))return -1;
+    page_call(m,"GoToQuitConfirm");
+    return m->fault?-1:1;
+}
+int black_FlashOnPage(BlackFlashMenu *m,uint32_t ui,const char *name)
+{ char page[64]={0};m->fault=0;return page_name(m,ui,page)&&!strcasecmp(page,name); }
 void black_FlashNameTick(BlackFlashMenu *m,uint32_t ui)
 {
     m->reads=m->calls=0;m->fault=0;char page[64]={0};

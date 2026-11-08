@@ -208,13 +208,57 @@ static void black_MenuCapture(int opening)
                NSApp.active && s_window.keyWindow) xek_capture_mouse(YES);
 }
 
+/* A click on the Dock icon sends the running app a reopen Apple event, and
+ * Quit in the Dock menu, log out, restart and shut down send it a quit one.
+ * The host pumps events itself and never runs -[NSApplication
+ * finishLaunching], which installs AppKit's handlers, so the click did
+ * nothing (Cmd+Tab, activation by the window server, worked) and the quit
+ * was ignored. Reopen brings the game window back, into its full-screen
+ * space if it has one; quit takes the same path as Cmd+Q. */
+@interface BlackReopenHandler : NSObject
+@end
+@implementation BlackReopenHandler
+- (void)reopen:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply
+{
+    (void)event; (void)reply;
+    if (!s_window) return;
+    if (s_window.miniaturized) [s_window deminiaturize:nil];
+    [NSApp activate];
+    [s_window makeKeyAndOrderFront:nil];
+}
+- (void)quit:(NSAppleEventDescriptor *)event reply:(NSAppleEventDescriptor *)reply
+{
+    (void)event; (void)reply;
+    void black_HostQuit(void);
+    black_HostQuit();
+}
+@end
+
+static void black_InstallReopenHandler(void)
+{
+    static BlackReopenHandler *handler;
+    if (handler) return;
+    /* What NSApplication's run does first, and SDL's own Cocoa loop too:
+     * check in with the system as a launched app. Its default Apple event
+     * handlers are replaced right after. */
+    [NSApp finishLaunching];
+    handler = [[BlackReopenHandler alloc] init];
+    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:handler
+        andSelector:@selector(reopen:reply:) forEventClass:'aevt' andEventID:'rapp'];
+    [[NSAppleEventManager sharedAppleEventManager] setEventHandler:handler
+        andSelector:@selector(quit:reply:) forEventClass:'aevt' andEventID:'quit'];
+}
+
 /* GPU flip paths also request lazy window startup. Suppress those in a
  * headless run, not just the main host's initial startup call. */
 void xbox_FramebufferWindowStart(void)
 {
     if (!getenv("BLACK_HEADLESS")) {
         black_OriginalFramebufferWindowStart();
-        if ([NSThread isMainThread] && s_window) black_MenuAttach(s_window, black_MenuCapture);
+        if ([NSThread isMainThread] && s_window) {
+            black_MenuAttach(s_window, black_MenuCapture);
+            black_InstallReopenHandler();
+        }
     }
 }
 

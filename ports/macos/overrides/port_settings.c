@@ -388,8 +388,18 @@ int black_SettingsResetInput(void)
 }
 
 int black_SettingsSaveFailed(void) { return atomic_load(&save_failed); }
-int black_MenuIsOpen(void) { return atomic_load(&menu_open); }
+/* Settings panel or the Home quit dialog: either one freezes the world and
+ * keeps game input; the panel alone is "settings". */
+static atomic_int quit_dialog, quit_to_menu;
+int black_MenuIsOpen(void) { return atomic_load(&menu_open) || atomic_load(&quit_dialog); }
+int black_SettingsPanelOpen(void) { return atomic_load(&menu_open); }
 void black_MenuSetOpen(int open) { atomic_store(&menu_open, !!open); }
+int black_QuitDialogOpen(void) { return atomic_load(&quit_dialog); }
+void black_QuitDialogSetOpen(int open) { atomic_store(&quit_dialog, !!open); }
+/* Quit to main menu: asked by the dialog, carried out on the game thread
+ * (game_flash.c) through the pause menu's own quit confirmation. */
+void black_QuitToMenuRequest(void) { atomic_store(&quit_to_menu, 1); }
+int black_QuitToMenuTake(void) { return atomic_exchange(&quit_to_menu, 0); }
 void black_MenuCommand(unsigned commands) { atomic_fetch_or(&menu_commands, commands); }
 unsigned black_MenuTakeCommands(void) { return atomic_exchange(&menu_commands, 0); }
 
@@ -490,6 +500,12 @@ int black_ModsSupported(void) { return atomic_load(&mods_supported); }
 /* Overridden by the game executable (game_mods.c); tools without game code
  * show no counter. */
 __attribute__((weak)) uint32_t black_GameFrameCount(void) { return 0; }
+/* game_flash.c: a mission is loaded (not the front end). */
+__attribute__((weak)) int black_GameInMission(void) { return 0; }
+/* game_flash.c: the pause menu page is up (seen in the last 0.3 s). */
+__attribute__((weak)) int black_GamePaused(void) { return 0; }
+/* xinput_device.c: a short START for the game. */
+__attribute__((weak)) void black_InputPulseStart(void) {}
 
 int black_SettingsInputDevice(void)
 { pthread_once(&initialized,load_settings); int cli = atomic_load(&input_cli); return cli >= 0 ? cli : atomic_load(&input_device); }

@@ -564,6 +564,8 @@ def play_locked(args, settings_path, data, name, binary, state):
     env["BLACK_DSP_HEADROOM_DB"] = str(args.dsp_headroom)
     if args.test_quit_after:
         env["BLACK_TEST_QUIT_AFTER"] = str(args.test_quit_after)
+    if args.test_home_quit:
+        env["BLACK_TEST_HOME_QUIT"] = str(args.test_home_quit) + (":stay" if args.test_home_stay else "")
     if args.audio_engine == "dsp":
         env["RECOMP_REAL_DSP"] = "1"
         env["RECOMP_AUDIOLOG"] = "1"
@@ -707,6 +709,8 @@ def main():
             sub.add_argument("--audio-capture", action="store_true", help="Record accepted game PCM buffers locally (not a tone)")
             sub.add_argument("--audio-stages", action="store_true", help="Measure decoded voice/filter clipping and per-bin DSP input peaks")
             sub.add_argument("--dsp-headroom", type=int, choices=(0, 6, 12, 18), default=0, help="Experimental input headroom before DSP 24-bit conversion, compensated at its output; 0 preserves original levels")
+            sub.add_argument("--test-home-quit", type=int, choices=range(1, 601), help="Open the Home quit dialog after N seconds and choose Quit to Main Menu (Quit Game outside a mission) a second later")
+            sub.add_argument("--test-home-stay", action="store_true", help="With --test-home-quit: only open the dialog, choose nothing")
             sub.add_argument("--test-quit-after", type=int, choices=range(1, 601), help="Post a local Cmd+Q event for a bounded exit integration check")
             sub.add_argument("--smoke-seconds", type=int, choices=range(1, 601), help="Stop after this many seconds; not a gameplay pass criterion")
     args = parser.parse_args()

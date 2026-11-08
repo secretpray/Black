@@ -25,6 +25,8 @@ typedef struct {
 } BlackFlashMenu;
 void black_FlashMenuTick(BlackFlashMenu *, uint32_t ui, BlackFlashPointer);
 void black_FlashNameTick(BlackFlashMenu *, uint32_t ui);
+int black_FlashPauseQuit(BlackFlashMenu *, uint32_t ui);
+int black_FlashOnPage(BlackFlashMenu *, uint32_t ui, const char *name);
 /* Host input, shared between the guest tick and Cocoa's main thread. */
 void black_GameMenuState(int menu, int text);
 int black_GameMenuActive(void);
