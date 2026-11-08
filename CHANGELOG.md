@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.0 — 2026-11-08
+
+- **The game's own brightness.** BLACK builds a gamma ramp for the Xbox's video
+  output: its brightness curve, the brightness slider and its fades to and from
+  black. That ramp never reached the screen; the presenter now applies it.
+- **Home / Xbox Guide / PS.** A tap opens or closes the settings. Held for 1.5
+  seconds it opens a quit page in the style of the game's own menus: Continue,
+  Quit to Main Menu (in a mission, through the game's own confirmation) or Quit
+  Game. While BLACK has focus the button no longer opens Game Center.
+- **Quit Game** in the settings footer and on Port Settings.
+- **Skip Films with a Button** (Mods, on by default): A, Start or Enter skips any
+  film, also the logos, with a hint after 2.5 seconds. The automatic options are
+  now Auto-Skip Intro Films and Auto-Skip Mission Briefings.
+- **Effect buffers at higher render scales.** The game's glow and blur buffers
+  are averaged over one Xbox texel, so reloads on bright backgrounds no longer
+  flicker as a grid.
+- **Dock.** A click on the Dock icon brings BLACK back; Quit in the Dock menu,
+  log out and restart close it normally.
+- **PRESS START** keeps the game's own words instead of a button icon.
+
 ## 0.5.5 — 2026-11-07
 
 - **Frame rate in later areas.** After the level streamed in its next part the

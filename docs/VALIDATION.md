@@ -1,7 +1,59 @@
 # Release validation and current limits
 
-Release: **BLACK 0.5.5**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.6.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Brightness, Home button and film skipping in 0.6.0
+
+**Gamma ramp.** BLACK builds its ramp at `0x1762B0`:
+`255 · 2.2 · (i/255)^1.2 · tint · (1 + brightness) · fade`, clamped to 255, and
+queues it for the vertical blank, which loads the DAC only while a flip waits
+for it. On this runtime that stops after four flips and the DAC registers are
+plain RAM, so neither the curve nor the slider nor the fades reached the screen.
+`cmake/BlackGameOverlay.cmake` hands each queued ramp to
+`ports/macos/overrides/display_gamma.c`; the presenter applies it last, with
+linear interpolation between entries (`run --gamma off` for A/B). Checked: 77
+tables in a 60-second run (a fade-in in about 30 steps, then r64=106, r128=245);
+frames of the title and logo films with and without the ramp; the slider at
+both ends (r64=149, r128=255 at its top); fades on loading and death. Death
+turns the screen red in the game's own frame, not in the ramp. The user judged
+the picture in missions 1 and 8 as very close to the Xbox.
+
+**Home / Xbox Guide / PS.** A tap toggles the settings, a 1.5-second hold opens
+the quit page (`menu_input.h`, tested). In a mission Quit to Main Menu sends
+START unless the pause menu is up, then calls that page's own `GoToQuitConfirm`
+(`InGameOn.bin`), which opens the game's ConfirmWarning with `QuitLevel` on YES.
+A scripted run (`--test-home-quit`) reached PauseMenu and ConfirmWarning, also
+in the release configuration with the real DSP. While the window has focus each
+controller's Home is set to `GCSystemGestureStateDisabled`; macOS honours that
+only for an app declaring `GCSupportsControllerUserInteraction`, now in
+`BLACK-Info.plist` (a bare executable started by `black.py run` has no
+Info.plist; use `--game-mode`). The user confirmed Game Center no longer opens.
+
+**Dock.** The host pumps events itself and never ran
+`-[NSApplication finishLaunching]`, so reopen and quit Apple events went
+unanswered. It now runs it and handles both: a quit event closed a test run
+with exit code 0, and with the release app the user brought the game back with
+a Dock click and closed it from the Dock menu. A minimized window and log out
+or restart with the game open were not tried.
+
+**Films.** Skip Films with a Button: a press the game does not answer within
+10 polls while the same non-looping film plays requests the game's stop byte
+(`player+0x1B9`). Scripted: the logos, the intro and the next film skipped,
+the looping menu film kept; with the option off nothing is skipped. The hint
+appears after 2.5 seconds (tested). PRESS START keeps the game's text.
+
+**Effect buffers.** At scales above 1× the 64x32, 80x60, 160x120 and 320x240
+glow/blur targets read with linear filtering are averaged over one Xbox texel
+when copied into a texture (`xemu_effect_filter.inc`; the 160x120 depth-as-colour
+target, read with box minification, is untouched; `--effect-filter off` for A/B).
+The user no longer saw the grid on reloads against a bright background.
+
+One unexplained frozen picture occurred once on a second mission start with
+frame capture on; it did not recur without capture or with the new features
+off. **115 CTest checks** and **49 Python tests** passed. The final DMG was
+checked read-only in English and Russian with isolated data and system-only
+PATH; the source archive matched the local sources and pinned upstreams.
 
 ## Frame rate, bloom and sun shafts in 0.5.5
 

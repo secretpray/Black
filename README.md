@@ -10,8 +10,12 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.5.5 is an experimental macOS release.** Later areas of a mission no longer
-> drop to 15-18 fps, and bloom and sun shafts render as on the Xbox. From 0.5.4:
+> **0.6.0 is an experimental macOS release.** The game's own brightness curve,
+> brightness slider and fades now reach the screen. Home / Xbox Guide / PS opens the
+> settings with a tap and a quit page with a hold, without opening Game Center;
+> A, Start or Enter skips any film; the Dock icon brings the game back. From 0.5.5:
+> later areas of a mission no longer drop to 15-18 fps, and bloom and sun shafts
+> render as on the Xbox. From 0.5.4:
 > the title screen shows PRESS START, the copyright line and the logo again.
 > From 0.5.3: HD textures no longer paint the grenade crate black or pickup
 > weapons white. From 0.5.2: controllers can be
@@ -43,11 +47,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.5.5 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.5.5)**
+**[BLACK 0.6.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.6.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.5.5-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.6.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -94,6 +98,9 @@ PS2 and Xbox 360 files are not supported.
 - At render scales above 1×, the game's small glow and blur buffers are averaged
   over one Xbox texel before its blur samples them, as on the console's
   resolution.
+- **Home / Xbox Guide / PS**: tap for the settings, hold for a quit page in the
+  game's own menu style; macOS keeps Game Center out of the way while BLACK has
+  focus. The Dock icon and Dock **Quit** work as for any Mac app.
 - A panel in the game’s own green-grey menu style, using fonts from your own game.
   The panel has **Port Settings**, **Controls** and **Mods** tabs,
   with device selection first and separate input subpages.
@@ -122,7 +129,7 @@ PS2 and Xbox 360 files are not supported.
 ## Mods
 
 <p align="center">
-  <img src="docs/screenshots/settings-mods.jpg" alt="Settings, Mods page: GAME USA XBE, Films with Skip Intro Movies, and Player with God Mode, Infinite Medkits and Infinite Grenades" width="85%">
+  <img src="docs/screenshots/settings-mods.jpg" alt="Settings, Mods page: GAME USA XBE, Films with Skip Films with a Button on, Auto-Skip Intro Films and Auto-Skip Mission Briefings off, and Player with God Mode and Infinite Medkits" width="85%">
 </p>
 
 The **Mods** page collects cheats and modifications, all **off by default**
@@ -164,7 +171,8 @@ unrecognised executable leaves every mod off.
 
 | Action | Default |
 | --- | --- |
-| Recomp settings | F1 / F10 / Cmd+, / Back + Start |
+| Recomp settings | F1 / F10 / Cmd+, / Back + Start / tap Home, Xbox Guide or PS |
+| Quit page: continue, main menu, quit | Hold Home, Xbox Guide or PS for 1.5 s / settings → Quit Game |
 | Change settings page | Q / E, Tab, LB / RB |
 | Fullscreen / quit | Cmd+Return / Cmd+Q |
 | Move / crouch / walk | W A S D / C / Alt |
@@ -173,6 +181,18 @@ unrecognised executable leaves every mod off.
 | Change weapon | Q / E or mouse wheel |
 | Objectives / pause | Tab / Escape |
 | Game menus | Click / wheel / arrows; Enter confirms, Escape or right mouse goes back |
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/home-quit.jpg" alt="Quit page over a mission, in the style of the game's pause menu: the gold BLACK mark, QUIT, Continue selected, Quit to Main Menu and Quit Game"><br><sub>Hold Home: continue, the game's main menu, or quit.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-quit.jpg" alt="Port Settings with Back, Quit Game and Defaults in the footer"><br><sub>Quit Game in the settings footer.</sub></td>
+  </tr>
+</table>
+
+While BLACK has focus, macOS gives Home / Xbox Guide / PS to the game instead of
+Game Center; it is handed back when you switch away. Quit to Main Menu opens the
+game's pause menu and its own confirmation, so checkpoint progress is only lost
+after you answer YES there.
 
 <table>
   <tr>
