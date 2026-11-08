@@ -35,7 +35,15 @@ int main(void)
     assert(black_PromptString(&p,0x53773143,0x21000)==0x21000);
     black_SettingsSetButtonPrompts(BLACK_PROMPTS_PLAYSTATION);
     uint32_t text=black_PromptString(&p,0xE0CA7C5F,0x20000);assert(!strcmp((char *)mem+text,"CROSS confirm"));
+    /* Name keyboard: B backs out there, so the pad deletes with X and types a space with Y. */
+    strcpy((char *)mem+0x22000,"delete");strcpy((char *)mem+0x23000,"space");
+    text=black_PromptString(&p,0x32D594BD,0x22000);assert(!strcmp((char *)mem+text,"SQUARE delete"));
+    text=black_PromptString(&p,0x758E2074,0x23000);assert(!strcmp((char *)mem+text,"TRIANGLE space"));
+    black_SettingsSetButtonPrompts(BLACK_PROMPTS_XBOX);
+    assert(black_PromptString(&p,0x32D594BD,0x22000)!=0x22000);
     black_SettingsSetButtonPrompts(BLACK_PROMPTS_KEYBOARD);
+    text=black_PromptString(&p,0x32D594BD,0x22000);assert(!strcmp((char *)mem+text,"BACKSPACE delete"));
+    text=black_PromptString(&p,0x758E2074,0x23000);assert(!strcmp((char *)mem+text,"SPACE space"));
     text=black_PromptString(&p,0xE0CA7C5F,0x20000);assert(!strcmp((char *)mem+text,"ENTER confirm"));
     text=black_PromptString(&p,0x53773143,0x21000);assert(!strcmp((char *)mem+text,"PRESS R :"));
     black_SettingsSetBinding(9,0,18);

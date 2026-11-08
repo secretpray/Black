@@ -111,6 +111,10 @@ include("${CMAKE_SOURCE_DIR}/cmake/BlackInterruptTests.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackVoiceLockTests.cmake")
 add_executable(black-menu-input tools/macos/menu_input_test.c)
 add_test(NAME macos_menu_input COMMAND black-menu-input)
+add_executable(black-text-pad tools/macos/text_pad_test.c)
+add_test(NAME macos_text_pad COMMAND black-text-pad)
+add_executable(black-menu-repeat tools/macos/menu_repeat_test.c)
+add_test(NAME macos_menu_repeat COMMAND black-menu-repeat)
 add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/port_settings.c ports/macos/overrides/keyboard_mouse.c
     ports/macos/overrides/flash_input.c ports/macos/overrides/input_profile.c)

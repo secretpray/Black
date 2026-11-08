@@ -35,6 +35,8 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 #include "input_owner.h"
 #include "input_profile.h"
 #include "pad_mapping.h"
+#include "text_pad.h"
+#include "menu_repeat.h"
 #include <pthread.h>
 
 /* Unlike the pinned backend, preserve SDL's failure result for diagnostics. */
@@ -288,6 +290,26 @@ DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
             else state->Gamepad.wButtons &= ~XBOX_GAMEPAD_START;
             atomic_store(&black_start_pulse, pulse - 1);
         }
+    }
+    if (!port && result == ERROR_SUCCESS && state) {
+        /* Name keyboard: X deletes, Y types a space (text_pad.h); the game
+         * does not see these two buttons while the page takes typing. */
+        static BlackTextPad text_pad;
+        int typing = black_GameTextActive() && !black_MenuIsOpen();
+        int c = black_text_pad(&text_pad, typing, state->Gamepad.bAnalogButtons[XBOX_BUTTON_X] > 30,
+            state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] > 30, SDL_GetTicks());
+        if (c) black_GameTextCharacter((unsigned)c);
+        if (typing) state->Gamepad.bAnalogButtons[XBOX_BUTTON_X] = state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] = 0;
+        /* Held d-pad in the game's menus: steady steps (menu_repeat.h). */
+        static BlackMenuRepeat menu_repeat;
+        static const WORD dirs[4] = {XBOX_GAMEPAD_DPAD_UP, XBOX_GAMEPAD_DPAD_DOWN,
+                                     XBOX_GAMEPAD_DPAD_LEFT, XBOX_GAMEPAD_DPAD_RIGHT};
+        uint32_t held = 0;
+        for (int i = 0; i < 4; ++i) if (state->Gamepad.wButtons & dirs[i]) held |= 1u << i;
+        uint32_t shown = black_menu_repeat(&menu_repeat, black_GameMenuActive() && !black_MenuIsOpen(),
+            held, SDL_GetTicks());
+        for (int i = 0; i < 4; ++i)
+            if (!(shown & (1u << i))) state->Gamepad.wButtons &= (WORD)~dirs[i];
     }
     if (!port)
         atomic_store(&black_film_button, result == ERROR_SUCCESS && state &&
