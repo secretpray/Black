@@ -122,12 +122,19 @@ static NSString *D(NSString *english)
 }
 
 #include "menu_pages.h"
-static NSString *const tab_names[MENU_TABS]={@"PORT SETTINGS",@"CONTROLS",@"MODS"};
-static NSString *const page_names[MENU_PAGES]={@"PORT SETTINGS",@"CONTROLS",@"BUTTON BINDINGS",@"BUTTON BINDINGS",@"MOUSE AND AIMING",@"GAMEPAD AND VIBRATION",@"ADVANCED GAMEPAD",@"CONTROLLER DIAGNOSTICS",@"MODS"};
+static NSString *const tab_names[MENU_TABS]={@"PORT SETTINGS",@"CONTROLS",@"MODS",@"SAVES"};
+static NSString *const page_names[MENU_PAGES]={@"PORT SETTINGS",@"CONTROLS",@"BUTTON BINDINGS",@"BUTTON BINDINGS",@"MOUSE AND AIMING",@"GAMEPAD AND VIBRATION",@"ADVANCED GAMEPAD",@"CONTROLLER DIAGNOSTICS",@"MODS",@"SAVES",@"PROFILE BACKUPS",@"COPY A PROFILE INTO A SLOT",@"IMPORT A PROFILE"};
 static int is_binding(int row){return row>=ROW_BIND_FIRST&&row<=ROW_BIND_LAST;}
 static int group_of(int row)
 {
     if(row==ROW_QUIT)return 18;
+    if(row>=ROW_SAVE_FIRST&&row<=ROW_SAVE_LAST)return 19;
+    if(row==ROW_SAVE_IMPORT||row==ROW_NAV_BACKUPS)return 20;
+    if(row>=ROW_BACKUP_FIRST&&row<=ROW_BACKUP_LAST)return 21;
+    if(row>=ROW_IMPORT_SRC_FIRST&&row<=ROW_IMPORT_SRC_LAST)return 22;
+    if(row>=ROW_IMPORT_DST_FIRST&&row<=ROW_IMPORT_DST_LAST)return 23;
+    if(row>=ROW_PICK_FIRST&&row<=ROW_PICK_LAST)return 24;
+    if(row==ROW_PICK_FOLDER||row==ROW_PICK_FINDER)return 20;
     if(black_menu_pair(row))return 3;
     if(black_menu_link(row)||row==ROW_EDIT_DEVICE)return 17;
     if (row >= ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS) return 13;
@@ -150,7 +157,7 @@ static int group_of(int row)
 }
 static NSString *group_name(int group)
 { return (@[@"DISPLAY", @"GRAPHICS", @"GENERAL", @"LOOK SENSITIVITY", @"AIMING", @"DEADZONES", @"FEEDBACK", @"DRIVER", @"CALIBRATION", @"MOUSE LOOK", @"KEY BINDINGS",
-    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES", @"DEVICE", @"CONTROLLER BINDINGS", @"CONTROLS", @"GAME"])[group]; }
+    @"FILMS", @"PLAYER", @"UNLOCKS", @"TEXTURES", @"DEVICE", @"CONTROLLER BINDINGS", @"CONTROLS", @"GAME", @"PROFILE SLOTS", @"MORE", @"BACKUPS", @"FROM THE FILE", @"INTO THIS PROFILE", @"IN THE IMPORT FOLDER"])[group]; }
 static int visible_start(int page,int selected)
 {return MAX(0,black_menu_index(page,selected)-MENU_TAB_MAX_ROWS+1);}
 static CGFloat row_y(int page,int row,int selected)
@@ -178,9 +185,49 @@ static NSArray *row_labels(void)
     for (int i = 0; i < BLACK_ACTION_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_KeyActions()[i].label]];
     [labels addObjectsFromArray:@[@"Skip Films with a Button", @"Auto-Skip Intro Films", @"Auto-Skip Mission Briefings"]];
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
-    [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming",@"Quit Game"]];
+    [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Profile Backups",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming",@"Quit Game"]];
+    for (int i = 0; i < BLACK_PROFILE_SLOTS; ++i) [labels addObject:@"Profile Slot"];
+    [labels addObject:@"Import a Profile"];
+    for (int i = 0; i < BLACK_SAVE_BACKUPS; ++i) [labels addObject:@"Backup"];
+    for (int i = 0; i < 2 * BLACK_PROFILE_SLOTS; ++i) [labels addObject:@"Profile Slot"];
+    for (int i = 0; i < BLACK_SAVE_IMPORTS; ++i) [labels addObject:@"Import"];
+    [labels addObjectsFromArray:@[@"Open the Import Folder", @"Choose in Finder"]];
     return labels;
 }
+/* The Saves tab (save_profiles.h): the profile file as read when a page
+ * opened, the backups, a file chosen for import with its source slot, the
+ * row waiting for its second Enter / A, and the last edit's outcome. Edits
+ * are applied by the game's thread; the panel waits for its answer. */
+static uint8_t profile_data[BLACK_PROFILE_SIZE], import_data[BLACK_PROFILE_SIZE];
+static BlackProfileSlot profile_slots[BLACK_PROFILE_SLOTS], import_slots[BLACK_PROFILE_SLOTS];
+static BlackSaveBackup backups[BLACK_SAVE_BACKUPS];
+static int profile_ok, backup_count, import_source = -1, save_armed = -1, save_waiting, save_outcome;
+static double save_armed_at;
+static NSString *import_name;
+static BlackSaveImport imports[BLACK_SAVE_IMPORTS];
+static int import_count;
+static void refresh_imports(void)
+{ import_count = black_SaveImports(imports, BLACK_SAVE_IMPORTS); black_menu_pick_rows = import_count; }
+static void refresh_saves(void)
+{
+    profile_ok = black_SaveRead(profile_data, NULL, 0) && black_profile_slots(profile_data, BLACK_PROFILE_SIZE, profile_slots);
+    if (!profile_ok) memset(profile_slots, 0, sizeof profile_slots);
+    backup_count = black_SaveBackups(backups, BLACK_SAVE_BACKUPS);
+    black_menu_backup_rows = backup_count; save_armed = -1;
+}
+static BOOL save_is_armed(int row)
+{ return save_armed == row && CACurrentMediaTime() - save_armed_at < 5; }
+/* First press arms the row, the second within five seconds acts. */
+static BOOL save_confirm(int row)
+{
+    if (save_is_armed(row)) { save_armed = -1; return YES; }
+    save_armed = row; save_armed_at = CACurrentMediaTime(); save_outcome = 0; return NO;
+}
+static void save_edit(const uint8_t *edited)
+{ black_SaveRequest(profile_data, edited); save_waiting = 1; save_outcome = 0; }
+static NSString *slot_text(const BlackProfileSlot *slot)
+{ return slot->active ? [NSString stringWithFormat:@"%@ · %d/32", [@(slot->name) uppercaseString], slot->completed] :
+    slot->damaged ? T(@"DAMAGED") : nil; }
 /* BLACK's own menu palette (black_ui.h): grey text on the selected row, green-grey
  * rows, light rails; TGP's layout and rows are kept, its gold palette is not. */
 enum { TEXT = BLACK_UI_TEXT, DIM = BLACK_UI_ROW, HEADING = BLACK_UI_RAIL, HIGHLIGHT = BLACK_UI_TICK,
@@ -530,7 +577,7 @@ static NSTimeInterval transition, last_draw;
             rows[i].target = self; rows[i].action = @selector(changeOption:);
             rows[i].focusRingType = NSFocusRingTypeNone;
             [rows[i] setAccessibilityLabel:labels[i]];
-            [rows[i] setAccessibilityHelp:i==ROW_QUIT?@"Open the quit dialog: main menu or quit BLACK. Holding Home does the same.":black_menu_link(i)?@"Open a controls subpage. Back returns to this row.":
+            [rows[i] setAccessibilityHelp:black_menu_save(i)?@"Saves: Enter twice confirms a delete, restore or import. Applied only on the game's main menu; a backup is kept.":i==ROW_QUIT?@"Open the quit dialog: main menu or quit BLACK. Holding Home does the same.":black_menu_link(i)?@"Open a controls subpage. Back returns to this row.":
                 black_menu_pair(i)?@"Choose X or Y with Left and Right, press Enter to edit. Back finishes editing.":
                 i==ROW_EDIT_DEVICE?@"Choose the bindings to edit; gameplay device is unchanged.":i <= ROW_RESET ? help[i] : i < ROW_MOUSE_X ?
                 @"Choose the input device and prompt family, or reassign a controller button. Escape cancels capture; Delete clears a binding." :
@@ -586,7 +633,7 @@ static NSTimeInterval transition, last_draw;
         categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * scale, TAB_WIDTH * scale, 38 * scale);
     back.frame = NSMakeRect(ox + 84 * scale, oy + 526 * scale, 126 * scale, 30 * scale);
     quit.frame = NSMakeRect(ox + 222 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
-    defaults.hidden=page==PAGE_CONTROLS||page==PAGE_DIAGNOSTICS;
+    defaults.hidden=page==PAGE_CONTROLS||page==PAGE_DIAGNOSTICS||page>=PAGE_SAVES;
     defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
 }
 - (void)refreshValues
@@ -670,6 +717,8 @@ static NSTimeInterval transition, last_draw;
 {
     black_ControllerCancelMeasure();page=newPage;
     if(page==PAGE_KEYS||page==PAGE_PAD_BINDINGS)editor_page=page;
+    if(page>=PAGE_SAVES){refresh_saves();if(page!=PAGE_IMPORT)import_source=-1;}
+    if(page==PAGE_IMPORT_PICK)refresh_imports();
     [self selectRow:black_menu_index(page,row)>=0?row:black_menu_row(page,0)];
 }
 - (BOOL)navigateBack
@@ -682,6 +731,9 @@ static NSTimeInterval transition, last_draw;
     else if(page==PAGE_PAD)[self openPage:PAGE_CONTROLS row:ROW_NAV_PAD];
     else if(page==PAGE_ADVANCED)[self openPage:PAGE_PAD row:ROW_NAV_ADVANCED];
     else if(page==PAGE_DIAGNOSTICS)[self openPage:PAGE_ADVANCED row:ROW_NAV_DIAGNOSTICS];
+    else if(page==PAGE_BACKUPS)[self openPage:PAGE_SAVES row:ROW_NAV_BACKUPS];
+    else if(page==PAGE_IMPORT)[self openPage:PAGE_IMPORT_PICK row:-1];
+    else if(page==PAGE_IMPORT_PICK)[self openPage:PAGE_SAVES row:ROW_SAVE_IMPORT];
     else return NO;
     return YES;
 }
@@ -731,7 +783,7 @@ static NSTimeInterval transition, last_draw;
             }
             return;
         }
-        if(black_menu_link(selected)||selected==ROW_EDIT_DEVICE||selected==ROW_QUIT){[self adjustOption:1 cycle:YES];return;}
+        if(black_menu_link(selected)||selected==ROW_EDIT_DEVICE||selected==ROW_QUIT||black_menu_save(selected)){[self adjustOption:1 cycle:YES];return;}
         if(black_menu_pair(selected)){
             if(x>=600&&x<876){axis_slot=x>=738;axis_edit=YES;
                 CGFloat local=x-(axis_slot?738:600);
@@ -750,10 +802,47 @@ static NSTimeInterval transition, last_draw;
 - (void)adjustOption:(int)direction cycle:(BOOL)cycle
 {
     if(selected==ROW_QUIT){if(cycle)black_MenuCommand(BLACK_MENU_QUIT);return;}
+    if(black_menu_save(selected)){
+        if(!cycle||save_waiting){[self setNeedsDisplay:YES];return;}
+        if(selected==ROW_SAVE_IMPORT){[self openPage:PAGE_IMPORT_PICK row:-1];return;}
+        if(selected==ROW_PICK_FINDER){[self chooseImport];return;}
+        if(selected==ROW_PICK_FOLDER){
+            char folder[1024];
+            if(black_SaveImportFolder(folder,sizeof folder))[NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:@(folder) isDirectory:YES]];
+            return;
+        }
+        if(selected>=ROW_PICK_FIRST&&selected<=ROW_PICK_LAST){
+            int at=selected-ROW_PICK_FIRST;
+            if(at<import_count)[self openImport:@(imports[at].path)];
+            return;
+        }
+        int in_use=black_SaveSlotInUse();
+        if(selected>=ROW_SAVE_FIRST&&selected<=ROW_SAVE_LAST){
+            int at=selected-ROW_SAVE_FIRST;
+            if(!profile_ok||!(profile_slots[at].active||profile_slots[at].damaged)||at==in_use)return;
+            if(!save_confirm(selected)){[self setNeedsDisplay:YES];return;}
+            uint8_t edited[BLACK_PROFILE_SIZE];memcpy(edited,profile_data,sizeof edited);
+            if(black_profile_clear(edited,at))save_edit(edited);
+        }else if(selected>=ROW_BACKUP_FIRST&&selected<=ROW_BACKUP_LAST){
+            int at=selected-ROW_BACKUP_FIRST;uint8_t edited[BLACK_PROFILE_SIZE];
+            if(!profile_ok||at>=backup_count||!save_confirm(selected)){[self setNeedsDisplay:YES];return;}
+            if(black_SaveReadBackup(backups[at].path,edited))save_edit(edited);
+        }else if(selected>=ROW_IMPORT_SRC_FIRST&&selected<=ROW_IMPORT_SRC_LAST){
+            int at=selected-ROW_IMPORT_SRC_FIRST;
+            if(!import_slots[at].active)return;
+            import_source=at;[self selectRow:ROW_IMPORT_DST_FIRST+MAX(0,black_profile_free_slot(profile_data))];return;
+        }else{
+            int at=selected-ROW_IMPORT_DST_FIRST;
+            if(!profile_ok||import_source<0||at==in_use||!save_confirm(selected)){[self setNeedsDisplay:YES];return;}
+            uint8_t edited[BLACK_PROFILE_SIZE];memcpy(edited,profile_data,sizeof edited);
+            if(black_profile_copy(edited,at,import_data,import_source))save_edit(edited);
+        }
+        [self setNeedsDisplay:YES];return;
+    }
     if(black_menu_link(selected)){
         if(!cycle)return;
         int target=selected==ROW_NAV_BINDINGS?editor_page:selected==ROW_NAV_MOUSE?PAGE_MOUSE:
-            selected==ROW_NAV_PAD?PAGE_PAD:selected==ROW_NAV_ADVANCED?PAGE_ADVANCED:PAGE_DIAGNOSTICS;
+            selected==ROW_NAV_PAD?PAGE_PAD:selected==ROW_NAV_ADVANCED?PAGE_ADVANCED:selected==ROW_NAV_BACKUPS?PAGE_BACKUPS:PAGE_DIAGNOSTICS;
         [self openPage:target row:-1];return;
     }
     if(selected==ROW_EDIT_DEVICE){
@@ -1003,6 +1092,35 @@ static NSAlert *pack_alert;
         dispatch_async(dispatch_get_main_queue(), ^{ [self checkTexturePack:panel.URL.path]; });
     }];
 }
+/* Import: a profile file or a save folder on this Mac (a backup, another
+ * copy of BLACK, a save copied off a hard disk). */
+- (void)chooseImport
+{
+    NSOpenPanel *panel = NSOpenPanel.openPanel;
+    panel.canChooseDirectories = YES; panel.canChooseFiles = YES; panel.allowsMultipleSelection = NO;
+    panel.message = D(@"Choose a BLACK profile file, the save folder that holds it, or a zip of either.");
+    fprintf(stderr, "[SAVES] import: Finder chooser opened\n");
+    [NSApp activateIgnoringOtherApps:YES];
+    panel.prompt = D(@"Import");
+    [panel beginSheetModalForWindow:menu_window completionHandler:^(NSModalResponse response) {
+        if (response != NSModalResponseOK || !panel.URL) return;
+        NSString *path = [panel.URL.path copy];
+        dispatch_async(dispatch_get_main_queue(), ^{ [self openImport:path]; [path release]; });
+    }];
+}
+- (void)openImport:(NSString *)path
+{
+    if (!black_SaveReadImport(path.fileSystemRepresentation, import_data) ||
+        !black_profile_slots(import_data, BLACK_PROFILE_SIZE, import_slots)) {
+        fprintf(stderr, "[SAVES] import: no BLACK profile in %s\n", path.fileSystemRepresentation);
+        save_outcome = -1; [self setNeedsDisplay:YES]; return;
+    }
+    [import_name release]; import_name = [path.lastPathComponent copy];
+    fprintf(stderr, "[SAVES] import file chosen: %s\n", path.fileSystemRepresentation);
+    [self openPage:PAGE_IMPORT row:-1];
+    int first = 0; while (first < BLACK_PROFILE_SLOTS - 1 && !import_slots[first].active) ++first;
+    [self selectRow:ROW_IMPORT_SRC_FIRST + first];
+}
 - (void)checkTexturePack:(NSString *)folder
 {
     BlackTexturePackCheck check;
@@ -1037,6 +1155,12 @@ static NSAlert *pack_alert;
 - (void)drawRect:(NSRect)dirty
 {
     (void)dirty;
+    if (save_waiting && black_SaveState() != BLACK_SAVE_PENDING) {
+        /* The game's thread answered the edit request. */
+        save_waiting = 0; save_outcome = black_SaveState(); refresh_saves();
+        if (save_outcome == BLACK_SAVE_DONE && page == PAGE_IMPORT) import_source = -1;
+        dispatch_async(dispatch_get_main_queue(), ^{ [self selectRow:selected]; });
+    }
     NSSize size = self.bounds.size;
     fill(self.bounds, BLACK_UI_BACKDROP, .9);
     [NSGraphicsContext saveGraphicsState];
@@ -1081,6 +1205,35 @@ static NSAlert *pack_alert;
         BOOL focus = selected == index;
         /* The live sticks sit right of the controller rows: the line stops at their divider. */
         if (focus) black_ui_selector(NSMakeRect(84, y, width, 38), rail, page == PAGE_DIAGNOSTICS ? 700 : edge);
+        if(black_menu_save(index)){
+            NSString *name=nil,*value=nil;int in_use=black_SaveSlotInUse();
+            if(index>=ROW_SAVE_FIRST&&index<=ROW_SAVE_LAST){int at=index-ROW_SAVE_FIRST;
+                name=[NSString stringWithFormat:@"%d. %@",at+1,profile_ok?slot_text(&profile_slots[at])?:T(@"EMPTY"):T(@"NO PROFILE YET")];
+                value=!profile_ok||!(profile_slots[at].active||profile_slots[at].damaged)?@"":at==in_use?@"IN USE":save_is_armed(index)?@"CONFIRM":profile_slots[at].damaged?@"CLEAR":@"DELETE";
+            }else if(index==ROW_SAVE_IMPORT){name=T(@"IMPORT A PROFILE");value=@"…";
+            }else if(index==ROW_PICK_FOLDER){name=T(@"OPEN THE IMPORT FOLDER");value=@"…";
+            }else if(index==ROW_PICK_FINDER){name=T(@"CHOOSE IN FINDER");value=@"…";
+            }else if(index>=ROW_PICK_FIRST&&index<=ROW_PICK_LAST){int at=index-ROW_PICK_FIRST;
+                NSMutableArray *names=[NSMutableArray array];
+                for(int i=0;i<BLACK_PROFILE_SLOTS;++i)if(imports[at].slots[i].active)[names addObject:[@(imports[at].slots[i].name) uppercaseString]];
+                name=[NSString stringWithFormat:@"%s · %@",imports[at].name,[names componentsJoinedByString:@", "]];value=@"CHOOSE";
+            }else if(index>=ROW_BACKUP_FIRST&&index<=ROW_BACKUP_LAST){int at=index-ROW_BACKUP_FIRST;
+                if(at<backup_count){NSMutableArray *names=[NSMutableArray array];
+                    for(int i=0;i<BLACK_PROFILE_SLOTS;++i)if(backups[at].slots[i].active)[names addObject:[@(backups[at].slots[i].name) uppercaseString]];
+                    name=[NSString stringWithFormat:@"%s · %@",backups[at].when,names.count?[names componentsJoinedByString:@", "]:T(@"EMPTY")];
+                    value=save_is_armed(index)?@"CONFIRM":@"RESTORE";
+                }else name=T(@"NO BACKUPS YET");
+            }else if(index>=ROW_IMPORT_SRC_FIRST&&index<=ROW_IMPORT_SRC_LAST){int at=index-ROW_IMPORT_SRC_FIRST;
+                name=[NSString stringWithFormat:@"%d. %@",at+1,slot_text(&import_slots[at])?:T(@"EMPTY")];
+                value=import_slots[at].active?(import_source==at?@"CHOSEN":@"CHOOSE"):@"";
+            }else{int at=index-ROW_IMPORT_DST_FIRST;
+                name=[NSString stringWithFormat:@"%d. %@",at+1,profile_ok?slot_text(&profile_slots[at])?:T(@"EMPTY"):T(@"NO PROFILE YET")];
+                value=import_source<0||!profile_ok?@"":at==in_use?@"IN USE":save_is_armed(index)?@"CONFIRM":profile_slots[at].active?@"REPLACE":@"SAVE HERE";
+            }
+            fitted_text(name,96,y+13,13,left-108,focus?TEXT:DIM,0);
+            if(value.length)fitted_text(T(value),left,y+13,12,122,save_is_armed(index)?WARN:focus?TEXT:DIM,0);
+            continue;
+        }
         fitted_text(T([row_labels()[index] uppercaseString]), 96, y + 13, 13,
             is_binding(index)||black_menu_pair(index) ? 490 : index==ROW_DEVICE||index==ROW_PROMPTS||index==ROW_EDIT_DEVICE ? 390 : left-108, focus ? TEXT : DIM, 0);
         if(black_menu_link(index)||index==ROW_QUIT){
@@ -1163,6 +1316,29 @@ static NSAlert *pack_alert;
     if(selected==ROW_QUIT){
         help=@"QUIT TO THE GAME'S MAIN MENU OR QUIT BLACK.";
         detail=@"ENTER / A OPENS. HOLDING HOME, GUIDE OR PS OPENS IT TOO.";
+    }else if(black_menu_save(selected)||selected==ROW_NAV_BACKUPS){
+        int in_use=black_SaveSlotInUse(),slot=selected>=ROW_SAVE_FIRST&&selected<=ROW_SAVE_LAST?selected-ROW_SAVE_FIRST:
+            selected>=ROW_IMPORT_DST_FIRST&&selected<=ROW_IMPORT_DST_LAST?selected-ROW_IMPORT_DST_FIRST:-1;
+        detail=black_SaveEditAllowed()?@"APPLIED AT ONCE; THE FILE BEFORE IT IS KEPT AS A BACKUP.":@"CHANGES APPLY ONLY ON THE GAME'S MAIN MENU, NOT IN A MISSION.";
+        if(save_waiting)help=@"APPLYING…";
+        else if(save_outcome==BLACK_SAVE_DONE)help=@"DONE. THE GAME'S PROFILE LIST SHOWS IT NOW.";
+        else if(save_outcome==BLACK_SAVE_NOT_MENU)help=@"OPEN THE GAME'S MAIN MENU FIRST.";
+        else if(save_outcome==BLACK_SAVE_GAME_CHANGED)help=@"THE GAME HAS UNSAVED CHANGES OR THE FILE CHANGED. SAVE IN THE GAME, THEN TRY AGAIN.";
+        else if(save_outcome<0)help=@"THIS HAS NO BLACK PROFILE: CHOOSE A PROFILE FILE OR ITS SAVE FOLDER.";
+        else if(save_outcome)help=@"COULD NOT WRITE THE PROFILE; IT WAS LEFT AS IT WAS.";
+        else if(!profile_ok&&selected!=ROW_NAV_BACKUPS)help=@"NO PROFILE YET: THE GAME CREATES ONE WHEN IT FIRST SAVES.";
+        else if(slot>=0&&slot==in_use)help=@"THE GAME PLAYS THIS PROFILE AND AUTOSAVES TO IT; IT CANNOT BE CHANGED HERE.";
+        else if(save_is_armed(selected))help=@"PRESS ENTER / A AGAIN TO CONFIRM.";
+        else if(selected==ROW_SAVE_IMPORT)help=@"COPY A PROFILE FROM A ZIP, SAVE FOLDER OR PROFILE FILE ON THIS MAC INTO A SLOT.";
+        else if(selected==ROW_PICK_FOLDER)help=import_count?@"PUT A ZIP, SAVE FOLDER OR PROFILE FILE HERE; IT IS LISTED ABOVE.":@"NOTHING TO IMPORT YET: PUT A ZIP, SAVE FOLDER OR PROFILE FILE IN THIS FOLDER.";
+        else if(selected==ROW_PICK_FINDER)help=@"CHOOSE A ZIP, SAVE FOLDER OR PROFILE FILE ANYWHERE ON THIS MAC.";
+        else if(selected>=ROW_PICK_FIRST&&selected<=ROW_PICK_LAST)help=@"ENTER / A SHOWS ITS PROFILES. THE FILE ITSELF IS NOT CHANGED.";
+        else if(selected==ROW_NAV_BACKUPS)help=@"EVERY CHANGE HERE KEEPS THE FILE BEFORE IT. ANY BACKUP CAN BE PUT BACK.";
+        else if(selected>=ROW_SAVE_FIRST&&selected<=ROW_SAVE_LAST)help=profile_slots[slot].active?@"ENTER / A TWICE DELETES THIS PROFILE.":
+            profile_slots[slot].damaged?@"THE GAME WROTE THIS SLOT OFF AS DAMAGED. ENTER / A TWICE CLEARS IT.":@"AN EMPTY SLOT. THE GAME OR AN IMPORT CAN FILL IT.";
+        else if(selected>=ROW_BACKUP_FIRST&&selected<=ROW_BACKUP_LAST)help=selected-ROW_BACKUP_FIRST<backup_count?@"ENTER / A TWICE PUTS ALL THREE SLOTS BACK AS THEY WERE THEN.":@"BACKUPS APPEAR AFTER THE FIRST CHANGE HERE.";
+        else if(selected>=ROW_IMPORT_SRC_FIRST&&selected<=ROW_IMPORT_SRC_LAST)help=[NSString stringWithFormat:@"%@: %@",T(@"CHOOSE THE PROFILE TO COPY"),import_name?:@""];
+        else help=import_source<0?@"CHOOSE A PROFILE FROM THE FILE FIRST.":profile_slots[slot].active?@"ENTER / A TWICE REPLACES THIS PROFILE WITH THE CHOSEN ONE.":@"ENTER / A TWICE SAVES THE CHOSEN PROFILE HERE.";
     }else if(black_menu_link(selected)){
         help=selected==ROW_NAV_BINDINGS?@"EDIT KEYBOARD OR GAMEPAD BINDINGS IN ONE PLACE.":
             selected==ROW_NAV_MOUSE?@"MOUSE LOOK, AIMING AND WALK SPEED.":
@@ -1394,6 +1570,11 @@ static void set_open(int open)
         closing = 0;
         if (!shown) {
             shown = 1; black_MenuSetOpen(1);
+            /* The game may have saved or loaded since: list profiles afresh. */
+            if (menu_view->page >= PAGE_SAVES) {
+                refresh_saves(); if (menu_view->page == PAGE_IMPORT_PICK) refresh_imports();
+                [menu_view selectRow:menu_view->selected];
+            }
             if (capture_input) capture_input(1);
             menu_view.hidden = NO;
             menu_view.alphaValue = reduced_motion() ? 1 : 0;

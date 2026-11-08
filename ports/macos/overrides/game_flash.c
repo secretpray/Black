@@ -59,11 +59,26 @@ static void quit_to_menu(uint32_t ui)
         asked = 0;
     }
 }
+/* The Saves tab (save_profiles.h): the save manager [0x2D19BC] keeps the
+ * profile file's image at +0x1268 (0x1F2F20 marks its slots there) and its
+ * autosave slot at +0x524 ("AutoSaveIndex" in its own debug page, 0x2094B0).
+ * Edits apply only on the main menu pages, never in a mission. */
+#include "save_profiles.h"
+static void saves_tick(uint32_t ui)
+{
+    uint32_t manager = MEM32(0x2D19BC);
+    int main_menu = !black_GameInMission() && (black_FlashOnPage(&menu, ui, "blacktitlemenu") ||
+        black_FlashOnPage(&menu, ui, "OptionsMenuXbox") || black_FlashOnPage(&menu, ui, "ProfileOptions"));
+    uint8_t *image = manager && memory_ok(manager + 0x1268, BLACK_PROFILE_SIZE) ? (uint8_t *)XBOX_PTR(manager + 0x1268) : NULL;
+    int slot = manager && memory_ok(manager + 0x524, 4) ? (int)MEM32(manager + 0x524) : -1;
+    black_SaveGameTick(image, slot, main_menu);
+}
 void black_GameMenu(uint32_t ui)
 {
     initialize();uint32_t previous_ebp=g_ebp,previous_seh=g_seh_ebp;g_ebp=ui;g_seh_ebp=ui;
     black_FlashMenuTick(&menu,ui,black_GamePointerTake());
     quit_to_menu(ui);
+    saves_tick(ui);
     black_PromptTick(&prompts);
     g_ebp=previous_ebp;g_seh_ebp=previous_seh;
     if(menu.fault&&getenv("RECOMP_INPUT_DEBUG")){

@@ -30,6 +30,9 @@ black_file_replace("        case XboxFileBasicInformation:\n            /* Setti
             if (info->EndOfFile.QuadPart < 0) return STATUS_INVALID_PARAMETER;
             if (info->EndOfFile.QuadPart < st.st_size && ftruncate(fd, (off_t)info->EndOfFile.QuadPart) != 0)
                 return STATUS_UNSUCCESSFUL;
+            {   void black_SaveNoteUsed(const char *);
+                const char *black_path = w32_handle_path(FileHandle);
+                if (black_path) black_SaveNoteUsed(black_path); }
             if (getenv(\"BLACK_SAVE_TRACE\"))
                 fprintf(stderr, \"  [SAVE-TRACE] allocation %lld (size %lld) %s\\n\",
                     (long long)info->EndOfFile.QuadPart, (long long)st.st_size, w32_handle_path(FileHandle));
@@ -91,6 +94,11 @@ black_file_replace("                ((unsigned char *)Buffer)[at] = 0;\n        
     }
 
     IoStatusBlock->Information = (ULONG_PTR)n;
+    {   /* the settings panel keeps the profile in use from being deleted */
+        void black_SaveNoteUsed(const char *);
+        const char *black_path = w32_handle_path(FileHandle);
+        if (black_path && strstr(black_path, \"/UserData/\")) black_SaveNoteUsed(black_path);
+    }
     if (getenv(\"BLACK_SAVE_TRACE\")) {
         const char *black_path = w32_handle_path(FileHandle);
         if (black_path && strstr(black_path, \"/UserData/\"))

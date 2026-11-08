@@ -4,6 +4,7 @@
 #include "keyboard_mouse.h"
 #include "input_profile.h"
 #include "game_mods.h"
+#include "save_profiles.h"
 enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES, ROW_TEXTURE_SIZE,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
@@ -12,15 +13,27 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, 
        ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
        ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1,
        ROW_ANY_FILM, ROW_INTROS, ROW_MISSIONS, ROW_MOD_FIRST, ROW_MOD_LAST = ROW_MOD_FIRST + BLACK_MOD_COUNT - 1,
-       ROW_NAV_BINDINGS, ROW_NAV_MOUSE, ROW_NAV_PAD, ROW_NAV_ADVANCED, ROW_NAV_DIAGNOSTICS,
-       ROW_EDIT_DEVICE, ROW_MOUSE_LOOK_PAIR, ROW_MOUSE_AIM_PAIR, ROW_PAD_LOOK_PAIR, ROW_PAD_AIM_PAIR, ROW_QUIT, MENU_ROWS };
+       ROW_NAV_BINDINGS, ROW_NAV_MOUSE, ROW_NAV_PAD, ROW_NAV_ADVANCED, ROW_NAV_DIAGNOSTICS, ROW_NAV_BACKUPS,
+       ROW_EDIT_DEVICE, ROW_MOUSE_LOOK_PAIR, ROW_MOUSE_AIM_PAIR, ROW_PAD_LOOK_PAIR, ROW_PAD_AIM_PAIR, ROW_QUIT,
+       ROW_SAVE_FIRST, ROW_SAVE_LAST = ROW_SAVE_FIRST + BLACK_PROFILE_SLOTS - 1, ROW_SAVE_IMPORT,
+       ROW_BACKUP_FIRST, ROW_BACKUP_LAST = ROW_BACKUP_FIRST + BLACK_SAVE_BACKUPS - 1,
+       ROW_IMPORT_SRC_FIRST, ROW_IMPORT_SRC_LAST = ROW_IMPORT_SRC_FIRST + BLACK_PROFILE_SLOTS - 1,
+       ROW_IMPORT_DST_FIRST, ROW_IMPORT_DST_LAST = ROW_IMPORT_DST_FIRST + BLACK_PROFILE_SLOTS - 1,
+       ROW_PICK_FIRST, ROW_PICK_LAST = ROW_PICK_FIRST + BLACK_SAVE_IMPORTS - 1, ROW_PICK_FOLDER, ROW_PICK_FINDER, MENU_ROWS };
 
 enum { PAGE_PORT, PAGE_CONTROLS, PAGE_KEYS, PAGE_PAD_BINDINGS, PAGE_MOUSE,
-       PAGE_PAD, PAGE_ADVANCED, PAGE_DIAGNOSTICS, PAGE_MODS, MENU_PAGES };
-enum { MENU_TABS = 3, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 264 };
+       PAGE_PAD, PAGE_ADVANCED, PAGE_DIAGNOSTICS, PAGE_MODS, PAGE_SAVES, PAGE_BACKUPS, PAGE_IMPORT, PAGE_IMPORT_PICK, MENU_PAGES };
+enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 5, TAB_WIDTH = 198 };
+/* Profile backups listed now (port_menu.m sets it); one row says "none". */
+static int black_menu_backup_rows = 1;
+/* Profiles found in the import folder now (port_menu.m sets it). */
+static int black_menu_pick_rows = 0;
 static inline int black_menu_count(int page)
 {
-    static const int counts[]={11,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT};
+    static const int counts[]={11,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT,
+        BLACK_PROFILE_SLOTS+2,1,2*BLACK_PROFILE_SLOTS,2};
+    if(page==PAGE_IMPORT_PICK)return 2+(black_menu_pick_rows<0?0:black_menu_pick_rows>BLACK_SAVE_IMPORTS?BLACK_SAVE_IMPORTS:black_menu_pick_rows);
+    if(page==PAGE_BACKUPS)return black_menu_backup_rows<1?1:black_menu_backup_rows>BLACK_SAVE_BACKUPS?BLACK_SAVE_BACKUPS:black_menu_backup_rows;
     return page>=0&&page<MENU_PAGES?counts[page]:0;
 }
 static inline int black_menu_row(int page,int index)
@@ -40,14 +53,21 @@ static inline int black_menu_row(int page,int index)
     case PAGE_ADVANCED:return advanced[index];
     case PAGE_DIAGNOSTICS:return ROW_MEASURE;
     case PAGE_MODS:return ROW_ANY_FILM+index;
+    case PAGE_SAVES:return index<BLACK_PROFILE_SLOTS?ROW_SAVE_FIRST+index:index==BLACK_PROFILE_SLOTS?ROW_SAVE_IMPORT:ROW_NAV_BACKUPS;
+    case PAGE_BACKUPS:return ROW_BACKUP_FIRST+index;
+    case PAGE_IMPORT:return ROW_IMPORT_SRC_FIRST+index;
+    case PAGE_IMPORT_PICK:{int picks=black_menu_count(page)-2;return index<picks?ROW_PICK_FIRST+index:index==picks?ROW_PICK_FOLDER:ROW_PICK_FINDER;}
     default:return -1;
     }
 }
 static inline int black_menu_index(int page,int row)
 {for(int i=0;i<black_menu_count(page);++i)if(black_menu_row(page,i)==row)return i;return -1;}
-static inline int black_menu_tab(int page){return page==PAGE_PORT?0:page==PAGE_MODS?2:1;}
-static inline int black_menu_top(int tab){return tab==0?PAGE_PORT:tab==2?PAGE_MODS:PAGE_CONTROLS;}
+static inline int black_menu_tab(int page){return page==PAGE_PORT?0:page==PAGE_MODS?2:page>=PAGE_SAVES?3:1;}
+static inline int black_menu_top(int tab){return tab==0?PAGE_PORT:tab==2?PAGE_MODS:tab==3?PAGE_SAVES:PAGE_CONTROLS;}
 static inline int black_menu_pair(int row)
 {return row>=ROW_MOUSE_LOOK_PAIR&&row<=ROW_PAD_AIM_PAIR;}
 static inline int black_menu_link(int row)
-{return row>=ROW_NAV_BINDINGS&&row<=ROW_NAV_DIAGNOSTICS;}
+{return row>=ROW_NAV_BINDINGS&&row<=ROW_NAV_BACKUPS;}
+/* Rows of the Saves tab other than its link to the backups. */
+static inline int black_menu_save(int row)
+{return row>=ROW_SAVE_FIRST&&row<=ROW_PICK_FINDER;}

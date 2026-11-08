@@ -50,6 +50,8 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/input_glyphs.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_ui.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/save_profiles.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_profile.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
 target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
@@ -115,6 +117,10 @@ add_executable(black-text-pad tools/macos/text_pad_test.c)
 add_test(NAME macos_text_pad COMMAND black-text-pad)
 add_executable(black-menu-repeat tools/macos/menu_repeat_test.c)
 add_test(NAME macos_menu_repeat COMMAND black-menu-repeat)
+add_executable(black-save-profiles tools/macos/save_profiles_test.m
+    ports/macos/overrides/save_profiles.m ports/macos/overrides/black_profile.c)
+target_link_libraries(black-save-profiles PRIVATE "-framework Foundation")
+add_test(NAME macos_save_profiles COMMAND black-save-profiles)
 add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/port_settings.c ports/macos/overrides/keyboard_mouse.c
     ports/macos/overrides/flash_input.c ports/macos/overrides/input_profile.c)
