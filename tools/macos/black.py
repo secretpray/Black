@@ -514,6 +514,8 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["BLACK_SKIP_INTROS"] = "1"
     if args.state_log:
         env["BLACK_STATE_LOG"] = "1"
+    if args.save_trace:
+        env["BLACK_SAVE_TRACE"] = "1"
     if args.diagnostics:
         env.update(RECOMP_FPSLOG="1", RECOMP_MENULOG="1", RECOMP_HANG_DUMP="30", RECOMP_XINLOG="1")
         # Keep the runtime's bounded native sample beside this run's guest dump.
@@ -693,6 +695,7 @@ def main():
             sub.add_argument("--skip-intros", action="store_true", help="Complete startup logos/intro only; leave story scenes and native progress-based skip rules intact")
             sub.add_argument("--state-log", action="store_true", help="Sample guest camera/world state for input diagnostics")
             sub.add_argument("--diagnostics", action="store_true")
+            sub.add_argument("--save-trace", action="store_true", help="Log save-folder enumeration and file allocation calls")
             sub.add_argument("--frame-times", action="store_true", help="Log game FPS and longest frame every two seconds without full diagnostics")
             sub.add_argument("--profile-frames", action="store_true", help="Buffered per-frame CPU/GPU-readback/presenter timing, no images")
             sub.add_argument("--gamma", choices=("game", "off"), default="game", help="Apply the game's own brightness/gamma ramp at presentation (default), or keep identity for A/B")

@@ -88,6 +88,7 @@ set_property(TARGET xbox_apu PROPERTY SOURCES
     "${BLACK_MAC_RUNTIME}/src/apu/apu_mmio_hook.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/apu_xaudio2.c")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackRealDSP.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/BlackFileOverlay.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/BlackNv2aInterrupt.cmake")
 
 # Compile every production runtime library and the extracted NV2A renderer.

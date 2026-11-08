@@ -23,6 +23,10 @@ foreach(pair IN ITEMS "bridge_KeInitializeInterrupt|black_OriginalInitializeInte
 endforeach()
 black_interrupt_replace(irq_bridge "static int kernel_raise_interrupt(uint32_t vector)\n{"
     "static int black_OriginalRaiseInterrupt(uint32_t vector)\n{")
+# A guest NtClose also ends a directory enumeration on that handle
+# (BlackFileOverlay.cmake): the next open gets the same handle value back.
+black_interrupt_replace(irq_bridge "        HANDLE h = bridge_take_handle(raw_handle);\n        if (h && h != INVALID_HANDLE_VALUE)\n            CloseHandle(h);"
+    "        HANDLE h = bridge_take_handle(raw_handle);\n        if (h && h != INVALID_HANDLE_VALUE) {\n            void black_DirForget(HANDLE);\n            black_DirForget(h);\n            CloseHandle(h);\n        }")
 set(BLACK_KERNEL_BRIDGE_OVERLAY "${CMAKE_BINARY_DIR}/runtime-overlay/kernel_bridge.c")
 file(WRITE "${BLACK_KERNEL_BRIDGE_OVERLAY}" "${irq_bridge}")
 file(READ "${BLACK_MAC_RUNTIME}/src/kernel/kernel_hal.c" irq_hal)
