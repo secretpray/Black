@@ -1,3 +1,4 @@
+#undef NDEBUG
 #include "../../ports/macos/overrides/text_pad.h"
 #include <assert.h>
 #include <stdio.h>

@@ -1,3 +1,4 @@
+#undef NDEBUG
 #include "../../ports/macos/overrides/menu_repeat.h"
 #include <assert.h>
 #include <stdio.h>
