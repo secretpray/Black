@@ -81,12 +81,14 @@ uint32_t black_PromptString(BlackGamePrompts *p,uint32_t id,uint32_t original)
             }
             snprintf(out,sizeof out,"%s %.960s",key,before); changed=1;
         }
-    } else if (id==0x758E2074) {
-        /* The name keyboard's SPACE key: Y on the pad (text_pad.h), Space on the keyboard. */
+    } else if (id==0x758E2074 || id==0x5FA655CF) {
+        /* The name keyboard's SPACE and DONE keys: Y and Start on the pad
+         * (text_pad.h), Space and Enter on the keyboard. */
+        int space=id==0x758E2074;
         if (family==BLACK_PROMPTS_KEYBOARD) {
-            if(getenv("BLACK_PROMPT_TEXT_SYMBOLS")) snprintf(key,sizeof key,"SPACE");
-            else black_InputGlyphUTF8(0xE200+49,key,sizeof key);
-        } else black_PromptButtonLabel(3,1,key,sizeof key);
+            if(getenv("BLACK_PROMPT_TEXT_SYMBOLS")) snprintf(key,sizeof key,space?"SPACE":"ENTER");
+            else black_InputGlyphUTF8(0xE200+(space?49:36),key,sizeof key);
+        } else black_PromptButtonLabel(space?3:12,1,key,sizeof key);
         snprintf(out,sizeof out,"%s %.960s",key,before); changed=1;
     } else if (id==0x2FCCE936 || id==0x905E4EE0 || id==0x661A3A37) {
         /* PRESS START keeps the game's own words in its language: START

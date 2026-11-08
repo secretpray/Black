@@ -292,14 +292,19 @@ DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
         }
     }
     if (!port && result == ERROR_SUCCESS && state) {
-        /* Name keyboard: X deletes, Y types a space (text_pad.h); the game
-         * does not see these two buttons while the page takes typing. */
+        /* Name keyboard: X deletes, Y types a space, Start is DONE
+         * (text_pad.h); the game does not see these buttons while the page
+         * takes typing. */
         static BlackTextPad text_pad;
         int typing = black_GameTextActive() && !black_MenuIsOpen();
         int c = black_text_pad(&text_pad, typing, state->Gamepad.bAnalogButtons[XBOX_BUTTON_X] > 30,
-            state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] > 30, SDL_GetTicks());
+            state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] > 30, !!(state->Gamepad.wButtons & XBOX_GAMEPAD_START),
+            SDL_GetTicks());
         if (c) black_GameTextCharacter((unsigned)c);
-        if (typing) state->Gamepad.bAnalogButtons[XBOX_BUTTON_X] = state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] = 0;
+        if (typing) {
+            state->Gamepad.bAnalogButtons[XBOX_BUTTON_X] = state->Gamepad.bAnalogButtons[XBOX_BUTTON_Y] = 0;
+            state->Gamepad.wButtons &= (WORD)~XBOX_GAMEPAD_START;
+        }
         /* Held d-pad in the game's menus: steady steps (menu_repeat.h). */
         static BlackMenuRepeat menu_repeat;
         static const WORD dirs[4] = {XBOX_GAMEPAD_DPAD_UP, XBOX_GAMEPAD_DPAD_DOWN,
