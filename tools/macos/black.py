@@ -559,6 +559,10 @@ def play_locked(args, settings_path, data, name, binary, state):
         window_frames.mkdir()
         env["RECOMP_FB_OUTSNAP"] = str(window_frames) + "/"
         print(f"Guest frames: {captures}\nPresented frames: {window_frames}", flush=True)
+    if args.slot_pictures:
+        pictures = run_dir / "slot-pictures"
+        pictures.mkdir()
+        env["BLACK_SLOT_PICTURES"] = str(pictures)
     if args.mute:
         env["SDL_AUDIODRIVER"] = "dummy"
     if args.input_script:
@@ -721,6 +725,7 @@ def main():
             sub.add_argument("--frame-source", choices=("snapshot", "legacy"), default="snapshot", help="Completed GPU snapshots also at native resolution; legacy selects guest RAM buffers for comparison")
             sub.add_argument("--capture", action="store_true", help="Capture framebuffer images locally")
             sub.add_argument("--mute", action="store_true", help="Use SDL's dummy audio device for a silent smoke")
+            sub.add_argument("--slot-pictures", action="store_true", help="Also write each picture kept for the Saves page to this run's slot-pictures/")
             sub.add_argument("--input-script", help="Runtime test harness: ms:button[:hold_ms], comma separated; times from boot")
             sub.add_argument("--test-input", action="store_true", help="Enable the runtime's local input.txt test harness")
             sub.add_argument("--script-only", action="store_true", help="Ignore physical pads/window input during a controlled scripted validation run")

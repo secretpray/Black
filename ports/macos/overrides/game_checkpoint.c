@@ -9,6 +9,14 @@
  * in the game. */
 __attribute__((weak)) ptrdiff_t g_xbox_mem_offset;
 
+/* The slot's record for the Saves page (slot_info.m, whose definition wins
+ * in the game); this one lets tools link the checkpoints alone. */
+#include "slot_info.h"
+__attribute__((weak)) void black_SlotInfoSaved(int slot, const uint8_t bytes[BLACK_PROFILE_SLOT], uint32_t previous_stamp)
+{ (void)slot; (void)bytes; (void)previous_stamp; }
+#define BLACK_CP_SLOT_SAVED(slot, bytes, previous_stamp) black_SlotInfoSaved((slot), (bytes), (previous_stamp))
+#define BLACK_CP_FILES_ON() (black_CheckpointsActive() || getenv("RECOMP_BLACK_CHECKPOINT_TEST") != NULL)
+
 #include "game_checkpoint.inc"
 
 /* The game's own Autosave (Profile options, main+0x20164), published by the
@@ -23,8 +31,10 @@ int black_CheckpointsActive(void)
 
 void black_CheckpointEvent(uint32_t event, uint32_t core)
 {
-    /* The Saves row with the game's Autosave, or the developer test gate. */
-    if (!black_CheckpointsActive() && !getenv("RECOMP_BLACK_CHECKPOINT_TEST")) return;
+    /* The Saves row with the game's Autosave, or the developer test gate. A
+     * profile save always runs: the slot's record follows every save, and
+     * its checkpoint files only with the row on (BLACK_CP_FILES_ON). */
+    if (event != 4u && !black_CheckpointsActive() && !getenv("RECOMP_BLACK_CHECKPOINT_TEST")) return;
     black_cp_event(event, core);
 }
 

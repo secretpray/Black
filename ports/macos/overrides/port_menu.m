@@ -14,6 +14,8 @@
 #include "game_mods.h"
 #include "game_language.h"
 #include "game_checkpoint.h"
+#include "slot_info.h"
+#include <time.h>
 #include "subtitles.h"
 #include "menu_text.h"
 #include "texture_pack.h"
@@ -291,10 +293,25 @@ typedef struct { char path[1024]; char file[128]; int slot; BlackProfileSlot inf
 static BlackPick picks[BLACK_SAVE_IMPORTS];
 static int pick_count;
 static void set_note(NSString *note) { [save_note release]; save_note = [note copy]; }
+/* Each slot's record beside the saves (slot_info.h) and its picture; none
+ * when the record no longer matches the slot. */
+static BlackSlotInfo slot_infos[BLACK_PROFILE_SLOTS];
+static int slot_info_ok[BLACK_PROFILE_SLOTS];
+static NSImage *slot_pictures[BLACK_PROFILE_SLOTS];
+static void refresh_slot_infos(void)
+{
+    for (int i = 0; i < BLACK_PROFILE_SLOTS; ++i) {
+        slot_info_ok[i] = profile_ok && black_SlotInfoRead(profile_data, i, &slot_infos[i]);
+        [slot_pictures[i] release]; slot_pictures[i] = nil;
+        if (slot_info_ok[i] && slot_infos[i].has_picture)
+            slot_pictures[i] = [[NSImage alloc] initWithContentsOfFile:@(slot_infos[i].picture)];
+    }
+}
 static void refresh_saves(void)
 {
     profile_ok = black_SaveRead(profile_data, NULL, 0) && black_profile_slots(profile_data, BLACK_PROFILE_SIZE, profile_slots);
     if (!profile_ok) memset(profile_slots, 0, sizeof profile_slots);
+    refresh_slot_infos();
     backup_count = black_SaveBackups(backups, BLACK_SAVE_BACKUPS);
     black_menu_backup_rows = backup_count;
 }
@@ -351,13 +368,38 @@ static NSString *slot_text(const BlackProfileSlot *slot)
 /* The record's level is the game's level number; the campaign plays them in
  * the order of its table at 0x288648 (0, 1, 5, 3, 4, 6, 7, 8; 2 is loading).
  * Streaming unit 1 starts a mission, so unit n is its checkpoint n - 1. */
+static NSString *mission_text(uint32_t level, uint32_t difficulty)
+{
+    static NSString *const names[4] = {@"EASY", @"NORMAL", @"HARD", @"BLACK OPS"};
+    static const int mission_of_level[9] = {1, 2, 0, 4, 5, 3, 6, 7, 8};
+    int mission = level < 9 ? mission_of_level[level] : 0;
+    return [NSString stringWithFormat:@"%@ · %@ %d", T(names[difficulty < 4 ? difficulty : 0]), T(@"MISSION"), mission];
+}
 static NSString *checkpoint_text(const BlackCheckpointInfo *info)
 {
-    static NSString *const difficulty[4] = {@"EASY", @"NORMAL", @"HARD", @"BLACK OPS"};
-    static const int mission_of_level[9] = {1, 2, 0, 4, 5, 3, 6, 7, 8};
-    int mission = info->level < 9 ? mission_of_level[info->level] : 0;
-    return [NSString stringWithFormat:@"%@ · %@ %d · %@ %u", T(difficulty[info->difficulty < 4 ? info->difficulty : 0]),
-        T(@"MISSION"), mission, T(@"CHECKPOINT"), info->unit > 1 ? info->unit - 1 : 1];
+    return [NSString stringWithFormat:@"%@ · %@ %u", mission_text(info->level, info->difficulty),
+        T(@"CHECKPOINT"), info->unit > 1 ? info->unit - 1 : 1];
+}
+/* The slot whose picture the rail band shows: the open slot, or the one
+ * selected in the Saves list. -1 for none. */
+static int pictured_slot(int page, int selected)
+{
+    int slot = page == PAGE_SLOT || page == PAGE_MISSIONS ? slot_open :
+        page == PAGE_SAVES && selected >= ROW_SAVE_FIRST && selected <= ROW_SAVE_LAST ? selected - ROW_SAVE_FIRST : -1;
+    return slot >= 0 && slot < BLACK_PROFILE_SLOTS && profile_slots[slot].active && slot_pictures[slot] ? slot : -1;
+}
+static NSString *duration_text(uint64_t seconds)
+{
+    uint64_t minutes = seconds / 60;
+    if (!minutes) return T(@"UNDER A MINUTE");
+    return minutes < 60 ? [NSString stringWithFormat:T(@"%d MIN"), (int)minutes] :
+        [NSString stringWithFormat:T(@"%d H %02d MIN"), (int)(minutes / 60), (int)(minutes % 60)];
+}
+static NSString *date_text(int64_t when)
+{
+    time_t t = (time_t)when; struct tm local; char out[32];
+    localtime_r(&t, &local); strftime(out, sizeof out, "%d.%m.%Y %H:%M", &local);
+    return @(out);
 }
 static NSString *const reason_labels[BLACK_SAVE_REASONS] = {@"BEFORE A DELETE", @"BEFORE AN IMPORT", @"BEFORE A RESTORE", @"AT LAUNCH"};
 static NSString *const result_labels[3] = {@"DONE", @"BELOW TARGET", @"TARGET MET"};
@@ -1472,6 +1514,19 @@ static NSAlert *pack_alert;
     BOOL still = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
     BlackPageGeometry g = page_geometry(size);
     black_ui_rails_band(g.rail_x, g.band, -oy / scale, 600 + oy / scale, still ? -1 : fmod(CACurrentMediaTime() / 7, 1) * 1.3 - .15, .9);
+    /* A slot's picture in the band, its top level with the first row, as the
+     * game's own menus put a picture beside their list. */
+    {
+        int pictured = pictured_slot(page, selected);
+        if (pictured >= 0) {
+            NSImage *image = slot_pictures[pictured];
+            /* Inside the band's rails: clear of the double rail on its right. */
+            CGFloat w = g.band - 44, h = w * image.size.height / MAX(image.size.width, 1);
+            NSRect frame = NSMakeRect(g.rail_x + 12, g.dy + ROWS_TOP * g.ky, w, h);
+            fill(NSInsetRect(frame, -1, -1), HIGHLIGHT, .8);
+            [image drawInRect:frame fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
+        }
+    }
     /* The rows from here on, shifted right of the wider band. */
     NSAffineTransform *shift = [NSAffineTransform transform];
     [shift translateXBy:g.dx yBy:g.dy]; [shift scaleXBy:g.k yBy:g.ky]; [shift concat];
@@ -1853,6 +1908,23 @@ static NSAlert *pack_alert;
         detail = selected == ROW_MISSIONS ? @"MISSION PROGRESS AND ENDING ARE UNCHANGED." :
             selected == ROW_ANY_FILM ? @"A HINT SHOWS THE BUTTON. OFF: ONLY FILMS THE GAME ITSELF LETS YOU SKIP." :
             @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
+    }
+    /* The open slot's record under its rows: what the profile itself does
+     * not say. Without one, what will add it. */
+    if (page == PAGE_SLOT && profile_slots[slot_open].active) {
+        CGFloat y = ROWS_TOP + black_menu_count(page) * ROW_STEP + 8;
+        if (slot_info_ok[slot_open]) {
+            const BlackSlotInfo *info = &slot_infos[slot_open];
+            /* Two lines a row's half apart: the mission, then time and date. */
+            NSString *names[2] = {T(@"LAST MISSION"), [NSString stringWithFormat:@"%@ · %@", T(@"TIME IN MISSIONS"), T(@"SAVED")]};
+            NSString *values[2] = {info->level >= 0 ? mission_text((uint32_t)info->level, (uint32_t)info->difficulty) : @"—",
+                [NSString stringWithFormat:@"%@ · %@", duration_text(info->mission_seconds), info->saved_at ? date_text(info->saved_at) : @"—"]};
+            for (int i = 0; i < 2; ++i, y += 26) {
+                text(names[i], 96, y, 10, DIM, 0);
+                CGFloat w = text_width(values[i], 10, 0);
+                text(values[i], 868 - w, y, 10, TEXT, 0);
+            }
+        } else fitted_text(T(@"THE NEXT SAVE OF THIS PROFILE ADDS ITS LAST MISSION, TIME AND A PICTURE."), 96, y, 10, 772, DIM, 0);
     }
     /* The description, a row's space under the list, its two lines apart. */
     line(84, 422, 792, HIGHLIGHT, 1);

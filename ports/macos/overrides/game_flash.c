@@ -96,6 +96,28 @@ static void saves_tick(uint32_t ui)
     int slot = manager && memory_ok(manager + 0x524, 4) ? (int)MEM32(manager + 0x524) : -1;
     black_SaveGameTick(image, slot, main_menu);
 }
+/* The slot's record (slot_info.h): the profile being played, the mission in
+ * play and its difficulty, read as the checkpoints read them (the profile at
+ * [[0x2D19B4]], the core's level at +0x5AEC, difficulty at main+0x2014C). */
+#include "slot_info.h"
+static void slot_info_tick(void)
+{
+    uint32_t manager = MEM32(0x2D19B4), profile = manager && memory_ok(manager, 4) ? MEM32(manager) : 0, key = 0;
+    if (profile && memory_ok(profile, 0x6A8) && MEM8(profile + 8) && !MEM8(profile + 1701)) {
+        key = 2166136261u ^ MEM32(profile);
+        for (uint32_t i = 0; i < 80; ++i) key = (key ^ MEM8(profile + 8 + i)) * 16777619u;
+        if (!key) key = 1;
+    }
+    int in_mission = black_GameInMission(), level = -1, difficulty = -1;
+    if (in_mission) {
+        uint32_t core = MEM32(0x2D45D4), game = MEM32(0x2D45F0);
+        if (core && game && memory_ok(core + 0x5AEC, 1) && memory_ok(game + 0x2014C, 4)) {
+            uint32_t l = MEM8(core + 0x5AEC), d = MEM32(game + 0x2014C);
+            if (l <= 8 && l != 2 && d <= 3) { level = (int)l; difficulty = (int)d; }
+        }
+    }
+    black_SlotInfoTick(monotonic(), key, in_mission && !black_GamePaused() && !black_MenuIsOpen(), level, difficulty);
+}
 /* The front end's input queue, read before the page's own script takes it
  * (the overlay calls this at the title's tick, 0x124369): a CONFIRM on the
  * checkpoint item resumes here instead. 5 is the front end's confirm. */
@@ -118,6 +140,7 @@ void black_GameMenu(uint32_t ui)
     quit_to_menu(ui);
     restart_tick();
     saves_tick(ui);
+    slot_info_tick();
     black_PromptTick(&prompts);
     g_ebp=previous_ebp;g_seh_ebp=previous_seh;
     if(menu.fault&&getenv("RECOMP_INPUT_DEBUG")){

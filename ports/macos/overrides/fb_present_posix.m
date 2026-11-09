@@ -80,6 +80,7 @@ static int black_PresenterSleep(const struct timespec *request, struct timespec 
 #include "port_menu.h"
 #include "flash_menu.h"
 #include "display_gamma.h"
+#include "slot_info.h"
 
 /* The DAC table as a 256x1 lookup for the scaling pass, with the player's
  * display brightness and gamma composed after it (display_gamma.h); 16-bit,
@@ -143,6 +144,30 @@ static id<MTLTexture> black_PostProcess(id<MTLCommandBuffer> command, id<MTLText
             uint64_t now = black_trace_ns();
             if (gpu > 0 && gpu < 1) black_trace(BLACK_TRACE_GPU, frame, now - (uint64_t)(gpu * 1e9), now, 0, 0);
         }];
+    }
+    /* A picture of the mission for the Saves page (slot_info.h): the frame
+     * as the game drew it, copied with this buffer and reduced once the GPU
+     * is done, off this thread's way. Every few seconds of play only. */
+    {
+        struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
+        double now = t.tv_sec + t.tv_nsec / 1e9;
+        if (source.pixelFormat == MTLPixelFormatBGRA8Unorm && !pvideo_active() && black_SlotInfoWantsFrame(now)) {
+            NSUInteger w = source.width, h = source.height;
+            id<MTLBuffer> copy = [s_device newBufferWithLength:w * h * 4 options:MTLResourceStorageModeShared];
+            if (copy) {
+                id<MTLBlitCommandEncoder> blit = [command blitCommandEncoder];
+                [blit copyFromTexture:source sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0, 0, 0)
+                           sourceSize:MTLSizeMake(w, h, 1) toBuffer:copy destinationOffset:0
+                  destinationBytesPerRow:w * 4 destinationBytesPerImage:w * h * 4];
+                [blit endEncoding];
+                double aspect = display_aspect();
+                [command addCompletedHandler:^(id<MTLCommandBuffer> done) {
+                    if (done.status == MTLCommandBufferStatusCompleted)
+                        black_SlotInfoFrame(copy.contents, (uint32_t)w, (uint32_t)h, w * 4, aspect, now);
+                }];
+                [copy release]; /* the handler keeps its own reference */
+            }
+        }
     }
     if (black_SmaaWanted()) source = black_SmaaApply(s_device, command, source);
     if (black_UpscaleWanted()) {

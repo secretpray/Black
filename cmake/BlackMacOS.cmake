@@ -51,11 +51,12 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/subtitles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_ui.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/save_profiles.m"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/slot_info.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/window_state.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_profile.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_checkpoint.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
-target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
+target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController" "-framework CoreText" "-framework ImageIO")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
 # HD texture replacement: map, pack index, DDS/PNG and loader threads; the
@@ -125,6 +126,10 @@ add_executable(black-save-profiles tools/macos/save_profiles_test.m
     ports/macos/overrides/save_profiles.m ports/macos/overrides/black_profile.c)
 target_link_libraries(black-save-profiles PRIVATE "-framework Foundation")
 add_test(NAME macos_save_profiles COMMAND black-save-profiles)
+add_executable(black-slot-info tools/macos/slot_info_test.m ports/macos/overrides/slot_info.m
+    ports/macos/overrides/black_profile.c ports/macos/overrides/display_gamma.c)
+target_link_libraries(black-slot-info PRIVATE "-framework Cocoa" "-framework ImageIO")
+add_test(NAME macos_slot_info COMMAND black-slot-info)
 add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/port_settings.c ports/macos/overrides/keyboard_mouse.c
     ports/macos/overrides/game_checkpoint.c

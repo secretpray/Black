@@ -754,6 +754,15 @@ static void black_cp_rebind_visit(const char *path, BlackCheckpoint *cp, const s
     if (strcmp(path, copy)) unlink(path);
 }
 
+/* Every successful save, whatever the Saves page says: the slot's record for
+ * the Saves page (slot_info.h). Only checkpoint files wait for its setting. */
+#ifndef BLACK_CP_SLOT_SAVED
+#define BLACK_CP_SLOT_SAVED(slot, bytes, previous_stamp) ((void)0)
+#endif
+#ifndef BLACK_CP_FILES_ON
+#define BLACK_CP_FILES_ON() 1
+#endif
+
 static void black_cp_profile_saved(uint32_t controller)
 {
     BlackCpRebind rebind;
@@ -771,11 +780,11 @@ static void black_cp_profile_saved(uint32_t controller)
     rebind.disk_stamp = black_cp_disk_stamp(rebind.memory_stamp, rebind.name);
     rebind.saved_stamp = black_cp_r32(payload + 0xC8u);
     rebind.campaign = black_cp_hash(black_cp_memory(payload + 0x124u), 1024u);
-    if (black_cp_r32(payload) != 38u || black_cp_memory(payload)[0x76Du] ||
-        !rebind.memory_stamp || !rebind.saved_stamp ||
-        rebind.disk_stamp == rebind.saved_stamp ||
+    if (black_cp_r32(payload) != 38u || black_cp_memory(payload)[0x76Du] || !rebind.saved_stamp ||
         memcmp(rebind.name, black_cp_memory(payload + 0xD0u), 80u)) return;
-    black_cp_each(black_cp_rebind_visit, &rebind);
+    BLACK_CP_SLOT_SAVED((int)slot, black_cp_memory(payload), rebind.disk_stamp);
+    if (!rebind.memory_stamp || rebind.disk_stamp == rebind.saved_stamp) return;
+    if (BLACK_CP_FILES_ON()) black_cp_each(black_cp_rebind_visit, &rebind);
     if (rebind.memory_stamp != rebind.saved_stamp)
         black_cp_alias_set(rebind.memory_stamp, rebind.saved_stamp, rebind.name);
 }

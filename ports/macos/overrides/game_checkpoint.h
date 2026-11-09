@@ -18,8 +18,9 @@ typedef struct {
  * 2 before its first streaming unit starts (restores only an armed load),
  * 3 when the title's own RestartMission/RestartLevel starts the mission over
  * (removes its file unless F9 / Back + Y armed it), 4 after a successful
- * profile autosave. `core` is the event's guest pointer. Writes and reads nothing
- * unless the Saves page says so (or the developer test gate is set). */
+ * profile autosave. `core` is the event's guest pointer. Writes and reads no
+ * checkpoint unless the Saves page says so (or the developer test gate is
+ * set); event 4 always hands the saved slot to slot_info.h. */
 void black_CheckpointEvent(uint32_t event, uint32_t core);
 
 /* The game's own Autosave (its Profile options, main+0x20164), published by
