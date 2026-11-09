@@ -3,7 +3,8 @@
 #include <stdint.h>
 enum { BLACK_MENU_TOGGLE = 1, BLACK_MENU_CHANGE = 2, BLACK_MENU_BACK = 4,
        BLACK_MENU_OFF = 8, BLACK_MENU_ON = 16, BLACK_MENU_UP = 32, BLACK_MENU_DOWN = 64,
-       BLACK_MENU_PREV_TAB = 128, BLACK_MENU_NEXT_TAB = 256, BLACK_MENU_QUIT = 512 };
+       BLACK_MENU_PREV_TAB = 128, BLACK_MENU_NEXT_TAB = 256, BLACK_MENU_QUIT = 512,
+       BLACK_MENU_RESET = 1024 /* the selected setting back to its default */ };
 int black_SettingsSkipIntros(void);
 int black_SettingsSetSkipIntros(int enabled);
 int black_SettingsSkipMissionIntros(void);

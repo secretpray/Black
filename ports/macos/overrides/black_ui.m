@@ -149,8 +149,10 @@ static void over(NSRect r, unsigned rgb, CGFloat opacity)
 { [black_ui_color(rgb, opacity) setFill]; NSRectFillUsingOperation(r, NSCompositingOperationSourceOver); }
 
 void black_ui_rails(CGFloat x, CGFloat top, CGFloat bottom, CGFloat glow)
+{ black_ui_rails_band(x, 34, top, bottom, glow); }
+
+void black_ui_rails_band(CGFloat x, CGFloat band, CGFloat top, CGFloat bottom, CGFloat glow)
 {
-    CGFloat band = 34;
     over(NSMakeRect(x + 3, top, band, bottom - top), BLACK_UI_BAR, .9);
     if (glow >= 0) {
         /* A warm light passing down the band, faded at both ends. */

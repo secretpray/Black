@@ -36,6 +36,8 @@ enum {
  * outside, a dark band between them. `glow` 0-1 moves a faint light down the
  * band, as the game's backdrop does; pass a negative value for none. */
 void black_ui_rails(CGFloat x, CGFloat top, CGFloat bottom, CGFloat glow);
+/* As above with the band's width (black_ui_rails: 34). */
+void black_ui_rails_band(CGFloat x, CGFloat band, CGFloat top, CGFloat bottom, CGFloat glow);
 /* The selected row: a dark bar with light end caps and the selector line
  * running from `rail` to the bar and from the bar to `edge`. */
 void black_ui_selector(NSRect bar, CGFloat rail, CGFloat edge);

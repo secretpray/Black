@@ -92,6 +92,8 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     /* LB / RB (Xbox White / Black) step the settings tabs. */
     if (g->bAnalogButtons[XBOX_BUTTON_WHITE] > 32) down |= BLACK_PAD_PREV_TAB;
     if (g->bAnalogButtons[XBOX_BUTTON_BLACK] > 32) down |= BLACK_PAD_NEXT_TAB;
+    /* Y: the selected setting back to its default. */
+    if (g->bAnalogButtons[XBOX_BUTTON_Y] > 32) down |= BLACK_PAD_RESET;
     int analog = 0;
     for (int i = 0; i < 8; ++i) analog |= g->bAnalogButtons[i];
     if (g->wButtons || analog || abs(g->sThumbLX) > 8000 || abs(g->sThumbLY) > 8000 ||

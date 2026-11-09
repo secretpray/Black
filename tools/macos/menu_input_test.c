@@ -23,6 +23,12 @@ int main(void)
     if (black_menu_pad(&pad, BLACK_PAD_PREV_TAB, 1, &capture) != BLACK_MENU_PREV_TAB) return 13;
     if (black_menu_pad(&pad, BLACK_PAD_NEXT_TAB, 1, &capture) != BLACK_MENU_NEXT_TAB) return 14;
     if (black_menu_pad(&pad, BLACK_PAD_NEXT_TAB, 0, &capture)) return 15;
+    /* Y resets the selected setting, only while the panel is open. */
+    black_menu_pad(&pad, 0, 1, &capture);
+    if (black_menu_pad(&pad, BLACK_PAD_RESET, 1, &capture) != BLACK_MENU_RESET) return 40;
+    black_menu_pad(&pad, 0, 0, &capture);
+    if (black_menu_pad(&pad, BLACK_PAD_RESET, 0, &capture)) return 41;
+    black_menu_pad(&pad, 0, 0, &capture);
     /* Home: a tap toggles the settings, a hold opens the quit dialog once. */
     {
         BlackHomeButton home = {0};

@@ -72,23 +72,31 @@ int main(void)
         memcpy(image, a, sizeof image);
         memcpy(b, a, sizeof b); assert(black_profile_clear(b, 2));
         /* Not on a main menu page: refused, nothing written. */
-        black_SaveRequest(a, b); black_SaveGameTick(image, 0, 0);
+        black_SaveRequest(a, b, BLACK_SAVE_BEFORE_DELETE); black_SaveGameTick(image, 0, 0);
         assert(black_SaveState() == BLACK_SAVE_NOT_MENU && !black_SaveEditAllowed());
         /* The game has unsaved changes in its image: refused. */
         image[10] ^= 1;
-        black_SaveRequest(a, b); black_SaveGameTick(image, 0, 1);
+        black_SaveRequest(a, b, BLACK_SAVE_BEFORE_DELETE); black_SaveGameTick(image, 0, 1);
         assert(black_SaveState() == BLACK_SAVE_GAME_CHANGED);
         image[10] ^= 1;
-        black_SaveRequest(a, b); black_SaveGameTick(image, 0, 1);
+        black_SaveRequest(a, b, BLACK_SAVE_BEFORE_DELETE); black_SaveGameTick(image, 0, 1);
         assert(black_SaveState() == BLACK_SAVE_DONE && black_SaveEditAllowed() && black_SaveSlotInUse() == 0);
         assert(!memcmp(image, b, sizeof b) && black_SaveRead(read_back, NULL, 0) && !memcmp(read_back, b, sizeof b));
         /* The file before the edit is a backup, which restores like any edit. */
         BlackSaveBackup backups[BLACK_SAVE_BACKUPS];
-        assert(black_SaveBackups(backups, BLACK_SAVE_BACKUPS) == 1 && backups[0].slots[2].active);
+        /* The launch backup (the game's first read) and the one before the delete. */
+        assert(black_SaveBackups(backups, BLACK_SAVE_BACKUPS) == 2 && backups[0].slots[2].active);
+        assert(backups[0].reason == BLACK_SAVE_BEFORE_DELETE && backups[1].reason == BLACK_SAVE_AT_LAUNCH);
         assert(black_SaveReadBackup(backups[0].path, c) && !memcmp(c, a, sizeof a));
-        black_SaveRequest(b, c); black_SaveGameTick(image, 0, 1);
+        black_SaveRequest(b, c, BLACK_SAVE_BEFORE_RESTORE); black_SaveGameTick(image, 0, 1);
         assert(black_SaveState() == BLACK_SAVE_DONE && !memcmp(image, a, sizeof a));
-        assert(black_SaveBackups(backups, BLACK_SAVE_BACKUPS) == 2 && !backups[0].slots[2].active);
+        assert(black_SaveBackups(backups, BLACK_SAVE_BACKUPS) == 3 && !backups[0].slots[2].active && backups[0].reason == BLACK_SAVE_BEFORE_RESTORE);
+        /* Only backups can be trashed: anything else is refused and left. */
+        assert(!black_SaveBackupTrash(file.fileSystemRepresentation) && [NSFileManager.defaultManager fileExistsAtPath:file]);
+        assert(!black_SaveBackupTrash("/etc/hosts") && !black_SaveBackupTrash(NULL));
+        /* Export: the slot alone, the others empty, importable. */
+        char exported[1024]; assert(black_SaveExport(a, 1, exported, sizeof exported));
+        assert(black_SaveReadImport(exported, c) && black_profile_slots(c, sizeof c, slots) && slots[1].active && !slots[0].active && !slots[2].active);
         /* Import reads a file or a save folder. */
         assert(black_SaveReadImport(folder.fileSystemRepresentation, c) && !memcmp(c, a, sizeof a));
         assert(black_SaveReadImport(file.fileSystemRepresentation, c));

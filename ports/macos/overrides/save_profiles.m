@@ -1,6 +1,7 @@
 /* See save_profiles.h. */
 #import <Foundation/Foundation.h>
 #include "save_profiles.h"
+#include <ctype.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -12,8 +13,11 @@
 #include <unistd.h>
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static void launch_backup(NSString *path);
 static char used_path[1024];            /* the profile file the game last read or wrote */
 static uint8_t want_before[BLACK_PROFILE_SIZE], want_after[BLACK_PROFILE_SIZE];
+static int want_reason;
+static const char *const reason_names[BLACK_SAVE_REASONS] = {"delete", "import", "restore", "launch"};
 static atomic_int state, slot_in_use = -1, menu_seen;
 static _Atomic double menu_at;
 
@@ -40,8 +44,10 @@ void black_SaveNoteUsed(const char *path)
     char folder[16]; memcpy(folder, at, 12); folder[12] = 0;
     if (!black_save_folder_name(folder) || strlen(path) >= sizeof used_path) return;
     pthread_mutex_lock(&lock);
+    int first = !used_path[0];
     if (strcmp(used_path, path)) { snprintf(used_path, sizeof used_path, "%s", path); fprintf(stderr, "[SAVES] profile file in use: %s/%s\n", folder, slash + 1); }
     pthread_mutex_unlock(&lock);
+    if (first) @autoreleasepool { launch_backup(@(path)); }
 }
 
 static int read_exact(NSString *path, uint8_t out[BLACK_PROFILE_SIZE])
@@ -188,23 +194,33 @@ int black_SaveImports(BlackSaveImport *out, int max)
 int black_SaveReadBackup(const char *path, uint8_t out[BLACK_PROFILE_SIZE])
 { @autoreleasepool { return path && read_exact(@(path), out) && !black_profile_check(out, BLACK_PROFILE_SIZE); } }
 
+static NSArray<NSString *> *backup_names(void)
+{
+    NSMutableArray *names = [NSMutableArray array];
+    for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:backup_root() error:NULL])
+        if ([name hasSuffix:@".profile"]) [names addObject:name];
+    [names sortUsingSelector:@selector(compare:)];
+    return names;
+}
+
 int black_SaveBackups(BlackSaveBackup *out, int max)
 {
     @autoreleasepool {
-        NSArray *names = [[NSFileManager.defaultManager contentsOfDirectoryAtPath:backup_root() error:NULL]
-            sortedArrayUsingSelector:@selector(compare:)];
         int count = 0;
-        for (NSString *name in names.reverseObjectEnumerator) {
+        for (NSString *name in backup_names().reverseObjectEnumerator) {
             if (count >= max) break;
-            if (![name hasSuffix:@".profile"]) continue;
             NSString *path = [backup_root() stringByAppendingPathComponent:name];
             uint8_t data[BLACK_PROFILE_SIZE];
             if (!read_exact(path, data) || !black_profile_slots(data, sizeof data, out[count].slots)) continue;
             snprintf(out[count].path, sizeof out[count].path, "%s", path.UTF8String);
-            /* name: YYYY-MM-DD_HH-MM-SS.profile */
+            /* name: YYYY-MM-DD_HH-MM-SS-mmm[-n]-reason.profile */
             NSString *stamp = [name stringByDeletingPathExtension];
-            if (stamp.length >= 19) stamp = [NSString stringWithFormat:@"%@ %@", [stamp substringToIndex:10],
-                [[stamp substringWithRange:NSMakeRange(11, 8)] stringByReplacingOccurrencesOfString:@"-" withString:@":"]];
+            out[count].reason = -1;
+            for (int r = 0; r < BLACK_SAVE_REASONS; ++r)
+                if ([stamp hasSuffix:[@"-" stringByAppendingString:@(reason_names[r])]]) out[count].reason = r;
+            if (stamp.length >= 19) stamp = [NSString stringWithFormat:@"%@.%@ %@", [stamp substringWithRange:NSMakeRange(8, 2)],
+                [stamp substringWithRange:NSMakeRange(5, 2)],
+                [[stamp substringWithRange:NSMakeRange(11, 5)] stringByReplacingOccurrencesOfString:@"-" withString:@":"]];
             snprintf(out[count].when, sizeof out[count].when, "%s", stamp.UTF8String);
             ++count;
         }
@@ -212,9 +228,39 @@ int black_SaveBackups(BlackSaveBackup *out, int max)
     }
 }
 
-void black_SaveRequest(const uint8_t before[BLACK_PROFILE_SIZE], const uint8_t edited[BLACK_PROFILE_SIZE])
+static int trash(NSString *path)
+{
+    NSURL *url = [NSURL fileURLWithPath:path];
+    if (![url.URLByDeletingLastPathComponent.path isEqualToString:backup_root()] || ![path hasSuffix:@".profile"]) return 0;
+    NSError *error = nil;
+    if (![NSFileManager.defaultManager trashItemAtURL:url resultingItemURL:NULL error:&error]) {
+        fprintf(stderr, "[SAVES] backup not moved to the Trash: %s\n", error.localizedDescription.UTF8String);
+        return 0;
+    }
+    return 1;
+}
+int black_SaveBackupTrash(const char *path)
+{
+    @autoreleasepool {
+        int n = path ? trash(@(path)) : 0;
+        if (n) fprintf(stderr, "[SAVES] backup moved to the Trash: %s\n", path);
+        return n;
+    }
+}
+int black_SaveBackupsTrashAll(void)
+{
+    @autoreleasepool {
+        int n = 0;
+        for (NSString *name in backup_names()) n += trash([backup_root() stringByAppendingPathComponent:name]);
+        fprintf(stderr, "[SAVES] %d backups moved to the Trash\n", n);
+        return n;
+    }
+}
+
+void black_SaveRequest(const uint8_t before[BLACK_PROFILE_SIZE], const uint8_t edited[BLACK_PROFILE_SIZE], int reason)
 {
     pthread_mutex_lock(&lock);
+    want_reason = reason >= 0 && reason < BLACK_SAVE_REASONS ? reason : BLACK_SAVE_BEFORE_IMPORT;
     memcpy(want_before, before, BLACK_PROFILE_SIZE); memcpy(want_after, edited, BLACK_PROFILE_SIZE);
     atomic_store(&state, BLACK_SAVE_PENDING);
     pthread_mutex_unlock(&lock);
@@ -236,16 +282,62 @@ static int replace_file(NSString *path, const uint8_t data[BLACK_PROFILE_SIZE])
     return read_exact(path, back) && !memcmp(back, data, BLACK_PROFILE_SIZE);
 }
 
-static int backup(NSString *path)
+/* A copy of the profile file in ProfileBackups/, named by time and reason;
+ * the oldest past BLACK_SAVE_KEEP are removed. */
+static int backup(NSString *path, int reason)
 {
     NSError *error = nil;
     if (![NSFileManager.defaultManager createDirectoryAtPath:backup_root() withIntermediateDirectories:YES attributes:nil error:&error]) return 0;
-    time_t t = time(NULL); struct tm local; localtime_r(&t, &local);
-    char stamp[32]; strftime(stamp, sizeof stamp, "%Y-%m-%d_%H-%M-%S", &local);
-    NSString *target = [backup_root() stringByAppendingPathComponent:[NSString stringWithFormat:@"%s.profile", stamp]];
+    /* Milliseconds in the name keep two backups of one second in order. */
+    static int64_t last_ms;
+    struct timespec now; clock_gettime(CLOCK_REALTIME, &now);
+    int64_t ms = (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+    if (ms <= last_ms) ms = last_ms + 1; /* strictly later than the previous one */
+    last_ms = ms;
+    time_t seconds = (time_t)(ms / 1000);
+    struct tm local; localtime_r(&seconds, &local);
+    char stamp[40], day[32]; strftime(day, sizeof day, "%Y-%m-%d_%H-%M-%S", &local);
+    snprintf(stamp, sizeof stamp, "%s-%03d", day, (int)(ms % 1000));
+    NSString *target = [backup_root() stringByAppendingPathComponent:[NSString stringWithFormat:@"%s-%s.profile", stamp, reason_names[reason]]];
     for (int n = 2; [NSFileManager.defaultManager fileExistsAtPath:target]; ++n)
-        target = [backup_root() stringByAppendingPathComponent:[NSString stringWithFormat:@"%s_%d.profile", stamp, n]];
-    return [NSFileManager.defaultManager copyItemAtPath:path toPath:target error:&error];
+        target = [backup_root() stringByAppendingPathComponent:[NSString stringWithFormat:@"%s-%d-%s.profile", stamp, n, reason_names[reason]]];
+    if (![NSFileManager.defaultManager copyItemAtPath:path toPath:target error:&error]) return 0;
+    NSArray *names = backup_names();
+    for (NSUInteger i = 0; i + BLACK_SAVE_KEEP < names.count; ++i)
+        [NSFileManager.defaultManager removeItemAtPath:[backup_root() stringByAppendingPathComponent:names[i]] error:NULL];
+    return 1;
+}
+
+/* At launch, as the game first reads its profile: a backup when the file
+ * differs from the newest one (idea from Burnout Revenge's save_backup). */
+static void launch_backup(NSString *path)
+{
+    uint8_t now[BLACK_PROFILE_SIZE], last[BLACK_PROFILE_SIZE];
+    if (!read_exact(path, now) || black_profile_check(now, sizeof now)) return;
+    NSString *newest = backup_names().lastObject;
+    if (newest && read_exact([backup_root() stringByAppendingPathComponent:newest], last) && !memcmp(now, last, sizeof now)) return;
+    if (backup(path, BLACK_SAVE_AT_LAUNCH)) fprintf(stderr, "[SAVES] profile backed up at launch\n");
+}
+
+int black_SaveExport(const uint8_t data[BLACK_PROFILE_SIZE], int slot, char *out, size_t cap)
+{
+    @autoreleasepool {
+        uint8_t file[BLACK_PROFILE_SIZE]; memcpy(file, data, sizeof file);
+        BlackProfileSlot slots[BLACK_PROFILE_SLOTS];
+        if (!black_profile_slots(file, sizeof file, slots) || slot < 0 || slot >= BLACK_PROFILE_SLOTS || !slots[slot].active) return 0;
+        for (int i = 0; i < BLACK_PROFILE_SLOTS; ++i) if (i != slot && slots[i].active) black_profile_clear(file, i);
+        NSString *folder = [[data_root() stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"Export"];
+        if (![NSFileManager.defaultManager createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:NULL]) return 0;
+        NSMutableString *name = [NSMutableString string];
+        for (const char *c = slots[slot].name; *c; ++c) [name appendFormat:@"%c", isalnum((unsigned char)*c) ? *c : '_'];
+        time_t t = time(NULL); struct tm local; localtime_r(&t, &local);
+        char stamp[32]; strftime(stamp, sizeof stamp, "%Y-%m-%d_%H-%M-%S", &local);
+        NSString *path = [folder stringByAppendingPathComponent:[NSString stringWithFormat:@"BLACK %@ %s.profile", name.length ? name : @"profile", stamp]];
+        if (![[NSData dataWithBytes:file length:sizeof file] writeToFile:path atomically:YES]) return 0;
+        snprintf(out, cap, "%s", path.fileSystemRepresentation);
+        fprintf(stderr, "[SAVES] slot %d exported: %s\n", slot + 1, path.fileSystemRepresentation);
+        return 1;
+    }
 }
 
 static int apply(uint8_t *image)
@@ -265,7 +357,7 @@ static int apply(uint8_t *image)
                 same_disk ? "unchanged" : "changed", image ? "differs" : "missing", differ);
             return BLACK_SAVE_GAME_CHANGED;
         }
-        if (!backup(path)) { fprintf(stderr, "[SAVES] edit refused: no backup\n"); return BLACK_SAVE_WRITE_FAILED; }
+        if (!backup(path, want_reason)) { fprintf(stderr, "[SAVES] edit refused: no backup\n"); return BLACK_SAVE_WRITE_FAILED; }
         pthread_mutex_lock(&lock);
         int ok = replace_file(path, want_after);
         if (ok) memcpy(image, want_after, BLACK_PROFILE_SIZE);
