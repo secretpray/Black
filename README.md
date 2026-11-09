@@ -10,8 +10,13 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.6.0 is an experimental macOS release.** The game's own brightness curve,
-> brightness slider and fades now reach the screen. Home / Xbox Guide / PS opens the
+> **0.6.1 is an experimental macOS release.** Saved profiles load again after the
+> first profile list instead of showing every slot as damaged. The settings are a
+> nested menu in the game's style with a **Saves** section: import, export,
+> delete and back up profile slots. On the name keyboard X deletes, Y types a
+> space and Start finishes; the game window remembers its size, place and full
+> screen, with Cmd+H, Cmd+M and a Window menu. From 0.6.0: the game's own
+> brightness curve, brightness slider and fades reach the screen. Home / Xbox Guide / PS opens the
 > settings with a tap and a quit page with a hold, without opening Game Center;
 > A, Start or Enter skips any film; the Dock icon brings the game back. From 0.5.5:
 > later areas of a mission no longer drop to 15-18 fps, and bloom and sun shafts
@@ -47,11 +52,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.6.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.6.0)**
+**[BLACK 0.6.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.6.1)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.6.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.6.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -102,11 +107,12 @@ PS2 and Xbox 360 files are not supported.
   game's own menu style; macOS keeps Game Center out of the way while BLACK has
   focus. The Dock icon and Dock **Quit** work as for any Mac app.
 - A panel in the game’s own green-grey menu style, using fonts from your own game.
-  The panel has **Port Settings**, **Controls** and **Mods** tabs,
-  with device selection first and separate input subpages.
+  It is a nested menu: **General**, **Controls**, **Mods** and **Saves** open
+  their pages, Back climbs one level, and the selected item is described under
+  the list. Y / Triangle or Backspace resets a setting.
 - An optional **FPS counter** showing the game's own frame rate.
 - Optional **HD texture replacement** from your own copy of the PCSX2 "BLACK HD
-  Reimagined" pack, through portingpete's map: turn on **Port Settings →
+  Reimagined" pack, through portingpete's map: turn on **General →
   Textures** and choose the pack's folder when asked. BLACK checks it and links
   it into `~/Library/Application Support/BLACK/Textures/replacement/` without
   copying (files placed there yourself work too). **HD Texture Size** limits the
@@ -129,7 +135,7 @@ PS2 and Xbox 360 files are not supported.
 ## Mods
 
 <p align="center">
-  <img src="docs/screenshots/settings-mods.jpg" alt="Settings, Mods page: GAME USA XBE, Films with Skip Films with a Button on, Auto-Skip Intro Films and Auto-Skip Mission Briefings off, and Player with God Mode and Infinite Medkits" width="85%">
+  <img src="docs/screenshots/settings-mods.jpg" alt="Mods page, game USA XBE: Skip Films with a Button and Auto-Skip Intro Films on, Auto-Skip Mission Briefings off, then God Mode, Infinite Medkits, Grenades, Ammo and Silver Weapons" width="85%">
 </p>
 
 The **Mods** page collects cheats and modifications, all **off by default**
@@ -185,7 +191,7 @@ unrecognised executable leaves every mod off.
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/home-quit.jpg" alt="Quit page over a mission, in the style of the game's pause menu: the gold BLACK mark, QUIT, Continue selected, Quit to Main Menu and Quit Game"><br><sub>Hold Home: continue, the game's main menu, or quit.</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings-quit.jpg" alt="Port Settings with Back, Quit Game and Defaults in the footer"><br><sub>Quit Game in the settings footer.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-menu.jpg" alt="Recomp Settings top menu in the game's style: General, Controls, Mods, Saves, Close the Menu and Quit Game beside the game's rail band"><br><sub>The settings: General, Controls, Mods, Saves, Quit Game.</sub></td>
   </tr>
 </table>
 
@@ -250,6 +256,27 @@ testing.
 A manual Gamepad choice selects the controller input path; selecting a particular
 pad among several connected devices is not implemented.
 
+## Saves
+
+The Xbox build keeps its three operator profiles as slots of one signed file and
+has no way to delete or copy them; the Xbox dashboard did that. **Saves** in the
+settings lists the slots with their progress. A slot's page shows its missions,
+replaces or fills it from a **zip**, a save folder or a profile file (put them in
+`Data/Import/`, or pick one), exports it to `Data/Export/`, and deletes it as a
+console writes an empty slot. A slot the game has marked as damaged can be
+cleared. Changes apply on the game's main menu pages; the slot the game
+autosaves to is greyed out, and every change asks Yes or No first.
+
+Each change keeps the file as it was in `Data/xboxrecomp/ProfileBackups/`, named
+with its time and reason, and one is made at launch when the profile changed
+since. The newest 30 are kept; any backup can be restored, and one or all can
+be moved to the Trash. Only saves on this Mac are used: BLACK does not talk to a
+console.
+
+<p align="center">
+  <img src="docs/screenshots/settings-saves.jpg" alt="Saves page: three profile slots with their names and progress, the autosave slot marked, import, export and backups" width="85%">
+</p>
+
 ## Your data and updates
 
 Data is stored in `~/Library/Application Support/BLACK/`:
@@ -257,7 +284,8 @@ Data is stored in `~/Library/Application Support/BLACK/`:
 | Folder/file | Purpose |
 | --- | --- |
 | `Game/` | Your privately installed game files |
-| `Data/xboxrecomp/` | Xbox saves, metadata and virtual cache partitions |
+| `Data/xboxrecomp/` | Xbox saves, profile backups, metadata and virtual cache partitions |
+| `Data/Import/`, `Data/Export/` | Profiles to import, and exported slots |
 | `settings.ini` | Recomp preferences and bindings |
 | `Logs/run-*/` | A separate log for every launch |
 

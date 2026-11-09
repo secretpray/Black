@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.1 — 2026-11-09
+
+- **Saved profiles.** After the first profile list Load Profile said there were
+  no profiles and Save Profile showed every slot as damaged, although the file
+  was intact: the runtime went on with an old directory scan when the game
+  reused a handle. Closing a handle now ends its scan, and saving can reserve
+  file space as on the Xbox.
+- **Saves** in the settings: the three profile slots with their progress,
+  missions, import from a zip, a save folder or a profile file, export, delete
+  and clear. A deleted slot is written as a console writes an empty one, the
+  slot the game autosaves to is greyed out, every change asks first and keeps
+  a backup; backups can be restored or moved to the Trash.
+- **The settings as the game's own menu.** General, Controls, Mods and Saves
+  open their pages, Back climbs one level, the selected item is described under
+  the list. The rail band, its light and the menu's place and type size follow
+  the game's main menu. Y / Triangle or Backspace resets a setting, a page's
+  last row resets the page, and Reset All Settings is on General.
+- **Name keyboard.** X deletes (held, it repeats), Y types a space and Start
+  presses DONE, with matching button hints.
+- **Menu repeat.** A held direction in the game's menus steps once, then every
+  150 ms after 400 ms, instead of racing past items at 60 fps.
+- **The Mac window.** Size, place and full screen are remembered between
+  launches; a window on a monitor that is gone comes back centred. Hide BLACK
+  (Cmd+H), Hide Others, and a Window menu with Minimize (Cmd+M), Zoom and Enter
+  Full Screen (Ctrl+Cmd+F).
+
 ## 0.6.0 — 2026-11-08
 
 - **The game's own brightness.** BLACK builds a gamma ramp for the Xbox's video

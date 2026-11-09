@@ -1,7 +1,47 @@
 # Release validation and current limits
 
-Release: **BLACK 0.6.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.6.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Saves, the settings menu and the Mac window in 0.6.1
+
+**Profile list.** The runtime kept a directory scan by handle value until it
+reached the end. The game's profile list stops at the first save folder and the
+next open reuses the handle value, so every later list resumed the old scan, read
+a file outside the profile folder and marked all three slots damaged. The guest
+`NtClose` bridge now ends the scan of the handle it closes, and
+`FileAllocationInformation` reserves space as on Windows. On a copy of the
+user's saves, repeated Load Profile and Save Profile kept the profile and showed
+no damaged slots.
+
+**Saves.** A profile is one signed 0x1800-byte file of three 0x778-byte slots.
+An empty slot keeps its marker and sets the empty flag, as console saves from
+the user show; zeroing the marker made the game report it as damaged. Edits are
+applied on the game thread, only on main-menu pages and only while the game's
+in-memory image equals the file, with an atomic write and a backup. The user
+deleted test slots and imported a profile, and the game's own Load Profile list
+then showed the slots as the page did (empty, not damaged). Export, restoring a
+backup and moving backups to the Trash were exercised in development runs only. Unit tests cover
+checksums, signing, slot clearing, copying and backup naming.
+
+**Name keyboard and repeat.** On a DualSense the user deleted with Square, typed
+a space with Triangle and finished with Start, and checked the d-pad step of
+400/150 ms in the game's menus.
+
+**Settings menu.** The nested menu, its resets, greyed rows for the autosave
+slot and the composition beside the rail band were reviewed by the user on
+screenshots from bounded windowed runs with scripted input.
+
+**Window.** The user resized, moved, entered and left full screen and relaunched;
+the window came back as left. Cmd+H, Cmd+M and the Window menu worked. A unit
+test covers fitting a saved frame to changed screens. Not checked: a monitor
+removed between launches on real hardware, Stage Manager, Spaces assignment.
+
+**Tests.** 119 CTest checks and 49 Python tests passed. The final DMG was checked read-only in
+English and Russian with isolated data and system-only PATH: both opened the
+settings and quit normally, and source game files and user preferences kept
+their hashes. The matching source archive was verified without game or private
+data.
 
 ## Brightness, Home button and film skipping in 0.6.0
 
