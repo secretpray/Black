@@ -207,7 +207,7 @@ RU = {
     "SAVES": "Сейвы", "PROFILE BACKUPS": "Резервные копии профиля", "IMPORT A PROFILE": "Импортировать профиль",
     "SAVE CHECKPOINTS": "Сохранять чекпоинты",
     "CHECKPOINT": "Чекпоинт", "DELETE THE CHECKPOINT": "Удалить чекпоинт", "PART": "Часть",
-    "THE RESUME POINT THIS PROFILE HAS IN THE GAME'S CHECKPOINT FILES: DIFFICULTY, MISSION AND PART.": "Точка возобновления этого профиля в файлах чекпоинтов игры: сложность, миссия и часть.",
+    "WHERE CONTINUE MISSION RESUMES THIS PROFILE: DIFFICULTY, MISSION AND ITS CHECKPOINT.": "Откуда «Продолжить миссию» продолжит этот профиль: сложность, миссия и её чекпоинт.",
     "REMOVES THIS PROFILE'S CHECKPOINT FILES. THE PROFILE AND ITS MISSIONS STAY.": "Удаляет файлы чекпоинтов этого профиля. Профиль и его миссии остаются.",
     "DELETE THE CHECKPOINT OF %@?": "Удалить чекпоинт %@?",
     "THE PROFILE AND ITS MISSIONS STAY. THE GAME STARTS THIS PROFILE'S NEXT MISSION FROM ITS BEGINNING.": "Профиль и его миссии остаются. Игра начнёт следующую миссию этого профиля с начала.",

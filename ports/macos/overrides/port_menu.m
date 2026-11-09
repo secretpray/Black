@@ -348,11 +348,16 @@ static NSString *slot_text(const BlackProfileSlot *slot)
     return slot->active ? [NSString stringWithFormat:@"%@ · %d %@ 32", [@(slot->name) uppercaseString], slot->completed, T(@"OF")] :
         slot->damaged ? T(@"DAMAGED") : T(@"EMPTY");
 }
+/* The record's level is the game's level number; the campaign plays them in
+ * the order of its table at 0x288648 (0, 1, 5, 3, 4, 6, 7, 8; 2 is loading).
+ * Streaming unit 1 starts a mission, so unit n is its checkpoint n - 1. */
 static NSString *checkpoint_text(const BlackCheckpointInfo *info)
 {
     static NSString *const difficulty[4] = {@"EASY", @"NORMAL", @"HARD", @"BLACK OPS"};
-    return [NSString stringWithFormat:@"%@ · %@ %u · %@ %u", T(difficulty[info->difficulty < 4 ? info->difficulty : 0]),
-        T(@"MISSION"), info->level + 1, T(@"PART"), info->stage];
+    static const int mission_of_level[9] = {1, 2, 0, 4, 5, 3, 6, 7, 8};
+    int mission = info->level < 9 ? mission_of_level[info->level] : 0;
+    return [NSString stringWithFormat:@"%@ · %@ %d · %@ %u", T(difficulty[info->difficulty < 4 ? info->difficulty : 0]),
+        T(@"MISSION"), mission, T(@"CHECKPOINT"), info->unit > 1 ? info->unit - 1 : 1];
 }
 static NSString *const reason_labels[BLACK_SAVE_REASONS] = {@"BEFORE A DELETE", @"BEFORE AN IMPORT", @"BEFORE A RESTORE", @"AT LAUNCH"};
 static NSString *const result_labels[3] = {@"DONE", @"BELOW TARGET", @"TARGET MET"};
@@ -1688,7 +1693,7 @@ static NSAlert *pack_alert;
             selected==ROW_SLOT_DELETE?(profile_slots[slot_open].damaged?@"MAKES THE SLOT EMPTY AGAIN.":@"EMPTIES THIS SLOT. YOU CONFIRM FIRST."):
             @"COPY A PROFILE FROM A ZIP, SAVE FOLDER OR PROFILE FILE INTO THIS SLOT.";
         else if(selected==ROW_SLOT_EXPORT)help=@"SAVES THIS PROFILE AS A FILE OF ITS OWN, TO KEEP OR TO IMPORT ELSEWHERE.";
-        else if(selected==ROW_SLOT_CHECKPOINT){help=@"THE RESUME POINT THIS PROFILE HAS IN THE GAME'S CHECKPOINT FILES: DIFFICULTY, MISSION AND PART.";detail=@"";}
+        else if(selected==ROW_SLOT_CHECKPOINT){help=@"WHERE CONTINUE MISSION RESUMES THIS PROFILE: DIFFICULTY, MISSION AND ITS CHECKPOINT.";detail=@"";}
         else if(selected==ROW_SLOT_CHECKPOINT_DELETE)help=@"REMOVES THIS PROFILE'S CHECKPOINT FILES. THE PROFILE AND ITS MISSIONS STAY.";
         else if(selected==ROW_CHECKPOINTS){help=@"WRITES THE GAME'S OWN CHECKPOINT BESIDE THE SAVES AS YOU PLAY. CONTINUE MISSION ON THE TITLE MENU RESUMES IT.";
             detail=checkpoints_locked()?@"NEEDS THE GAME'S AUTOSAVE: OPTIONS > PROFILE > AUTOSAVE ON. THE SAME ROW IS THERE TOO.":
@@ -1849,9 +1854,10 @@ static NSAlert *pack_alert;
             selected == ROW_ANY_FILM ? @"A HINT SHOWS THE BUTTON. OFF: ONLY FILMS THE GAME ITSELF LETS YOU SKIP." :
             @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
-    line(84, 432, 792, HIGHLIGHT, 1);
-    fitted_text(T(help), 96, 442, 11, 768, TEXT, 0);
-    fitted_text(T(detail), 96, 460, 10, 768, DIM, 0);
+    /* The description, a row's space under the list, its two lines apart. */
+    line(84, 422, 792, HIGHLIGHT, 1);
+    fitted_text(T(help), 96, 434, 11, 768, TEXT, 0);
+    fitted_text(T(detail), 96, 462, 10, 768, DIM, 0);
     if (page == PAGE_DIAGNOSTICS) {
         BlackControllerMonitor monitor = black_ControllerMonitor();
         fill(NSMakeRect(704, 131, 1, 264), HEADING, .35);

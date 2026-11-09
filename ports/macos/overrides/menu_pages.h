@@ -29,7 +29,9 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_BRIGHTNESS, ROW_GAMMA, ROW_
 enum { PAGE_PORT, PAGE_CONTROLS, PAGE_KEYS, PAGE_PAD_BINDINGS, PAGE_MOUSE,
        PAGE_PAD, PAGE_ADVANCED, PAGE_DIAGNOSTICS, PAGE_MODS, PAGE_SAVES, PAGE_BACKUPS, PAGE_SLOT, PAGE_IMPORT_PICK,
        PAGE_MISSIONS, PAGE_CONFIRM, PAGE_BACKUP, PAGE_ROOT, MENU_PAGES };
-enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 8, TAB_WIDTH = 198 };
+/* Seven rows show, the rest scroll: one row's space stays between the list
+ * and the description, as on the game's pages. */
+enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 7, TAB_WIDTH = 198 };
 /* The Saves pages' rows depend on what is on disk; port_menu.m sets these:
  * backups listed, profiles found to import, the slot page's actions, and the
  * page and row a confirmation returns to. */
