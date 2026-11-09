@@ -121,6 +121,10 @@ black_trace_replace(presenter "        if (build_candidates(candidates, &candida
     "        if (!black_StableFrameAvailable() && build_candidates(candidates, &candidate_count) > 0) {")
 black_trace_replace(presenter "if (getenv(\"RECOMP_BACKGROUND\") || getenv(\"RECOMP_FLOAT\"))"
     "if (getenv(\"RECOMP_FLOAT\"))")
+# The window's saved size, place and full screen (window_state.m) instead of
+# RECOMP_FULLSCREEN alone.
+black_trace_replace(presenter "            if (getenv(\"RECOMP_FULLSCREEN\"))\n                [s_window toggleFullScreen:nil];"
+    "            black_WindowRestore(s_window);")
 black_trace_replace(presenter "            [s_window orderFrontRegardless];"
     "            [s_window orderFront:nil];")
 black_trace_replace(presenter "        [s_window setTitle:@\"Black - Xbox Recomp Framebuffer\"];"
@@ -146,7 +150,7 @@ math(EXPR input_end "${input_begin} + ${input_end}")
 string(SUBSTRING "${presenter}" 0 ${input_begin} input_prefix)
 string(SUBSTRING "${presenter}" ${input_end} -1 input_suffix)
 set(presenter "${input_prefix}${input_methods}${input_suffix}")
-string(PREPEND presenter "#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/keyboard_mouse.h\"\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/flash_menu.h\"\n")
+string(PREPEND presenter "#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/window_state.h\"\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/keyboard_mouse.h\"\n#include \"${CMAKE_SOURCE_DIR}/ports/macos/overrides/flash_menu.h\"\n")
 black_trace_replace(presenter "    s_mouse_captured = on;"
     "    s_mouse_captured = on;\n    black_MouseCapture(on);")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS

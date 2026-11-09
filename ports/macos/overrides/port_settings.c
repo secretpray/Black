@@ -45,6 +45,9 @@ static atomic_int pad_bindings[BLACK_PAD_CONTROLS];
 static atomic_int mods[BLACK_MOD_COUNT], mods_supported = -1;
 static _Atomic(const char *) mods_revision = "DETECTING";
 static atomic_uint menu_commands;
+/* The game window: content rect in screen points (x, y, width, height; width 0
+ * when never saved) and full screen (-1 never saved, then 0 or 1). */
+static atomic_int window_frame[4], window_full_screen = -1;
 static char *settings_path;
 
 static void load_settings(void)
@@ -173,6 +176,14 @@ static void load_settings(void)
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 1) atomic_store(&upscaler, (int)n);
             }
+            int frame[4];
+            if (sscanf(line, " window_frame = %d , %d , %d , %d %c", &frame[0], &frame[1], &frame[2], &frame[3], &extra) == 4 &&
+                black_SettingsValidWindowFrame(frame))
+                for (int i = 0; i < 4; ++i) atomic_store(&window_frame[i], frame[i]);
+            if (sscanf(line, " window_full_screen = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= 0 && n <= 1) atomic_store(&window_full_screen, (int)n);
+            }
             if (sscanf(line, " anisotropic_filtering = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && black_SettingsValidAniso((int)n)) atomic_store(&anisotropic_filtering, (int)n);
@@ -252,11 +263,53 @@ int black_SettingsValidAniso(int level)
     return level == 0 || level == 2 || level == 4 || level == 8 || level == 16;
 }
 
+static int write_settings(void);
 static int save_setting(atomic_int *setting, int value)
 {
     pthread_once(&initialized, load_settings);
     pthread_mutex_lock(&save_lock);
     atomic_store(setting, value);
+    int success = write_settings();
+    pthread_mutex_unlock(&save_lock);
+    return success;
+}
+
+int black_SettingsValidWindowFrame(const int frame[4])
+{
+    return frame[0] >= -100000 && frame[0] <= 100000 && frame[1] >= -100000 && frame[1] <= 100000 &&
+        frame[2] >= 160 && frame[2] <= 32768 && frame[3] >= 120 && frame[3] <= 32768;
+}
+
+int black_SettingsWindowFrame(int frame[4])
+{
+    pthread_once(&initialized, load_settings);
+    pthread_mutex_lock(&save_lock);
+    for (int i = 0; i < 4; ++i) frame[i] = atomic_load(&window_frame[i]);
+    pthread_mutex_unlock(&save_lock);
+    return frame[2] > 0;
+}
+
+int black_SettingsWindowFullScreen(void)
+{
+    pthread_once(&initialized, load_settings);
+    return atomic_load(&window_full_screen);
+}
+
+int black_SettingsSetWindowState(const int frame[4], int full_screen)
+{
+    if ((frame && !black_SettingsValidWindowFrame(frame)) || full_screen < 0 || full_screen > 1) return 0;
+    pthread_once(&initialized, load_settings);
+    pthread_mutex_lock(&save_lock);
+    if (frame) for (int i = 0; i < 4; ++i) atomic_store(&window_frame[i], frame[i]);
+    atomic_store(&window_full_screen, full_screen);
+    int success = write_settings();
+    pthread_mutex_unlock(&save_lock);
+    return success;
+}
+
+/* Caller holds save_lock. */
+static int write_settings(void)
+{
     int success = 0;
     char *temporary = NULL;
     if (settings_path && asprintf(&temporary, "%s.XXXXXX", settings_path) >= 0) {
@@ -287,6 +340,12 @@ static int save_setting(atomic_int *setting, int value)
                     atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
                     written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
+                if (atomic_load(&window_frame[2]) > 0)
+                    written &= fprintf(file, "# Game window content rect in screen points: x,y,width,height\nwindow_frame=%d,%d,%d,%d\n",
+                        atomic_load(&window_frame[0]), atomic_load(&window_frame[1]),
+                        atomic_load(&window_frame[2]), atomic_load(&window_frame[3])) > 0;
+                if (atomic_load(&window_full_screen) >= 0)
+                    written &= fprintf(file, "window_full_screen=%d\n", atomic_load(&window_full_screen)) > 0;
                 int flushed = fflush(file) == 0 && fsync(fd) == 0;
                 int closed = fclose(file) == 0;
                 if (written && flushed && closed && rename(temporary, settings_path) == 0) success = 1;
@@ -306,7 +365,6 @@ static int save_setting(atomic_int *setting, int value)
         atomic_load(&vibration), atomic_load(&dualsense_hid), atomic_load(&look_speed[0]), atomic_load(&look_speed[1]),
         atomic_load(&look_speed[2]), atomic_load(&look_speed[3]), atomic_load(&invert_x), atomic_load(&rumble_intensity),
         atomic_load(&hold_aim), atomic_load(&aim_assist));
-    pthread_mutex_unlock(&save_lock);
     return success;
 }
 

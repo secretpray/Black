@@ -506,8 +506,10 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["BLACK_LEGACY_VOICE_GAIN"] = "1"
     if args.world_wait == "legacy":
         env["BLACK_LEGACY_WORLD_WAIT"] = "1"
-    if not args.windowed:
-        env["RECOMP_FULLSCREEN"] = "1"
+    # This run's choice; the app itself restores the player's last one.
+    env["RECOMP_FULLSCREEN"] = "0" if args.windowed else "1"
+    if args.restore_window:
+        del env["RECOMP_FULLSCREEN"]
     if args.skip_movies:
         env["BLACK_SKIP_MOVIES"] = "1"
     if args.skip_intros:
@@ -696,6 +698,7 @@ def main():
             sub.add_argument("--state-log", action="store_true", help="Sample guest camera/world state for input diagnostics")
             sub.add_argument("--diagnostics", action="store_true")
             sub.add_argument("--save-trace", action="store_true", help="Log save-folder enumeration and file allocation calls")
+            sub.add_argument("--restore-window", action="store_true", help="Window or full screen as last left, as the app does (overrides --windowed)")
             sub.add_argument("--frame-times", action="store_true", help="Log game FPS and longest frame every two seconds without full diagnostics")
             sub.add_argument("--profile-frames", action="store_true", help="Buffered per-frame CPU/GPU-readback/presenter timing, no images")
             sub.add_argument("--gamma", choices=("game", "off"), default="game", help="Apply the game's own brightness/gamma ramp at presentation (default), or keep identity for A/B")

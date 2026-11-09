@@ -150,6 +150,7 @@ void black_HostQuit(void)
 {
     /* Before exit: ending the process mid-buffer clicked in the speakers. */
     black_AudioFadeOut();
+    black_WindowStateFlush();
     xek_capture_mouse(NO);
     xbox_KeyboardReleaseAll();
     xbox_MouseReleaseAll();
@@ -222,6 +223,7 @@ static void black_MenuCapture(int opening)
 {
     (void)event; (void)reply;
     if (!s_window) return;
+    if (NSApp.hidden) [NSApp unhide:nil];
     if (s_window.miniaturized) [s_window deminiaturize:nil];
     [NSApp activate];
     [s_window makeKeyAndOrderFront:nil];

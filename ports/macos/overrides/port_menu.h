@@ -38,6 +38,11 @@ int black_SettingsSetTextureReplacement(int enabled);
 int black_SettingsTextureMaxSize(void);
 int black_SettingsSetTextureMaxSize(int size);
 int black_SettingsSaveFailed(void);
+/* Game window state, saved by the window itself (window_state.m). */
+int black_SettingsValidWindowFrame(const int frame[4]);
+int black_SettingsWindowFrame(int frame[4]);
+int black_SettingsWindowFullScreen(void);
+int black_SettingsSetWindowState(const int frame[4], int full_screen);
 int black_MenuIsOpen(void);          /* settings panel or quit dialog */
 int black_SettingsPanelOpen(void);
 void black_MenuSetOpen(int open);

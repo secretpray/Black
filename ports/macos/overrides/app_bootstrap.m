@@ -54,8 +54,10 @@ char *black_AppPrepareGame(void)
         if(films&&!getenv("BLACK_SUBTITLE_DIR")){setenv("BLACK_SUBTITLE_DIR",films.path.fileSystemRepresentation,1);fprintf(stderr,"[LANG] Russian film subtitles on\n");}
         setenv("XDG_DATA_HOME",[[root URLByAppendingPathComponent:@"Data"].path fileSystemRepresentation],1);
         setenv("BLACK_GAME_DIR",game.path.fileSystemRepresentation,1);
-        const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_FULLSCREEN","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};
+        const char *ones[]={"SDL_NO_SIGNAL_HANDLERS","RECOMP_XEMU_GPU","RECOMP_VBLANK","RECOMP_AC97_READY","RECOMP_PB_EXEC","RECOMP_FB_WINDOW","RECOMP_REAL_DSP","BLACK_CONSOLE_GAME_CLOCK","BLACK_STABLE_FRAMES"};
         for(unsigned i=0;i<sizeof ones/sizeof ones[0];++i)setenv(ones[i],"1",1);
+        /* Full screen or a window as the player left it (window_state.m). */
+        unsetenv("RECOMP_FULLSCREEN");
         setenv("RECOMP_KEYBOARD","0",1);setenv("RECOMP_ASPECT","16:9",1);setenv("BLACK_DSP_HEADROOM_DB","6",1);
         int scale=black_SettingsRenderScale();value("RECOMP_SCALE",scale);value("RECOMP_FOV",black_SettingsFov());value("RECOMP_AF",black_SettingsAniso());
         setenv("RECOMP_AA",(const char*[]){"0","1","smaa"}[black_SettingsAntiAliasing()],1);

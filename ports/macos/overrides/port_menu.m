@@ -1970,6 +1970,10 @@ void black_MenuAttach(void *window, void (*capture)(int))
             if (down && !event.isARepeat) request_quit();
             return nil;
         }
+        /* Other Cmd shortcuts are the menus' (Cmd+H, Cmd+M, Ctrl+Cmd+F...),
+         * also with the settings open; Cmd+, stays the settings' toggle. */
+        if ((event.modifierFlags & NSEventModifierFlagCommand) && code != 43 &&
+            !(black_SettingsPanelOpen() && (menu_view->binding_capture || menu_view->pad_capture))) return event;
         if (black_SettingsPanelOpen() && menu_view->pad_capture) {
             if (down && !event.isARepeat && (code == 53 || code == 117 || code == 122 || code == 109)) {
                 if (code == 117) black_SettingsSetPadBinding(menu_view->selected - ROW_PAD_FIRST,-1);
@@ -2040,11 +2044,38 @@ void black_MenuAttach(void *window, void (*capture)(int))
     settings_item = [[NSMenuItem alloc] initWithTitle:@"Recomp Settings…" action:@selector(toggle:) keyEquivalent:@","];
     settings_item.target = actions;
     [app_menu insertItem:settings_item atIndex:0];
+    /* What a Mac app's menus have: Hide (Cmd+H), Hide Others, Show All, and
+     * a Window menu with Minimize (Cmd+M), Zoom, full screen (Ctrl+Cmd+F)
+     * and Bring All to Front. Their actions go to NSApp and the key window. */
+    if (![app_menu itemWithTitle:@"Hide BLACK"]) {
+        NSInteger at = [app_menu indexOfItem:quit];
+        [app_menu insertItem:NSMenuItem.separatorItem atIndex:at++];
+        [app_menu insertItemWithTitle:@"Hide BLACK" action:@selector(hide:) keyEquivalent:@"h" atIndex:at++];
+        NSMenuItem *others = [app_menu insertItemWithTitle:@"Hide Others" action:@selector(hideOtherApplications:) keyEquivalent:@"h" atIndex:at++];
+        others.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption;
+        [app_menu insertItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@"" atIndex:at++];
+        [app_menu insertItem:NSMenuItem.separatorItem atIndex:at];
+    }
+    if (![main itemWithTitle:@"Window"]) {
+        NSMenu *window_menu = [[[NSMenu alloc] initWithTitle:@"Window"] autorelease];
+        [window_menu addItemWithTitle:@"Minimize" action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+        [window_menu addItemWithTitle:@"Zoom" action:@selector(performZoom:) keyEquivalent:@""];
+        [window_menu addItem:NSMenuItem.separatorItem];
+        NSMenuItem *full = [window_menu addItemWithTitle:@"Enter Full Screen" action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
+        full.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagControl;
+        [window_menu addItem:NSMenuItem.separatorItem];
+        [window_menu addItemWithTitle:@"Bring All to Front" action:@selector(arrangeInFront:) keyEquivalent:@""];
+        NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"Window" action:nil keyEquivalent:@""] autorelease];
+        item.submenu = window_menu; [main addItem:item];
+        NSApp.windowsMenu = window_menu;
+    }
     if (getenv("BLACK_OPEN_SETTINGS")) black_MenuCommand(BLACK_MENU_TOGGLE);
 }
 
+#include "window_state.h"
 void black_MenuPump(void)
 {
+    black_WindowStatePump();
     /* Local process-only integration check; never injects OS keyboard input. */
     static double test_start;
     static int test_sent;
