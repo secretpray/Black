@@ -10,7 +10,8 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.7.0 is an experimental macOS release.** The game's own checkpoint is kept
+> **0.7.1 is an experimental macOS release.** The settings' prompts stand in a
+> column as on the game's own pages. From 0.7.0: the game's own checkpoint is kept
 > between launches: **Continue Mission** on the title resumes it, and F9 or
 > Back + Y go back to it in a mission after a question. Checkpoints follow the
 > game's Autosave, with a Checkpoints row under it in Options → Profile.
@@ -57,11 +58,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.7.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.7.0)**
+**[BLACK 0.7.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.7.1)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.7.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.7.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -143,7 +144,7 @@ PS2 and Xbox 360 files are not supported.
 ## Mods
 
 <p align="center">
-  <img src="docs/screenshots/settings-mods.jpg" alt="Mods page, game USA XBE: Skip Films with a Button and Auto-Skip Intro Films on, Auto-Skip Mission Briefings off, then God Mode, Infinite Medkits, Grenades, Ammo and Silver Weapons" width="85%">
+  <img src="docs/screenshots/settings-mods.jpg" alt="Mods page, game USA XBE: Skip Films with a Button and Auto-Skip Intro Films on, Auto-Skip Mission Briefings off, then God Mode, Infinite Medkits, Grenades and Ammo" width="85%">
 </p>
 
 The **Mods** page collects cheats and modifications, all **off by default**
@@ -177,7 +178,7 @@ unrecognised executable leaves every mod off.
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/mods-in-game.jpg" alt="In a mission with mods on: three medkits, nine grenades, 999 rounds, the M16A2 and FPS 29.9 in the corner"><br><sub>Mods in play, with the FPS counter.</sub></td>
-    <td width="50%"><img src="docs/screenshots/settings-mods-unlocks.jpg" alt="Mods page with No Recoil, One-Hit Kill, Game Speed, Always Silenced and Unlock All Missions"><br><sub>Player mods and unlocks.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-mods-unlocks.jpg" alt="Mods page with Silver Weapons, Rapid Fire, No Recoil, One-Hit Kill, Game Speed, Always Silenced and Unlock All Missions"><br><sub>Player mods and unlocks.</sub></td>
   </tr>
 </table>
 
@@ -211,7 +212,7 @@ after you answer YES there.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="Current game-style Recomp Settings: render scale, MetalFX, field of view, FPS counter and SMAA"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="General page: render scale, MetalFX, field of view, FPS counter, display brightness and gamma, SMAA; the description and the Select, Confirm, Default and Back prompts below"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
     <td width="50%"><img src="docs/screenshots/settings-controller.jpg" alt="Gamepad and Vibration subpage: independent X/Y response, aiming and vibration"><br><sub>Gamepad response on its own page.</sub></td>
   </tr>
 </table>
@@ -283,7 +284,7 @@ be moved to the Trash. Only saves on this Mac are used: BLACK does not talk to a
 console.
 
 <p align="center">
-  <img src="docs/screenshots/settings-saves.jpg" alt="Saves page: three profile slots with their names and progress, the autosave slot marked, import, export and backups" width="85%">
+  <img src="docs/screenshots/settings-saves.jpg" alt="Saves page: three profile slots with their names and progress, Save Checkpoints and Profile Backups" width="85%">
 </p>
 
 ## Checkpoints
@@ -294,6 +295,17 @@ game's own checkpoint beside the saves as it is reached, for each saved profile
 slot, mission and difficulty, and restores it the way the game's own Continue
 does after a death: health, ammunition, weapons, objectives and the part of the
 level.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/checkpoint-title.jpg" alt="Title menu: Continue Mission selected above Start Mission, Options and Operator Profile"><br><sub>Continue Mission on the title resumes the last checkpoint.</sub></td>
+    <td width="50%"><img src="docs/screenshots/checkpoint-restart.jpg" alt="Restart page over a mission in the pause menu's style: Restart from the last checkpoint? Continue selected, Restart from Checkpoint below"><br><sub>F9 or Back + Y: back to the checkpoint, after a question.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/checkpoint-profile.jpg" alt="The game's Profile options: New, Load, Save, Autosave On Off, and the Checkpoints On Off row under it, selected"><br><sub>Options → Profile: Checkpoints, under the game's Autosave.</sub></td>
+    <td width="50%"><img src="docs/screenshots/checkpoint-slot.jpg" alt="Saves, slot 1 page: Missions, Checkpoint Normal, Mission 2, Checkpoint 3, Delete the Checkpoint, Replace, Export and Delete"><br><sub>A slot's checkpoint in Saves, with Delete.</sub></td>
+  </tr>
+</table>
 
 - **Continue Mission** on the title resumes the active slot's checkpoint. While
   it is there, the game's own button reads **Start Mission**: it opens the

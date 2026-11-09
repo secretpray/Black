@@ -1,7 +1,21 @@
 # Release validation and current limits
 
-Release: **BLACK 0.7.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.7.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Settings prompts in 0.7.1
+
+The settings panel's layout changed: the prompts form a column one row step
+apart under the description, the page sits nearer the top, and seven rows show
+with a row's space before the description. A slot's checkpoint in Saves now
+names the mission in campaign order (table `0x288648`) and the checkpoint
+(streaming unit − 1); it showed the level number and the stage. Checked in
+scripted windowed runs on every settings page shown in the README and on the
+slot page; 121 CTest checks and 49 Python tests
+passed, and the final DMG was checked read-only in English and Russian with
+isolated data and system-only PATH (both opened the settings and quit
+normally, source game files and user preferences kept their hashes). The source
+archive was verified without game or private data. Everything else is 0.7.0.
 
 ## Checkpoints and display brightness in 0.7.0
 

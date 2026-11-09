@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.1 — 2026-11-09
+
+- **Settings prompts as on the game's pages.** Select, Confirm and Back stand in a
+  column under the description, one row apart, the buttons centred before the
+  words; Select shows a cross where left and right change the value, and Default
+  stands beside Confirm in the values' column. The heading and the list sit
+  nearer the top; seven rows show and the rest scroll, so a row's space parts
+  the list from the description, whose two lines no longer touch.
+- **A slot's checkpoint** in Saves names the mission in campaign order and the
+  checkpoint reached (it showed the game's level number and always part 1).
+- **New screenshots** of the settings and of checkpoints in the README.
 ## 0.7.0 — 2026-11-09
 
 - **Checkpoints kept between launches.** The game's own checkpoint is written
