@@ -46,6 +46,8 @@ static int fake_rumble(SDL_GameController *p,Uint16 l,Uint16 r,Uint32 ms)
 #define SDL_GetTicks fake_ticks
 #define SDL_GameControllerGetType fake_type
 #define SDL_GameControllerRumble fake_rumble
+static int restart_requests;
+void black_CheckpointRequestRestart(void) { ++restart_requests; }
 #include BLACK_INPUT_ROUTING_SOURCE
 static XBOX_GAMEPAD poll(void)
 {XBOX_INPUT_STATE result;assert(black_InputGetState(0,&result)==ERROR_SUCCESS);return result.Gamepad;}
@@ -63,6 +65,12 @@ int main(void)
     /* A physical pad can still open/control settings in manual Keyboard. */
     physical.wButtons=XBOX_GAMEPAD_START|XBOX_GAMEPAD_BACK;pad=poll();
     assert(black_MenuTakeCommands()==BLACK_MENU_TOGGLE && !pad.wButtons && !pad.bAnalogButtons[1]);
+    /* Back + Y asks for a checkpoint restart once per press, not per poll. */
+    physical=(XBOX_GAMEPAD){0};physical.wButtons=XBOX_GAMEPAD_BACK;physical.bAnalogButtons[XBOX_BUTTON_Y]=255;
+    poll();assert(restart_requests==1);poll();assert(restart_requests==1);
+    physical=(XBOX_GAMEPAD){0};poll();
+    physical.wButtons=XBOX_GAMEPAD_BACK;physical.bAnalogButtons[XBOX_BUTTON_Y]=255;poll();
+    assert(restart_requests==2);
     physical=(XBOX_GAMEPAD){0};black_MenuSetOpen(1);poll();
     black_SettingsSetPadBinding(0,7);black_SettingsSetInputDevice(BLACK_INPUT_GAMEPAD);
     physical.bAnalogButtons[0]=255;pad=poll();assert(!pad.bAnalogButtons[0]);

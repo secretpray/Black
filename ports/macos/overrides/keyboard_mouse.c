@@ -4,6 +4,7 @@
 #include "keyboard_mouse.h"
 #include "port_menu.h"
 #include "flash_menu.h"
+#include "game_checkpoint.h"
 #include <pthread.h>
 #include <math.h>
 #include <string.h>
@@ -65,11 +66,26 @@ uint64_t black_InputNowMs(void)
     struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
     return (uint64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000 + 1;
 }
+/* F9 restarts from the on-disk checkpoint unless the player bound it. */
+#define BLACK_KEY_RESTART 101
+static int restart_key_bound(int key)
+{
+    for (int i = 0; i < BLACK_ACTION_COUNT; ++i)
+        for (int slot = 0; slot < 2; ++slot)
+            if (black_SettingsBinding(i, slot) == key) return 1;
+    return 0;
+}
 void black_KeyEvent(int key, int down)
 {
     key = black_KeyCanonical(key);
     if (key < 0 || key >= BLACK_KEY_LIMIT || !black_KeyValid(key)) return;
-    pthread_mutex_lock(&lock); held[key] = !!down; pthread_mutex_unlock(&lock);
+    pthread_mutex_lock(&lock);
+    int fresh = down && !held[key];
+    held[key] = !!down;
+    pthread_mutex_unlock(&lock);
+    /* Autorepeat repeats the down, so only the first press asks. */
+    if (fresh && key == BLACK_KEY_RESTART && !restart_key_bound(key))
+        black_CheckpointRequestRestart();
     if (key >= BLACK_MOUSE_LEFT && getenv("RECOMP_INPUT_DEBUG"))
         fprintf(stderr, "[INPUT-MOUSE] key=%d down=%d ms=%llu\n", key, !!down,
             (unsigned long long)black_InputNowMs());

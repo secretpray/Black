@@ -336,6 +336,9 @@ static BOOL slot_in_use(int slot) { return slot == black_SaveSlotInUse(); }
  * plays. Drawn grey, skipped by the cursor, ignored by clicks. */
 static BOOL row_disabled(int row)
 { return (row == ROW_SLOT_IMPORT || row == ROW_SLOT_DELETE) && slot_in_use(slot_open); }
+/* Save Checkpoints follows the game's own Autosave (its Profile options): with
+ * Autosave off the row stays selectable, to say why, but is grey and fixed. */
+static BOOL checkpoints_locked(void) { return black_CheckpointAutosave() == 0; }
 static NSString *profile_label(const BlackProfileSlot *slot)
 { return [NSString stringWithFormat:@"%@ (%d/32)", [@(slot->name) uppercaseString], slot->completed]; }
 static NSString *slot_text(const BlackProfileSlot *slot)
@@ -491,14 +494,20 @@ void black_FilmHintSet(int visible)
  * in the panel's look over the frozen game. Continue is selected first; in a
  * mission Quit to Main Menu hands over to the pause menu's own confirmation
  * (game_flash.c); Quit Game closes BLACK as Cmd+Q does. */
-enum { QUIT_CONTINUE, QUIT_MAIN_MENU, QUIT_GAME };
-static int quit_options[3], quit_count, quit_selected;
+/* The same dialog asks before F9 / Back + Y restart from the checkpoint
+ * (quit_restart: Continue, then Restart from Checkpoint). */
+enum { QUIT_CONTINUE, QUIT_MAIN_MENU, QUIT_GAME, QUIT_RESTART };
+static int quit_options[3], quit_count, quit_selected, quit_restart;
 static NSString *quit_label(int option)
-{ return option == QUIT_MAIN_MENU ? @"QUIT TO MAIN MENU" : option == QUIT_GAME ? @"QUIT GAME" : @"CONTINUE"; }
+{
+    return option == QUIT_MAIN_MENU ? @"QUIT TO MAIN MENU" : option == QUIT_GAME ? @"QUIT GAME" :
+        option == QUIT_RESTART ? @"RESTART FROM CHECKPOINT" : @"CONTINUE";
+}
 static NSString *quit_help(int option)
 {
     return option == QUIT_MAIN_MENU ? @"THE GAME THEN ASKS TO CONFIRM. CHECKPOINT PROGRESS IS LOST." :
-        option == QUIT_GAME ? @"CLOSES BLACK. PROGRESS SINCE THE LAST SAVE IS LOST." : @"BACK TO THE GAME.";
+        option == QUIT_GAME ? @"CLOSES BLACK. PROGRESS SINCE THE LAST SAVE IS LOST." :
+        option == QUIT_RESTART ? @"BACK TO THE LAST CHECKPOINT. PROGRESS SINCE THEN IS LOST." : @"BACK TO THE GAME.";
 }
 /* Laid out as BLACK's own pause page, measured on its frames in these
  * 960x600 panel units: the light rails at 160 and 352-371 with a black band
@@ -602,9 +611,10 @@ static void quit_mark(CGFloat x, CGFloat y)
     /* The gold mark, the page title under it. */
     CGFloat x = quit_column + 6;
     quit_mark(x, 62);
-    text(T(@"QUIT"), x, QUIT_TITLE_Y, 22, 0xe6e6e6, 1);
+    text(T(quit_restart ? @"RESTART" : @"QUIT"), x, QUIT_TITLE_Y, 22, 0xe6e6e6, 1);
     int option = quit_options[quit_selected];
-    fitted_text(T(quit_count == 3 ? @"LEAVE THE MISSION OR QUIT BLACK?" : @"QUIT BLACK?"), x, QUIT_MESSAGE_Y, 12, 300, 0xd8d8d8, 0);
+    fitted_text(T(quit_restart ? @"RESTART FROM THE LAST CHECKPOINT?" : quit_count == 3 ? @"LEAVE THE MISSION OR QUIT BLACK?" : @"QUIT BLACK?"),
+        x, QUIT_MESSAGE_Y, 12, 300, 0xd8d8d8, 0);
     /* The selector glides to the chosen option. */
     CGFloat target = quit_row_rect(quit_selected).origin.y;
     double glide = still ? 1 : quit_ease((now - quit_moved) / 0.12);
@@ -783,7 +793,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_INTROS] setAccessibilityValue:black_SettingsSkipIntros() ? @"On" : @"Off"];
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
     [rows[ROW_ANY_FILM] setAccessibilityValue:black_SettingsSkipAnyFilm() ? @"On" : @"Off"];
-    [rows[ROW_CHECKPOINTS] setAccessibilityValue:black_SettingsSaveCheckpoints() ? @"On" : @"Off"];
+    [rows[ROW_CHECKPOINTS] setAccessibilityValue:checkpoints_locked() ? @"Unavailable, the game's autosave is off" : black_SettingsSaveCheckpoints() ? @"On" : @"Off"];
     if (slot_checkpoint_ok) [rows[ROW_SLOT_CHECKPOINT] setAccessibilityValue:checkpoint_text(&slot_checkpoint)];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
@@ -969,6 +979,7 @@ static NSTimeInterval transition, last_draw;
         confirm_kind=4;return;
     }
     if(selected==ROW_CHECKPOINTS){
+        if(checkpoints_locked())return;
         int current=black_SettingsSaveCheckpoints(),value=cycle?!current:direction>0;
         if(value==current)return;
         black_SettingsSetSaveCheckpoints(value);
@@ -1546,9 +1557,9 @@ static NSAlert *pack_alert;
             }else if(index==ROW_PICK_FINDER){name=T(@"CHOOSE IN FINDER");
             }else if(index==ROW_CONFIRM_YES){name=T(save_waiting?@"APPLYING…":@"YES");warn=YES;
             }else if(index==ROW_CONFIRM_NO){name=T(@"NO");}
-            if(row_disabled(index)){
+            if(row_disabled(index)||(index==ROW_CHECKPOINTS&&checkpoints_locked())){
                 fitted_text(name,96,y+13,13,700,BLACK_UI_DISABLED,0);
-                fitted_text(T(@"NOT WHILE IN GAME"),500,y+13,12,330,BLACK_UI_DISABLED,0);
+                fitted_text(T(index==ROW_CHECKPOINTS?@"AUTOSAVE IS OFF":@"NOT WHILE IN GAME"),500,y+13,12,330,BLACK_UI_DISABLED,0);
                 continue;
             }
             CGFloat value_x=index>=ROW_PICK_FIRST&&index<=ROW_PICK_LAST?560:500;
@@ -1677,8 +1688,9 @@ static NSAlert *pack_alert;
         else if(selected==ROW_SLOT_EXPORT)help=@"SAVES THIS PROFILE AS A FILE OF ITS OWN, TO KEEP OR TO IMPORT ELSEWHERE.";
         else if(selected==ROW_SLOT_CHECKPOINT){help=@"THE RESUME POINT THIS PROFILE HAS IN THE GAME'S CHECKPOINT FILES: DIFFICULTY, MISSION AND PART.";detail=@"";}
         else if(selected==ROW_SLOT_CHECKPOINT_DELETE)help=@"REMOVES THIS PROFILE'S CHECKPOINT FILES. THE PROFILE AND ITS MISSIONS STAY.";
-        else if(selected==ROW_CHECKPOINTS){help=@"WRITES THE GAME'S OWN CHECKPOINT BESIDE THE SAVES AS YOU PLAY; IT IS RESTORED AT THE NEXT MISSION START.";
-            detail=@"ON BY DEFAULT. OFF NEITHER WRITES NOR RESTORES; THE GAME'S OWN CHECKPOINT STILL WORKS.";}
+        else if(selected==ROW_CHECKPOINTS){help=@"WRITES THE GAME'S OWN CHECKPOINT BESIDE THE SAVES AS YOU PLAY. CONTINUE MISSION ON THE TITLE MENU RESUMES IT.";
+            detail=checkpoints_locked()?@"NEEDS THE GAME'S AUTOSAVE: OPTIONS > PROFILE > AUTOSAVE ON. THE SAME ROW IS THERE TOO.":
+                @"ON BY DEFAULT, WITH THE GAME'S AUTOSAVE. F9 OR BACK + Y RESTARTS FROM IT IN A MISSION, AFTER A QUESTION.";}
         else if(selected>=ROW_MISSION_FIRST&&selected<=ROW_MISSION_LAST){help=@"AS THE PROFILE HAS IT. THE GAME CHANGES IT AS YOU PLAY.";detail=@"";}
         else if(selected>=ROW_PICK_FIRST&&selected<=ROW_PICK_LAST)help=[NSString stringWithFormat:T(@"COPY THIS PROFILE INTO SLOT %d. THE FILE ITSELF IS NOT CHANGED."),slot_open+1];
         else if(selected==ROW_PICK_FOLDER)help=pick_count?@"PUT A ZIP, SAVE FOLDER OR PROFILE FILE THERE; ITS PROFILES ARE LISTED ABOVE.":@"NOTHING TO IMPORT YET: PUT A ZIP, SAVE FOLDER OR PROFILE FILE IN THIS FOLDER.";
@@ -2022,8 +2034,11 @@ static void quit_open(void)
     }
     quit_count = 0;
     quit_options[quit_count++] = QUIT_CONTINUE;
-    if (black_GameInMission()) quit_options[quit_count++] = QUIT_MAIN_MENU;
-    quit_options[quit_count++] = QUIT_GAME;
+    if (quit_restart) quit_options[quit_count++] = QUIT_RESTART;
+    else {
+        if (black_GameInMission()) quit_options[quit_count++] = QUIT_MAIN_MENU;
+        quit_options[quit_count++] = QUIT_GAME;
+    }
     quit_selected = 0;
     quit_closing = 0; quit_opened = quit_moved = CACurrentMediaTime();
     quit_from_y = quit_row_rect(0).origin.y;
@@ -2032,7 +2047,8 @@ static void quit_open(void)
     [quit_view setFrameSize:container.bounds.size];
     quit_view.hidden = NO; [quit_view setNeedsDisplay:YES];
     [menu_window makeFirstResponder:quit_view];
-    fprintf(stderr, "[HOME] quit dialog opened%s\n", black_GameInMission() ? " in a mission" : "");
+    if (quit_restart) fprintf(stderr, "[CHECKPOINT] restart question opened\n");
+    else fprintf(stderr, "[HOME] quit dialog opened%s\n", black_GameInMission() ? " in a mission" : "");
 }
 static void quit_choose(int index)
 {
@@ -2044,6 +2060,10 @@ static void quit_choose(int index)
         if (!black_GamePaused()) black_InputPulseStart();
         fprintf(stderr, "[HOME] quit to main menu requested\n");
     } else if (option == QUIT_GAME) request_quit();
+    else if (option == QUIT_RESTART) {
+        black_CheckpointConfirmRestart();
+        fprintf(stderr, "[CHECKPOINT] restart confirmed\n");
+    }
 }
 /* Pad and keyboard commands while the dialog is up. */
 static void quit_command(unsigned command)
@@ -2340,7 +2360,8 @@ void black_MenuPump(void)
         if (quit_closing && now - quit_closed >= 0.14) { quit_view.hidden = YES; quit_closing = 0; }
         else if (quit_closing || now - quit_opened < 0.25 || now - quit_moved < 0.15) [quit_view setNeedsDisplay:YES];
     }
-    if (command & BLACK_MENU_QUIT) { quit_open(); command = 0; }
+    if (command & BLACK_MENU_QUIT) { quit_restart = 0; quit_open(); command = 0; }
+    if (command & BLACK_MENU_RESTART) { if (!black_SettingsPanelOpen()) { quit_restart = 1; quit_open(); } command &= ~(unsigned)BLACK_MENU_RESTART; }
     if (black_QuitDialogOpen()) { if (command) quit_command(command); command = 0; }
     if (command & BLACK_MENU_TOGGLE) set_open(!black_SettingsPanelOpen());
     else if (command & BLACK_MENU_BACK) {

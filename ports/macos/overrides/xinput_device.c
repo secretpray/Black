@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "port_menu.h"
+#include "game_checkpoint.h"
 #include "controller_monitor.h"
 #include "flash_menu.h"
 #include "input_profile.h"
@@ -98,6 +99,13 @@ static int black_menu_input(DWORD port, XBOX_INPUT_STATE *state)
     for (int i = 0; i < 8; ++i) analog |= g->bAnalogButtons[i];
     if (g->wButtons || analog || abs(g->sThumbLX) > 8000 || abs(g->sThumbLY) > 8000 ||
         abs(g->sThumbRX) > 8000 || abs(g->sThumbRY) > 8000) down |= BLACK_PAD_HELD;
+    /* Back + Y in a mission: restart from the on-disk checkpoint. The physical
+     * layout, not the remap, so a rebound Y cannot fire it; the settings panel
+     * uses Y alone and is excluded inside the request. */
+    static int restart_combo;
+    int restart = (g->wButtons & XBOX_GAMEPAD_BACK) && g->bAnalogButtons[XBOX_BUTTON_Y] > 32;
+    if (restart && !restart_combo) black_CheckpointRequestRestart();
+    restart_combo = restart;
     int instance = g_pads[0] && g_controller_connected[0] ?
         SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(g_pads[0])) : -1;
     if (instance != navigation_instance) {

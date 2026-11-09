@@ -13,7 +13,8 @@ set(BLACK_RENAMED
     # Mods page (ports/macos/overrides/game_mods.c): bullet hit, weapon update
     "sub_001E74B0|black_OriginalBulletHit" "sub_001EEFD0|black_OriginalWeaponUpdate"
     # Checkpoints (game_checkpoint_hooks.c): the title's own capture
-    "sub_001C8D20|black_OriginalCheckpointCapture")
+    "sub_001C8D20|black_OriginalCheckpointCapture"
+    "sub_00124190|black_OriginalRestartMission" "sub_00124250|black_OriginalRestartLevel")
 foreach(pair IN LISTS BLACK_RENAMED)
     string(REPLACE "|" ";" symbols "${pair}")
     list(GET symbols 0 old)
@@ -25,6 +26,7 @@ set(BLACK_FOUND_HUD_ITEM 0)
 set(BLACK_FOUND_STICK_LOOK 0)
 set(BLACK_FOUND_MOUSE_LOOK 0)
 set(BLACK_FOUND_FLASH_MENU 0)
+set(BLACK_FOUND_CP_CONFIRM 0)
 set(BLACK_FOUND_FLASH_NAME 0)
 set(BLACK_FOUND_PICKUP_TEXT 0)
 foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER MOD_RECOIL)
@@ -49,6 +51,19 @@ foreach(source IN LISTS BLACK_GENERATED)
         math(EXPR BLACK_FOUND_FLASH_MENU "${BLACK_FOUND_FLASH_MENU} + ${flash_matches}")
         string(REPLACE "${flash_anchor}" "loc_00124374: ;\n    black_GameMenu(ebp);\n    _fa = (uint32_t)(MEM32(ebp + 0x3884))" edited "${edited}")
         string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_GameMenu(uint32_t);" edited "${edited}")
+    endif()
+    # The checkpoint item's CONFIRM is read before the page's script gets the
+    # front end's input queue (game_flash.c black_GameCheckpointConfirm).
+    set(cp_confirm_anchor "loc_00124369: ;\n    eax = ebp + 0x44C;")
+    string(REPLACE "${cp_confirm_anchor}" "" without_cp_confirm "${edited}")
+    string(LENGTH "${edited}" before_length)
+    string(LENGTH "${without_cp_confirm}" after_length)
+    string(LENGTH "${cp_confirm_anchor}" anchor_length)
+    math(EXPR cp_confirm_matches "(${before_length} - ${after_length}) / ${anchor_length}")
+    if(cp_confirm_matches GREATER 0)
+        math(EXPR BLACK_FOUND_CP_CONFIRM "${BLACK_FOUND_CP_CONFIRM} + ${cp_confirm_matches}")
+        string(REPLACE "${cp_confirm_anchor}" "loc_00124369: ;\n    black_GameCheckpointConfirm(ebp);\n    eax = ebp + 0x44C;" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_GameCheckpointConfirm(uint32_t);" edited "${edited}")
     endif()
     set(pickup_anchor "loc_00132AB7: ;\n    MEM8(esi + 0x1D) = LO8(eax);")
     string(FIND "${edited}" "${pickup_anchor}" pickup_position)
@@ -329,6 +344,10 @@ endif()
 
 if(NOT BLACK_FOUND_FLASH_MENU EQUAL 1)
     message(FATAL_ERROR "Expected exactly one verified Flash menu hook at 0x124374")
+endif()
+
+if(NOT BLACK_FOUND_CP_CONFIRM EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified checkpoint confirm hook at 0x124369")
 endif()
 
 if(NOT BLACK_FOUND_FLASH_NAME EQUAL 1)

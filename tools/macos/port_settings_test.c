@@ -1,6 +1,7 @@
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/game_mods.h"
+#include "../../ports/macos/overrides/game_checkpoint.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +94,13 @@ int main(int argc, char **argv)
     if (child(argv[0], "checkpoints", path) || !black_SettingsSetSaveCheckpoints(0) ||
         !child(argv[0], "checkpoints", path) || !black_SettingsSetSaveCheckpoints(1) ||
         child(argv[0], "checkpoints", path)) return 39;
+    /* They follow the game's own Autosave: unknown until read, then its value. */
+    if (black_CheckpointAutosave() != -1 || !black_CheckpointsActive()) return 40;
+    black_CheckpointSetAutosave(0);
+    if (black_CheckpointsActive() || black_CheckpointResumeOffer() || black_CheckpointTakeRestart(1)) return 41;
+    black_CheckpointSetAutosave(1);
+    if (!black_CheckpointsActive() || !black_SettingsSetSaveCheckpoints(0) || black_CheckpointsActive() ||
+        !black_SettingsSetSaveCheckpoints(1)) return 42;
     if (!black_SettingsSetRenderScale(3) || !black_SettingsSetFov(85) || child(argv[0], "graphics", path)) return 13;
     if (black_SettingsSetRenderScale(0) || black_SettingsSetRenderScale(7) ||
         black_SettingsSetFov(44) || black_SettingsSetFov(141) || child(argv[0], "graphics", path)) return 14;

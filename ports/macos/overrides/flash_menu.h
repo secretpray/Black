@@ -14,6 +14,9 @@ typedef struct {
     uint32_t (*alloc)(void *, size_t);
     void (*trace)(void *, const char *, uint32_t, unsigned);
     int debug;
+    /* The title menu's checkpoint item: 1 when the save this profile plays has
+     * a checkpoint to resume; prepare asks the game to resume it. */
+    int (*checkpoint)(void *, int prepare);
 } BlackFlashApi;
 typedef struct {
     BlackFlashApi api;
@@ -22,8 +25,21 @@ typedef struct {
     unsigned reads, calls, name_gate;
     int fault, seen_pointer;
     char logged_name[64];
+    uint32_t cp_list, cp_button, cp_names, cp_stock;
+    int cp_offer, cp_checked, cp_linked, cp_panel, cp_reported, cp_stock_named;
+    uint32_t cp_row_list, cp_row, cp_row_on, cp_row_off;
+    int cp_row_linked, cp_row_failed, cp_row_value;
+    float cp_row_dy;
 } BlackFlashMenu;
 void black_FlashMenuTick(BlackFlashMenu *, uint32_t ui, BlackFlashPointer);
+/* The title menu's resume item, on every front-end tick; confirm runs where the
+ * input queue is read, before the page's script takes it. */
+void black_FlashCheckpointItem(BlackFlashMenu *, uint32_t ui);
+int black_FlashCheckpointConfirm(BlackFlashMenu *, uint32_t ui);
+/* Profile options' Checkpoints row under Autosave: every front-end tick, and
+ * its input (1 when taken) where the queue is read. */
+void black_FlashCheckpointRow(BlackFlashMenu *, uint32_t ui);
+int black_FlashCheckpointRowInput(BlackFlashMenu *, uint32_t ui, uint32_t input);
 void black_FlashNameTick(BlackFlashMenu *, uint32_t ui);
 int black_FlashPauseQuit(BlackFlashMenu *, uint32_t ui);
 int black_FlashOnPage(BlackFlashMenu *, uint32_t ui, const char *name);

@@ -127,6 +127,7 @@ target_link_libraries(black-save-profiles PRIVATE "-framework Foundation")
 add_test(NAME macos_save_profiles COMMAND black-save-profiles)
 add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/port_settings.c ports/macos/overrides/keyboard_mouse.c
+    ports/macos/overrides/game_checkpoint.c
     ports/macos/overrides/flash_input.c ports/macos/overrides/input_profile.c)
 target_link_libraries(black-port-settings PRIVATE Threads::Threads)
 add_test(NAME macos_port_settings COMMAND black-port-settings)
@@ -195,7 +196,8 @@ target_compile_definitions(black-flash-call PRIVATE BLACK_HINT_WRAPPER_SOURCE="$
 add_test(NAME macos_flash_call COMMAND black-flash-call)
 add_executable(black-flash-menu-asan tools/macos/flash_menu_test.c
     ports/macos/overrides/flash_menu.c ports/macos/overrides/flash_input.c
-    ports/macos/overrides/keyboard_mouse.c ports/macos/overrides/port_settings.c ports/macos/overrides/input_profile.c)
+    ports/macos/overrides/keyboard_mouse.c ports/macos/overrides/port_settings.c ports/macos/overrides/input_profile.c
+    ports/macos/overrides/game_checkpoint.c)
 target_compile_options(black-flash-menu-asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 target_link_options(black-flash-menu-asan PRIVATE -fsanitize=address)
 target_link_libraries(black-flash-menu-asan PRIVATE Threads::Threads)

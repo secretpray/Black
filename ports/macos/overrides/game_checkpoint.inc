@@ -2,11 +2,13 @@
  * checkpoint. A POSIX port of portingpete/Black-2006-Recomp
  * src/black_checkpoint.inc (MIT). No guest pointers are serialized. Loading
  * runs after Guns/LevelDat are ready and before either initial streaming unit
- * starts (1EDC90:1EE310); the title's own death/Continue then owns the
- * restore. A successful profile autosave (1FE713) stores the surviving
- * checkpoints under the profile's new date, and the Saves page reads and
- * removes each slot's files by its save stamp and player name (every slot of
- * a profile carries the same name). */
+ * starts (1EDC90:1EE310), and only for a load that asked for it: the title
+ * menu's Continue Mission item or F9 / Back + Y. The title's own starts and
+ * restarts begin the mission from its start, as on the console, and its
+ * death/Continue keeps owning the in-memory checkpoint. A successful profile
+ * autosave (1FE713) stores the surviving checkpoints under the profile's new
+ * date, and the Saves page reads and removes each slot's files by its save
+ * stamp and player name (every slot of a profile carries the same name). */
 #include "game_checkpoint.h"
 #include "black_profile.h"
 #include <dirent.h>
@@ -14,6 +16,7 @@
 #include <fcntl.h>
 #include <fenv.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +59,11 @@ typedef struct BlackCheckpointContext {
 } BlackCheckpointContext;
 
 static char black_cp_root[BLACK_CP_PATH_MAX];
+#if defined(__APPLE__)
+#define BLACK_CP_MTIME(status) ((status)->st_mtimespec)
+#else
+#define BLACK_CP_MTIME(status) ((status)->st_mtim)
+#endif
 
 static int black_cp_ram_span(uint32_t address, uint32_t bytes)
 {
@@ -88,6 +96,46 @@ static uint32_t black_cp_hash(const void *data, size_t length)
     uint32_t hash = 2166136261u;
     while (length--) hash = (hash ^ *p++) * 16777619u;
     return hash;
+}
+
+/* The title writes a save's date into the slot copy it saves (0x1F1A00 on
+ * that buffer, from 0x1FB3F0), never into the profile it plays: until the
+ * profile is loaded again the running title knows it by the old date, while
+ * the files, the Saves page and the next launch go by the new one. A profile
+ * save records that pair here, for this launch only, and every name built
+ * from the playing profile goes through it. Game thread only. */
+#define BLACK_CP_ALIASES 8u
+static struct { uint32_t memory, saved, name; } black_cp_alias[BLACK_CP_ALIASES];
+static unsigned black_cp_alias_next;
+
+static uint32_t black_cp_disk_stamp(uint32_t memory, const uint8_t *name)
+{
+    const uint32_t hash = black_cp_hash(name, 80u);
+    for (unsigned i = 0; i < BLACK_CP_ALIASES; ++i)
+        if (black_cp_alias[i].saved && black_cp_alias[i].memory == memory && black_cp_alias[i].name == hash)
+            return black_cp_alias[i].saved;
+    return memory;
+}
+
+static void black_cp_alias_set(uint32_t memory, uint32_t saved, const uint8_t *name)
+{
+    const uint32_t hash = black_cp_hash(name, 80u);
+    unsigned at = black_cp_alias_next % BLACK_CP_ALIASES;
+    for (unsigned i = 0; i < BLACK_CP_ALIASES; ++i)
+        if (black_cp_alias[i].saved && black_cp_alias[i].memory == memory && black_cp_alias[i].name == hash) {
+            black_cp_alias[i].saved = saved;
+            return;
+        }
+    black_cp_alias[at].memory = memory;
+    black_cp_alias[at].saved = saved;
+    black_cp_alias[at].name = hash;
+    ++black_cp_alias_next;
+}
+
+/* The playing profile's stamp as its files carry it. */
+static uint32_t black_cp_profile_stamp(const BlackCheckpointContext *c)
+{
+    return black_cp_disk_stamp(black_cp_r32(c->profile), black_cp_memory(c->profile + 8u));
 }
 
 /* $XDG_DATA_HOME/xboxrecomp/Checkpoints, beside the saves. */
@@ -185,7 +233,7 @@ static int black_cp_context(BlackCheckpointContext *c, int buffers)
 static int black_cp_path(const BlackCheckpointContext *c, char *path, size_t size)
 {
     return snprintf(path, size, "%s/%08X-%08X-%u-%u-%u.bin", black_cp_root,
-        black_cp_r32(c->profile), black_cp_hash(black_cp_memory(c->profile + 8u), 80u),
+        black_cp_profile_stamp(c), black_cp_hash(black_cp_memory(c->profile + 8u), 80u),
         black_cp_r32(c->main + 0x2014Cu), black_cp_memory(c->core)[0x5AECu],
         black_cp_memory(c->core)[0x5AEDu]) > 0;
 }
@@ -197,7 +245,9 @@ static void black_cp_record_path(const BlackCheckpoint *cp, char *path, size_t s
         black_cp_hash(cp->name, 80u), cp->difficulty, cp->level, cp->stage);
 }
 
-static int black_cp_write(const char *path, BlackCheckpoint *cp)
+/* `keep` (or NULL for now) is the capture time the file carries: the newest
+ * record of a slot is chosen by it, so a copy keeps its original's. */
+static int black_cp_write(const char *path, BlackCheckpoint *cp, const struct stat *keep)
 {
     char temporary[BLACK_CP_PATH_MAX + 32];
     ssize_t written;
@@ -214,6 +264,10 @@ static int black_cp_write(const char *path, BlackCheckpoint *cp)
     if (ok) {
         ok = rename(temporary, path) == 0;
         /* A failed replacement retains the last complete checkpoint. */
+        if (ok && keep) {
+            struct timespec times[2] = {BLACK_CP_MTIME(keep), BLACK_CP_MTIME(keep)};
+            utimensat(AT_FDCWD, path, times, 0);
+        }
         if (ok) black_cp_sync_parent(path);
     }
     if (!ok) unlink(temporary);
@@ -242,7 +296,7 @@ static void black_cp_identity(BlackCheckpoint *cp, const BlackCheckpointContext 
     memset(cp, 0, sizeof(*cp));
     cp->magic = 0x50434C42u; /* BLCP */
     cp->version = 2;
-    cp->profile_stamp = black_cp_r32(c->profile);
+    cp->profile_stamp = black_cp_profile_stamp(c);
     cp->level = black_cp_memory(c->core)[0x5AECu];
     cp->stage = black_cp_memory(c->core)[0x5AEDu];
     cp->difficulty = black_cp_r32(c->main + 0x2014Cu);
@@ -290,7 +344,7 @@ static void black_cp_save(void)
     }
     black_cp_path(&c, path, sizeof path);
     {
-        const int saved = black_cp_write(path, cp);
+        const int saved = black_cp_write(path, cp, NULL);
         fprintf(stderr, "[CHECKPOINT] %s level=%u stage=%u difficulty=%u unit=%u bytes=%zu\n",
             saved ? "saved" : "SAVE FAILED", cp->level, cp->stage, cp->difficulty, cp->unit, sizeof(*cp));
     }
@@ -315,7 +369,7 @@ static int black_cp_valid(const BlackCheckpoint *cp, const BlackCheckpointContex
 {
     uint32_t i, value;
     if (cp->magic != 0x50434C42u || cp->version != 2u ||
-        cp->profile_stamp != black_cp_r32(c->profile) ||
+        cp->profile_stamp != black_cp_profile_stamp(c) ||
         cp->campaign_hash != black_cp_hash(black_cp_memory(c->profile + 92u), 1024u) ||
         memcmp(cp->name, black_cp_memory(c->profile + 8u), 80) ||
         cp->level != black_cp_memory(c->core)[0x5AECu] ||
@@ -344,6 +398,31 @@ static int black_cp_valid(const BlackCheckpoint *cp, const BlackCheckpointContex
     return 1;
 }
 
+/* The one load the file is restored for: the title's Continue Mission item
+ * or F9 / Back + Y name the mission; the next load hook takes it whatever it
+ * loads, so a different mission or the title's own start never restores. */
+static struct { int armed; uint32_t level, difficulty; } black_cp_armed;
+
+static void black_cp_arm(uint32_t level, uint32_t difficulty)
+{
+    black_cp_armed.level = level;
+    black_cp_armed.difficulty = difficulty;
+    black_cp_armed.armed = 1;
+}
+
+static int black_cp_armed_for(const BlackCheckpointContext *c)
+{
+    return black_cp_armed.armed && black_cp_armed.level == black_cp_memory(c->core)[0x5AECu] &&
+        black_cp_armed.difficulty == black_cp_r32(c->main + 0x2014Cu);
+}
+
+/* This mission's file, whole and valid for the loaded mission; 1 when it is. */
+static int black_cp_check(const BlackCheckpointContext *c, BlackCheckpoint *cp)
+{
+    char path[BLACK_CP_PATH_MAX];
+    return black_cp_path(c, path, sizeof path) && black_cp_read(path, cp) && black_cp_valid(cp, c);
+}
+
 /* Runs after the mission's tables exist and before its first streaming unit
  * reads the unit fields, so the title streams the checkpoint unit itself.
  * Everything is validated first; only current allocations are written. */
@@ -351,31 +430,25 @@ static void black_cp_load(uint32_t core)
 {
     BlackCheckpointContext c;
     BlackCheckpoint *cp;
-    char path[BLACK_CP_PATH_MAX];
-    FILE *file;
-    uint32_t checksum, parity;
-    int complete;
+    uint32_t parity;
     const int trace = getenv("RECOMP_BLACK_CHECKPOINT_TRACE") != NULL;
+    const uint8_t live = black_cp_memory(0x2F3BF8u)[0];
+    const int context = !live && black_cp_context(&c, 1) && core == c.core;
+    const int asked = context && black_cp_armed_for(&c);
+    black_cp_armed.armed = 0;
     /* A live checkpoint is already authoritative, including after death. */
-    if (black_cp_memory(0x2F3BF8u)[0] || !black_cp_context(&c, 1) || core != c.core) {
-        if (trace) fprintf(stderr, "[CHECKPOINT_TRACE] load skipped: live=%u context=%d\n",
-            black_cp_memory(0x2F3BF8u)[0], c.profile != 0u);
-        return;
-    }
-    black_cp_path(&c, path, sizeof path);
-    file = fopen(path, "rb");
-    if (!file) {
-        if (trace) fprintf(stderr, "[CHECKPOINT_TRACE] no checkpoint file for this mission\n");
+    if (!context || !asked) {
+        if (trace) fprintf(stderr, "[CHECKPOINT_TRACE] load skipped: live=%u context=%d asked=%d\n",
+            live, context, asked);
         return;
     }
     cp = (BlackCheckpoint *)malloc(sizeof(*cp));
-    if (!cp) { fclose(file); return; }
-    complete = fread(cp, 1, sizeof(*cp), file) == sizeof(*cp) && fgetc(file) == EOF && !ferror(file);
-    fclose(file);
-    checksum = complete ? cp->checksum : 0u;
-    if (complete) cp->checksum = 0;
-    if (!complete || black_cp_hash(cp, sizeof(*cp)) != checksum || !black_cp_valid(cp, &c)) {
-        fprintf(stderr, "[CHECKPOINT] ignored incompatible or incomplete checkpoint\n");
+    if (!cp) return;
+    if (!black_cp_check(&c, cp)) {
+        char path[BLACK_CP_PATH_MAX];
+        black_cp_path(&c, path, sizeof path);
+        fprintf(stderr, "[CHECKPOINT] no valid checkpoint to restore (%s, memory stamp %08X)\n",
+            path, black_cp_r32(c.profile));
         free(cp);
         return;
     }
@@ -404,6 +477,76 @@ static void black_cp_load(uint32_t core)
     fprintf(stderr, "[CHECKPOINT] restored level=%u stage=%u difficulty=%u unit=%u\n",
         cp->level, cp->stage, cp->difficulty, cp->unit);
     free(cp);
+}
+
+/* A restart from the checkpoint, in two steps: F9 or Back + Y only ask; the
+ * game's own Flash tick checks the run (a mission whose run has a checkpoint,
+ * the live flag, and whose file is whole and valid) and has the panel ask the
+ * player; a confirmed restart is checked again, arms the load and runs the
+ * pause menu's own restart (RestartLevel). Anything else would restart from
+ * the mission's start and lose the run. */
+enum { BLACK_CP_RESTART_NONE, BLACK_CP_RESTART_ASK, BLACK_CP_RESTART_GO };
+static atomic_int black_cp_restart_request, black_cp_restart_confirmed;
+
+static void black_cp_restart_ask(void)
+{
+    atomic_store(&black_cp_restart_request, 1);
+}
+
+static void black_cp_restart_confirm(void)
+{
+    atomic_store(&black_cp_restart_confirmed, 1);
+}
+
+static void black_cp_restart_clear(void)
+{
+    atomic_store(&black_cp_restart_request, 0);
+    atomic_store(&black_cp_restart_confirmed, 0);
+}
+
+static int black_cp_restart_valid(int in_mission, BlackCheckpointContext *c)
+{
+    BlackCheckpoint *cp;
+    int valid;
+    black_cp_root_ready();
+    if (!in_mission || !black_cp_memory(0x2F3BF8u)[0] || !black_cp_context(c, 1)) {
+        fprintf(stderr, "[CHECKPOINT] restart: this run has no checkpoint yet\n");
+        return 0;
+    }
+    cp = (BlackCheckpoint *)malloc(sizeof(*cp));
+    valid = cp && black_cp_check(c, cp);
+    free(cp);
+    if (!valid) fprintf(stderr, "[CHECKPOINT] restart: no valid checkpoint file for this mission\n");
+    return valid;
+}
+
+/* NONE, ASK (open the confirmation) or GO (armed: run RestartLevel). */
+static int black_cp_restart_take(int in_mission)
+{
+    BlackCheckpointContext c;
+    if (atomic_exchange(&black_cp_restart_confirmed, 0)) {
+        atomic_store(&black_cp_restart_request, 0);
+        if (!black_cp_restart_valid(in_mission, &c)) return BLACK_CP_RESTART_NONE;
+        black_cp_arm(black_cp_memory(c.core)[0x5AECu], black_cp_r32(c.main + 0x2014Cu));
+        return BLACK_CP_RESTART_GO;
+    }
+    if (!atomic_exchange(&black_cp_restart_request, 0)) return BLACK_CP_RESTART_NONE;
+    return black_cp_restart_valid(in_mission, &c) ? BLACK_CP_RESTART_ASK : BLACK_CP_RESTART_NONE;
+}
+
+/* The title's own RestartMission (Mission Failed) and RestartLevel (pause)
+ * clear the live checkpoint and set the first unit: a restart from the
+ * mission's start, which its confirmation says. The file goes with it,
+ * unless F9 / Back + Y armed this restart to come back to it. */
+static void black_cp_native_restart(void)
+{
+    BlackCheckpointContext c;
+    char path[BLACK_CP_PATH_MAX];
+    if (!black_cp_context(&c, 0)) return;
+    if (black_cp_armed_for(&c)) return;
+    black_cp_armed.armed = 0;
+    if (black_cp_path(&c, path, sizeof path) && unlink(path) == 0)
+        fprintf(stderr, "[CHECKPOINT] discarded: the mission restarts from its start\n");
 }
 
 /* The save file's slot identity: its stamp at +0xC8 and the player name at
@@ -452,7 +595,7 @@ typedef struct {
     const uint8_t *name;
     uint32_t stamp;
     BlackCheckpoint *best;
-    time_t newest;
+    struct timespec newest;
     int found;
 } BlackCpSlotScan;
 
@@ -462,15 +605,17 @@ static void black_cp_slot_visit(const char *path, BlackCheckpoint *cp, const str
     (void)path;
     if (cp->magic != 0x50434C42u || cp->version != 2u || cp->unit < 2u ||
         cp->profile_stamp != scan->stamp || memcmp(cp->name, scan->name, 80u)) return;
-    if (scan->found && status->st_mtime <= scan->newest) return;
-    scan->found = 1; scan->newest = status->st_mtime; *scan->best = *cp;
+    const struct timespec when = BLACK_CP_MTIME(status);
+    if (scan->found && (when.tv_sec < scan->newest.tv_sec ||
+        (when.tv_sec == scan->newest.tv_sec && when.tv_nsec <= scan->newest.tv_nsec))) return;
+    scan->found = 1; scan->newest = when; *scan->best = *cp;
 }
 
 static int black_cp_slot_scan(const uint8_t *profile, int slot, BlackCheckpoint *best)
 {
     const uint8_t *name = black_cp_slot_name(profile, slot);
     const uint32_t stamp = black_cp_slot_stamp(profile, slot);
-    BlackCpSlotScan scan = {name, stamp, best, 0, 0};
+    BlackCpSlotScan scan = {name, stamp, best, {0, 0}, 0};
     /* A slot that the game has not saved yet has no records of its own. */
     if (!name || !stamp) return 0;
     black_cp_each(black_cp_slot_visit, &scan);
@@ -519,6 +664,67 @@ int black_CheckpointRemoveSlot(const uint8_t *profile, int slot)
     return removed;
 }
 
+/* The title's checkpoint item: the active save slot's newest record, valid
+ * for this profile (the same identity the load hook requires) and for a
+ * mission the title has unlocked (the check the title's start action makes).
+ * The unlock byte sits at +0x1A of each 32-byte campaign record. */
+static int black_cp_resume_unlocked(uint32_t level, uint32_t difficulty)
+{
+    int index = -1, i;
+    uint32_t at;
+    if (difficulty > 3u || level > 8u || !black_cp_ram_span(0x288648u, 8u)) return 0;
+    for (i = 0; i < 8; ++i)
+        if ((uint8_t)black_cp_memory(0x288648u)[i] == (uint8_t)level) { index = i; break; }
+    if (index < 0) return 0;
+    at = 0x2D0D9Eu + ((uint32_t)(index + (int)difficulty * 8) << 5);
+    return black_cp_ram_span(at, 1u) && black_cp_memory(at)[0] == 1u;
+}
+
+static int black_cp_resume_find(BlackCheckpoint *cp)
+{
+    BlackCheckpointContext c;
+    uint32_t manager, slot;
+    if (!black_cp_profile_context(&c)) return 0;
+    manager = black_cp_r32(0x2D19BCu);
+    if (!black_cp_ram_span(manager + 0x524u, 4u) ||
+        !black_cp_ram_span(manager + 0x1268u, BLACK_PROFILE_SIZE)) return 0;
+    slot = black_cp_r32(manager + 0x524u);
+    if (slot > 2u) return 0;
+    if (!black_cp_slot_scan(black_cp_memory(manager + 0x1268u), (int)slot, cp)) return 0;
+    if (cp->profile_stamp != black_cp_profile_stamp(&c) ||
+        cp->campaign_hash != black_cp_hash(black_cp_memory(c.profile + 92u), 1024u) ||
+        memcmp(cp->name, black_cp_memory(c.profile + 8u), 80u) ||
+        !cp->stage || cp->unit < 2u) return 0;
+    return black_cp_resume_unlocked(cp->level, cp->difficulty);
+}
+
+static int black_cp_resume_offer(void)
+{
+    BlackCheckpoint cp;
+    return black_cp_resume_find(&cp);
+}
+
+/* The title's start action (0x124CF0) reads these fields and then asks the
+ * front end to leave for FMVPlayer; the live flag would make the load hook
+ * keep a checkpoint the previous mission captured instead of this file. */
+static int black_cp_resume_prepare(void)
+{
+    BlackCheckpoint cp;
+    uint32_t main;
+    if (!black_cp_resume_find(&cp)) return 0;
+    main = black_cp_r32(0x2D45F0u);
+    if (!black_cp_ram_span(main, 0x21090u)) return 0;
+    black_cp_memory(main)[0x2020Cu] = (uint8_t)cp.level;
+    black_cp_memory(main)[0x2020Du] = (uint8_t)cp.unit;
+    black_cp_memory(main)[0x2020Eu] = (uint8_t)cp.stage;
+    black_cp_w32(main + 0x2014Cu, cp.difficulty);
+    black_cp_memory(0x2F3BF8u)[0] = 0;
+    black_cp_arm(cp.level, cp.difficulty);
+    fprintf(stderr, "[CHECKPOINT] title resume level=%u stage=%u difficulty=%u unit=%u\n",
+        cp.level, cp.stage, cp.difficulty, cp.unit);
+    return 1;
+}
+
 /* A successful profile autosave gives the on-disk profile a new date. Store
  * the surviving checkpoints under that date too, so the next launch finds
  * them, and retire the ones whose campaign results the save replaced. The
@@ -526,27 +732,25 @@ int black_CheckpointRemoveSlot(const uint8_t *profile, int slot)
  * that date's records belong to the slot being saved. */
 typedef struct {
     const uint8_t *name;
-    uint32_t memory_stamp, saved_stamp, campaign;
+    uint32_t memory_stamp, disk_stamp, saved_stamp, campaign;
 } BlackCpRebind;
 
 static void black_cp_rebind_visit(const char *path, BlackCheckpoint *cp, const struct stat *status, void *data)
 {
     BlackCpRebind *rebind = (BlackCpRebind *)data;
     char copy[BLACK_CP_PATH_MAX];
-    (void)status;
-    if (cp->profile_stamp != rebind->memory_stamp ||
+    if (cp->profile_stamp != rebind->disk_stamp ||
         memcmp(cp->name, rebind->name, 80u)) return;
     if (cp->campaign_hash != rebind->campaign) { unlink(path); return; }
     cp->profile_stamp = rebind->saved_stamp;
     black_cp_record_path(cp, copy, sizeof copy);
-    if (!black_cp_write(copy, cp)) {
+    if (!black_cp_write(copy, cp, status)) {
         fprintf(stderr, "[CHECKPOINT] profile-save rebinding failed\n");
         return;
     }
-    /* The title keeps writing under its old date until it reloads the
-     * profile, but the menu and the next launch look under the new one:
-     * leaving this copy would hide one file per save from the slot's delete.
-     * A later capture writes it afresh and is rebound by the next save. */
+    /* The menu and the next launch look under the new date, and this launch
+     * reaches the copy through the alias (black_cp_disk_stamp); a copy left
+     * under the old date would hide from the slot's delete. */
     if (strcmp(path, copy)) unlink(path);
 }
 
@@ -564,13 +768,16 @@ static void black_cp_profile_saved(uint32_t controller)
     payload = controller + 4712u + slot * 1912u;
     rebind.name = black_cp_memory(profile + 8u);
     rebind.memory_stamp = black_cp_r32(profile);
+    rebind.disk_stamp = black_cp_disk_stamp(rebind.memory_stamp, rebind.name);
     rebind.saved_stamp = black_cp_r32(payload + 0xC8u);
     rebind.campaign = black_cp_hash(black_cp_memory(payload + 0x124u), 1024u);
     if (black_cp_r32(payload) != 38u || black_cp_memory(payload)[0x76Du] ||
         !rebind.memory_stamp || !rebind.saved_stamp ||
-        rebind.memory_stamp == rebind.saved_stamp ||
+        rebind.disk_stamp == rebind.saved_stamp ||
         memcmp(rebind.name, black_cp_memory(payload + 0xD0u), 80u)) return;
     black_cp_each(black_cp_rebind_visit, &rebind);
+    if (rebind.memory_stamp != rebind.saved_stamp)
+        black_cp_alias_set(rebind.memory_stamp, rebind.saved_stamp, rebind.name);
 }
 
 /* All hooks are game-thread calls. Preserve the caller's complete FP controls
@@ -589,6 +796,7 @@ static void black_cp_event(uint32_t event, uint32_t core)
     black_cp_root_ready();
     if (event == 1u) black_cp_save();
     else if (event == 2u) black_cp_load(core);
+    else if (event == 3u) black_cp_native_restart();
     else if (event == 4u) black_cp_profile_saved(core);
     fesetenv(&environment);
 #if defined(__x86_64__)

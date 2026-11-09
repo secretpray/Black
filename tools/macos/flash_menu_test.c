@@ -11,6 +11,11 @@ static unsigned char ram[0x600000];
 static uint32_t cursor=0x10000,ui,display,root,list,b1,b2,c1,c2;
 static unsigned calls,confirm_calls,updates;
 static char name[256]="abcd";static int caret=2,max_length=12;
+static int checkpoint_offer,checkpoint_prepared,checkpoint_asked;
+static unsigned resume_calls,run_actions,label_sets,duplicates;
+static char label_text[128];
+static uint32_t last_string,stock_text_field,item_text_field;
+static uint32_t text_anim,lead_clip,stock_clip;
 static int rd(void *p,uint32_t at,void *out,size_t n)
 {(void)p;if(at<0x10000||(uint64_t)at+n>sizeof ram)return 0;memcpy(out,ram+at,n);return 1;}
 static int wr(void *p,uint32_t at,const void *in,size_t n)
@@ -18,6 +23,7 @@ static int wr(void *p,uint32_t at,const void *in,size_t n)
 static uint32_t r(uint32_t at){uint32_t v=0;if(!rd(NULL,at,&v,4))abort();return v;}
 static void w(uint32_t at,uint32_t v){if(!wr(NULL,at,&v,4))abort();}
 static void f(uint32_t at,float v){if(!wr(NULL,at,&v,4))abort();}
+static float rf(uint32_t at){float v=0;if(!rd(NULL,at,&v,4))abort();return v;}
 static uint32_t allocate(void *p,size_t n){(void)p;uint32_t at=cursor;cursor+=(uint32_t)((n+15)&~15);if(cursor>0x200000)abort();return at;}
 static uint32_t object(unsigned type)
 {uint32_t at=allocate(NULL,0x100);w(at,0x500000);w(at+4,(type<<25)|0x10);w(0x50000c,0x200);return at;}
@@ -31,6 +37,16 @@ static void field(uint32_t obj,const char *key,uint32_t value)
 }
 static uint32_t make_clip(float x,float y,float width,float height)
 {uint32_t c=object(0xd);w(c+0x58,0x100000);f(c+0x70,x);f(c+0x74,y);f(c+0x78,x+width);f(c+0x7c,y+height);return c;}
+static uint32_t get(uint32_t obj,const char *key)
+{
+    uint32_t table=r(obj+0x60);if(!table)return 0;
+    unsigned count=r(table);uint32_t entries=r(table+4);
+    for(unsigned i=0;i<count;++i)if(!strcmp((char*)ram+r(entries+i*8)+8,key))return r(entries+i*8+4);
+    return 0;
+}
+static int checkpoint_stub(void *p,int prepare){(void)p;++checkpoint_asked;if(prepare)++checkpoint_prepared;return checkpoint_offer;}
+static const char *label_of(uint32_t text_field)
+{uint32_t string=get(text_field,"variable");return string?(char*)ram+string+8:"";}
 static uint32_t guest_call(void *p,uint32_t target,uint32_t a,uint32_t ec,uint32_t ed,const uint32_t *args,size_t n)
 {
     (void)p;(void)ed;++calls;
@@ -41,6 +57,27 @@ static uint32_t guest_call(void *p,uint32_t target,uint32_t a,uint32_t ec,uint32
         else if(strstr(path,"stringIndex"))snprintf(out,sizeof out,"%d",caret);else snprintf(out,sizeof out,"%s",name);
         strcpy((char*)ram+args[0],out);return 0;}
     if(target==0x101790){if(n!=2||strcmp((char*)ram+args[0],"_level4.FINALRESULTSTRING"))abort();strcpy(name,(char*)ram+args[1]);return 0;}
+    if(target==0x101420&&n==5){ /* title item: a stopped copy of the last label */
+        const char *fn=(char*)ram+args[0];uint32_t data,list,sentinel,vfield,fdata,nametext;
+        if(strcmp(fn,"duplicateMovieClip")||args[2]!=2||strcmp((char*)ram+args[3],"CheckpointButton")||
+            strcmp((char*)ram+args[4],"100")||!strstr((char*)ram+a,".TextAnim."))abort();
+        data=allocate(NULL,0x40);list=allocate(NULL,16);sentinel=allocate(NULL,0x60);
+        vfield=object(0xF);fdata=allocate(NULL,0x40);nametext=allocate(NULL,32);
+        strcpy((char*)ram+nametext+8,"variable");w(fdata+0x1C,nametext);w(vfield+0x48,fdata);
+        w(sentinel+0x50,vfield);w(list,sentinel);w(data+0x24,list);
+        {uint32_t clip=object(0xD);w(clip+0x48,data);w(clip+0x58,0x100000);field(text_anim,"CheckpointButton",clip);}
+        item_text_field=vfield;++duplicates;return 0;
+    }
+    if(target==0x100DB0){ /* SetMember: eax value, edx kept name, object in the args */
+        const char *key=(char*)ram+ed+12;
+        if(!strcmp(key,"variable")){++label_sets;if(a!=last_string)abort();field(args[1],key,a);return 1;}
+        if(ed+12<0x10000)abort();
+        field(args[1],key,a);return 1;
+    }
+    if(target==0xF5600){if(n!=1)abort();snprintf(label_text,sizeof label_text,"%s",(char*)ram+args[0]);
+        last_string=allocate(NULL,160);snprintf((char*)ram+last_string+8,152,"%s",label_text);return last_string;}
+    if(target==0x10F180){if(n!=1||args[0]!=r(0x2ec988))abort();++run_actions;return 0;}
+    if(target==0x124CF0){++resume_calls;strcpy((char*)ram+ui+0x3820,"FMVPlayer");w(ui+0x3884,1);return 0;}
     if(target==0x101420){if(n!=3||strcmp((char*)ram+a,"_level4"))abort();const char *fn=(char*)ram+args[0];
         if(!strcmp(fn,"CursorForward")){++caret;w(ui+0x374,1);}
         else if(!strcmp(fn,"UpdateString")){if(r(ui+0x374))abort();++updates;w(ui+0x374,1);}
@@ -60,10 +97,39 @@ static BlackFlashMenu setup(void)
     root=object(0x12);w(root+0x54,4);w(movies,root);list=object(8);field(root,"MyMenu",list);
     b1=object(8);b2=object(8);c1=make_clip(100,100,150,40);c2=make_clip(100,180,150,40);
     field(b1,"movieClip",c1);field(b2,"movieClip",c2);field(b1,"buttonDown",b2);field(b2,"buttonUp",b1);field(list,"mFocusButton",b1);
-    return (BlackFlashMenu){.api={NULL,rd,wr,guest_call,allocate,NULL}};
+    return (BlackFlashMenu){.api={NULL,rd,wr,guest_call,allocate,NULL,0,checkpoint_stub}};
 }
 static BlackFlashPointer pointer(float x,float y,int click)
 {return (BlackFlashPointer){x/640,y/480,1,click,click,0};}
+static unsigned kind(uint32_t v){return r(v+4)>>25;}
+/* The title menu: Main.TextAnim holds the last stock label, the ring's first
+ * and last buttons sit on the movie, and the button class has the highlight
+ * methods. */
+static void setup_title(void)
+{
+    uint32_t main_object=object(0xC),first=object(8),last=object(8),klass=object(8);
+    black_MenuSetOpen(0);checkpoint_offer=1;checkpoint_prepared=checkpoint_asked=0;
+    resume_calls=run_actions=label_sets=duplicates=0;label_text[0]=0;item_text_field=0;
+    strcpy((char*)ram+ui+0x3840,"blacktitlemenu");
+    field(root,"Main",main_object);
+    text_anim=object(0xC);field(main_object,"TextAnim",text_anim);
+    lead_clip=object(0xD);field(text_anim,"operatorprofile_text",lead_clip);
+    field(root,"continueButton",first);field(root,"profileButton",last);
+    /* The stock Continue's label is its own TextAnim clip, $FE_CONTINUEMISSION. */
+    {
+        uint32_t clip=object(0xD),data=allocate(NULL,0x40),list=allocate(NULL,16),sentinel=allocate(NULL,0x60),nametext=allocate(NULL,32);
+        stock_text_field=object(0xF);
+        strcpy((char*)ram+nametext+8,"variable");
+        w(stock_text_field+0x48,allocate(NULL,0x40));w(r(stock_text_field+0x48)+0x1C,nametext);
+        w(sentinel+0x50,stock_text_field);w(list,sentinel);w(data+0x24,list);w(clip+0x48,data);
+        f(clip+0x1C,100);f(clip+0x20,150);stock_clip=clip;
+        field(text_anim,"continuemission_text",clip);
+    }
+    field(last,"buttonDown",first);field(first,"buttonUp",last);
+    field(first,"HighlightFrame",object(8));field(klass,"HighLight",object(8));field(klass,"UnHighLight",object(8));
+    w(r(first+0x60)+8,klass);
+    field(list,"mFocusButton",last);
+}
 int main(void)
 {
     BlackFlashMenu m=setup();BlackFlashPointer p=pointer(150,200,0);
@@ -94,5 +160,60 @@ int main(void)
     max_length=(int)strlen(name);black_GameTextCharacter('q');black_FlashNameTick(&m,ui);if(strcmp(name,"abzx cd"))return 18;
     black_GameTextCharacter('\r');strcpy((char*)ram+ui+0x3840,"OptionsMenuXbox");black_FlashNameTick(&m,ui);
     if(black_GameTextActive()||black_GameTextTake()!=-1||confirm_calls)return 19; /* queued Enter cannot confirm the next page */
-    puts("Production Flash graph: hover/click/input priority/hidden/cycles/wheel/widescreen/slider; native script text/caret/limits/one-per-tick/page reset: PASS");return 0;
+    /* The checkpoint item: one copy of the last label, under it, linked into
+     * the ring, and resuming through the title's own start action. */
+    m=setup();setup_title();black_FlashCheckpointItem(&m,ui);
+    {
+        uint32_t button=get(text_anim,"CheckpointButton");
+        uint32_t first=get(root,"continueButton"),last=get(root,"profileButton");
+        if(m.fault||!button||kind(button)!=0xD)return 25;
+        if(label_sets!=2||strcmp(label_text,"$FE_STARTMISSION")||
+            strcmp(label_of(item_text_field),"$FE_CONTINUEMISSION")||
+            strcmp(label_of(stock_text_field),"$FE_STARTMISSION")||
+            run_actions!=1||duplicates!=1||checkpoint_asked!=1)return 26;
+        if(get(last,"buttonDown")!=button||get(button,"buttonUp")!=last||
+            get(button,"buttonDown")!=first||get(first,"buttonUp")!=button)return 27;
+        {
+            float y=125.0f;uint32_t bits;
+            memcpy(&bits,&y,4);
+            /* Above the stock Continue row, which the item is ringed to. */
+            if(r(button+0x1C)!=r(stock_clip+0x1C)||r(button+0x20)!=bits||
+                !(rf(button+0x20)<rf(stock_clip+0x20)))return 28;
+        }
+        black_FlashCheckpointItem(&m,ui);if(duplicates!=1)return 29;
+        field(list,"mFocusButton",first);w(ui+0x44c,5);
+        if(black_FlashCheckpointConfirm(&m,ui)||checkpoint_prepared)return 30; /* not on another button */
+        field(list,"mFocusButton",button);w(ui+0x44c,5);
+        if(black_FlashCheckpointConfirm(&m,ui)!=1||checkpoint_prepared!=1||resume_calls!=1)return 31;
+        black_FlashCheckpointItem(&m,ui);if(duplicates!=1||r(ui+0x44c)!=5)return 32; /* the item leaves the queue alone */
+    }
+    /* The file gone by the press: the press is taken, nothing starts, the
+     * item goes on the next tick. */
+    m=setup();setup_title();black_FlashCheckpointItem(&m,ui);
+    {
+        uint32_t button=get(text_anim,"CheckpointButton");int calls=resume_calls;
+        if(!button)return 41;
+        field(list,"mFocusButton",button);w(ui+0x44c,5);checkpoint_offer=0;
+        if(black_FlashCheckpointConfirm(&m,ui)!=1||resume_calls!=calls)return 42;
+        black_FlashCheckpointItem(&m,ui);if(get(button,"buttonDown")==get(root,"continueButton"))return 43;
+        checkpoint_offer=1;
+    }
+    /* Without a resume point, or once it goes away, no item and no focus on it. */
+    m=setup();setup_title();checkpoint_offer=0;black_FlashCheckpointItem(&m,ui);
+    if(get(text_anim,"CheckpointButton")||duplicates||label_sets||get(stock_text_field,"variable"))return 33;
+    m=setup();setup_title();black_FlashCheckpointItem(&m,ui);
+    {
+        uint32_t button=get(text_anim,"CheckpointButton"),first=get(root,"continueButton"),last=get(root,"profileButton");
+        if(!button)return 34;
+        checkpoint_offer=0;field(list,"mFocusButton",button);
+        black_MenuSetOpen(1);black_FlashCheckpointItem(&m,ui);
+        if(get(button,"buttonDown")!=first)return 35; /* open panel: the item is left alone */
+        black_MenuSetOpen(0);black_FlashCheckpointItem(&m,ui);
+        if(get(last,"buttonDown")!=first||get(first,"buttonUp")!=last)return 36;
+        if(get(button,"buttonDown")||get(button,"buttonUp"))return 37;
+        if(r(button+0x58)&0x100000)return 38;
+        if(get(list,"mFocusButton")!=last)return 39;
+        if(label_sets!=3||strcmp(label_of(stock_text_field),"$FE_CONTINUEMISSION"))return 40;
+    }
+    puts("Production Flash graph: hover/click/input priority/hidden/cycles/wheel/widescreen/slider; native script text/caret/limits/one-per-tick/page reset; quick Continue once at the title; checkpoint item made, linked, confirming the title's start, unlinked and hidden without one: PASS");return 0;
 }

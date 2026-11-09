@@ -6,10 +6,13 @@
 #include "flash_menu.h"
 #include "flash_memory.h"
 #include "game_prompts.h"
+#include "game_checkpoint.h"
 #include "hud_prompts.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
+#include "port_menu.h"
 extern uint32_t xbox_HeapAlloc(uint32_t,uint32_t);
 extern size_t g_xbox_total_ram;
 static BlackFlashMenu menu;
@@ -26,9 +29,11 @@ static uint32_t alloc_guest(void *opaque,size_t size)
 #include "flash_guest_call.inc"
 static void trace_guest(void *opaque,const char *page,uint32_t list,unsigned count)
 { (void)opaque;if(getenv("RECOMP_INPUT_DEBUG"))fprintf(stderr,"[FLASH-MENU] page=%s list=%08X reachable=%u\n",page,list,count); }
+static int checkpoint_guest(void *opaque,int prepare)
+{ (void)opaque;return prepare?black_CheckpointResumePrepare():black_CheckpointResumeOffer(); }
 static pthread_once_t api_once = PTHREAD_ONCE_INIT;
 static void initialize_api(void)
-{ menu.api=(BlackFlashApi){NULL,read_guest,write_guest,call_guest,alloc_guest,trace_guest,getenv("RECOMP_INPUT_DEBUG")!=NULL}; prompts.api=menu.api; }
+{ menu.api=(BlackFlashApi){NULL,read_guest,write_guest,call_guest,alloc_guest,trace_guest,getenv("RECOMP_INPUT_DEBUG")!=NULL,checkpoint_guest}; prompts.api=menu.api; }
 static void initialize(void) { pthread_once(&api_once,initialize_api); }
 /* The Home quit dialog's "quit to main menu" (port_menu.m): it sends START
  * unless the pause menu is already up; here, once that page can take a
@@ -59,6 +64,24 @@ static void quit_to_menu(uint32_t ui)
         asked = 0;
     }
 }
+/* F9 or Back + Y asked for a restart from the checkpoint: first the panel
+ * asks the player; once confirmed, the next load is armed for this mission
+ * and the pause menu's own in-mission Restart (RestartLevel) runs here, where
+ * that menu runs it too. It clears the live checkpoint, so the level reload
+ * reaches the load hook, which restores the armed file; unarmed, the same
+ * action restarts from the start. */
+static void restart_tick(void)
+{
+    int take = black_CheckpointTakeRestart(black_GameInMission());
+    if (take == 1) { black_MenuCommand(BLACK_MENU_RESTART); return; }
+    if (take != 2) return;
+    if (!recomp_lookup_manual(0x00124250u) && !recomp_lookup(0x00124250u)) {
+        fprintf(stderr, "[CHECKPOINT] restart: RestartLevel is unavailable\n");
+        return;
+    }
+    fprintf(stderr, "[CHECKPOINT] restart from checkpoint\n");
+    call_guest(NULL,0x00124250u,0u,0u,0u,NULL,0u);
+}
 /* The Saves tab (save_profiles.h): the save manager [0x2D19BC] keeps the
  * profile file's image at +0x1268 (0x1F2F20 marks its slots there) and its
  * autosave slot at +0x524 ("AutoSaveIndex" in its own debug page, 0x2094B0).
@@ -73,11 +96,27 @@ static void saves_tick(uint32_t ui)
     int slot = manager && memory_ok(manager + 0x524, 4) ? (int)MEM32(manager + 0x524) : -1;
     black_SaveGameTick(image, slot, main_menu);
 }
+/* The front end's input queue, read before the page's own script takes it
+ * (the overlay calls this at the title's tick, 0x124369): a CONFIRM on the
+ * checkpoint item resumes here instead. 5 is the front end's confirm. */
+void black_GameCheckpointConfirm(uint32_t ui)
+{
+    if(!memory_ok(ui+0x44C,4)||!MEM32(ui+0x44C))return;
+    uint32_t input=MEM32(ui+0x44C);
+    if(menu.cp_button&&input==5&&black_FlashCheckpointConfirm(&menu,ui)){MEM32(ui+0x44C)=0;return;}
+    /* Profile options' Checkpoints row: left, right and A are its own. */
+    if(menu.cp_row&&black_FlashCheckpointRowInput(&menu,ui,input))MEM32(ui+0x44C)=0;
+}
 void black_GameMenu(uint32_t ui)
 {
     initialize();uint32_t previous_ebp=g_ebp,previous_seh=g_seh_ebp;g_ebp=ui;g_seh_ebp=ui;
+    /* The game's own Autosave (Profile options): the checkpoints' gate. */
+    { uint32_t game=MEM32(0x2D45F0); if(game&&memory_ok(game+0x20164,1))black_CheckpointSetAutosave(MEM8(game+0x20164)==1); }
     black_FlashMenuTick(&menu,ui,black_GamePointerTake());
+    black_FlashCheckpointItem(&menu,ui);
+    black_FlashCheckpointRow(&menu,ui);
     quit_to_menu(ui);
+    restart_tick();
     saves_tick(ui);
     black_PromptTick(&prompts);
     g_ebp=previous_ebp;g_seh_ebp=previous_seh;
@@ -92,12 +131,39 @@ void black_GameNameEntry(uint32_t ui)
     g_ebp=previous_ebp;g_seh_ebp=previous_seh;
 }
 
+/* The front end's string id of a token (its name without '$'): the title's
+ * own table hash, as TGP's options_menu.cpp computes it. */
+static uint32_t token_id(const char *name)
+{
+    uint32_t h=~0u;
+    for(;*name;++name)h=(uint32_t)((int32_t)h>>8)^MEM32(0x2AC908u+((h^(uint8_t)*name)&0xFFu)*4u);
+    return h;
+}
+/* $BLACK_CHECKPOINTS, the Profile options' Checkpoints row (flash_menu.c), in
+ * the game's language: UTF-8, as the Russian bank is built (game_translation.h),
+ * whose Cyrillic the run's fonts carry at its own code points. */
+static uint32_t checkpoints_label(void)
+{
+    static const char *const label[]={"CHECKPOINTS","POINTS DE CONTROLE","CHECKPOINTS","PUNTOS DE CONTROL","CHECKPOINT","ЧЕКПОИНТЫ"};
+    static uint32_t text;
+    if(!text){
+        int language=black_SettingsGameLanguage();
+        if(language<0||language>5)language=0;
+        size_t length=strlen(label[language])+1;
+        text=alloc_guest(NULL,length);
+        if(text)memcpy((void *)XBOX_PTR(text),label[language],length);
+    }
+    return text;
+}
 extern void black_OriginalString(void);
 void sub_001F3A80(void)
 {
     initialize();
     uint32_t id = memory_ok(g_esp+4,4) ? MEM32(g_esp+4) : 0;
+    static uint32_t checkpoints_id;
+    if(!checkpoints_id)checkpoints_id=token_id("BLACK_CHECKPOINTS");
     black_OriginalString();
+    if(id&&id==checkpoints_id){uint32_t text=checkpoints_label();if(text){g_eax=text;return;}}
     static pthread_mutex_t strings_lock = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&strings_lock);
     g_eax = black_PromptString(&prompts,id,g_eax);
