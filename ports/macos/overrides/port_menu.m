@@ -395,6 +395,16 @@ static NSString *duration_text(uint64_t seconds)
     return minutes < 60 ? [NSString stringWithFormat:T(@"%d MIN"), (int)minutes] :
         [NSString stringWithFormat:T(@"%d H %02d MIN"), (int)(minutes / 60), (int)(minutes % 60)];
 }
+/* A run's time as the game's clocks show it: M:SS, or H:MM:SS. */
+static NSString *clock_text(double seconds)
+{
+    long t = seconds > 0 ? (long)(seconds + 0.5) : 0;
+    return t >= 3600 ? [NSString stringWithFormat:@"%ld:%02ld:%02ld", t / 3600, t / 60 % 60, t % 60] :
+        [NSString stringWithFormat:@"%ld:%02ld", t / 60, t % 60];
+}
+/* Tenths of a percent; a dash without shots. */
+static NSString *accuracy_text(int tenths)
+{ return tenths < 0 ? @"—" : [NSString stringWithFormat:@"%d.%d%%", tenths / 10, tenths % 10]; }
 static NSString *date_text(int64_t when)
 {
     time_t t = (time_t)when; struct tm local; char out[32];
@@ -1753,7 +1763,16 @@ static NSAlert *pack_alert;
         else if(selected==ROW_CHECKPOINTS){help=@"WRITES THE GAME'S OWN CHECKPOINT BESIDE THE SAVES AS YOU PLAY. CONTINUE MISSION ON THE TITLE MENU RESUMES IT.";
             detail=checkpoints_locked()?@"NEEDS THE GAME'S AUTOSAVE: OPTIONS > PROFILE > AUTOSAVE ON. THE SAME ROW IS THERE TOO.":
                 @"ON BY DEFAULT, WITH THE GAME'S AUTOSAVE. F9 OR BACK + Y RESTARTS FROM IT IN A MISSION, AFTER A QUESTION.";}
-        else if(selected>=ROW_MISSION_FIRST&&selected<=ROW_MISSION_LAST){help=@"AS THE PROFILE HAS IT. THE GAME CHANGES IT AS YOU PLAY.";detail=@"";}
+        else if(selected>=ROW_MISSION_FIRST&&selected<=ROW_MISSION_LAST){
+            /* The mission's bests and last run, from the slot's record (mission_stats.h). */
+            const BlackMissionBest *b=slot_info_ok[slot_open]?&slot_infos[slot_open].missions[selected-ROW_MISSION_FIRST]:NULL;
+            if(b&&b->completions){
+                help=[NSString stringWithFormat:@"%@ %@ · %@ %d · %@ %@ · %@ %d",T(@"BEST TIME"),clock_text(b->best_seconds),
+                    T(@"FEWEST DEATHS"),b->fewest_deaths,T(@"BEST ACCURACY"),accuracy_text(b->best_accuracy),T(@"COMPLETIONS"),b->completions];
+                detail=[NSString stringWithFormat:@"%@ %@ · %@ %d · %@ %d · %@ %@",T(@"LAST RUN"),clock_text(b->last_seconds),
+                    T(@"DEATHS"),b->last_deaths,T(@"CHECKPOINTS"),b->last_checkpoints,T(@"ACCURACY"),accuracy_text(b->last_accuracy)];
+            }else{help=@"AS THE PROFILE HAS IT. THE GAME CHANGES IT AS YOU PLAY.";detail=@"BEST RESULTS APPEAR ONCE THE MISSION IS COMPLETED WITH THIS VERSION.";}
+        }
         else if(selected>=ROW_PICK_FIRST&&selected<=ROW_PICK_LAST)help=[NSString stringWithFormat:T(@"COPY THIS PROFILE INTO SLOT %d. THE FILE ITSELF IS NOT CHANGED."),slot_open+1];
         else if(selected==ROW_PICK_FOLDER)help=pick_count?@"PUT A ZIP, SAVE FOLDER OR PROFILE FILE THERE; ITS PROFILES ARE LISTED ABOVE.":@"NOTHING TO IMPORT YET: PUT A ZIP, SAVE FOLDER OR PROFILE FILE IN THIS FOLDER.";
         else if(selected==ROW_PICK_FINDER)help=@"CHOOSE A ZIP, SAVE FOLDER OR PROFILE FILE ANYWHERE ON THIS MAC.";

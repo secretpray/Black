@@ -5,6 +5,7 @@
 #import <Cocoa/Cocoa.h>
 #include "../../ports/macos/overrides/slot_info.h"
 #include "../../ports/macos/overrides/black_profile.h"
+#include "../../ports/macos/overrides/mission_stats.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,6 +97,45 @@ static int run(void)
     black_SlotInfoSaved(0, fourth, 0x3333);
     black_SlotInfoFlush();
     if (!black_SlotInfoRead(fourth, 0, &info) || info.has_picture || info.mission_seconds > 6 || info.level != 4) return 17;
+
+    /* A completed run joins the slot's missions: Normal, mission 3 (level 5). */
+    black_StatsReset();
+    for (double t = 100; t <= 160; t += 0.1) black_StatsTick(t, 1, 5, 1, 1, 0);
+    for (int i = 0; i < 10; ++i) { black_StatsWeaponBegin(); if (i < 4) black_StatsHit(); black_StatsWeaponEnd(1); }
+    black_StatsTick(161, 0, -1, -1, 0, 0);
+    uint8_t done[BLACK_PROFILE_SIZE];
+    make_profile(done, 0x5555);
+    uint32_t met = 2;
+    memcpy(done + BLACK_PROFILE_RECORDS + (2 + 1 * 8) * BLACK_PROFILE_RECORD, &met, 4);
+    black_profile_seal(done);
+    black_SlotInfoSaved(0, done, 0x4444);
+    black_SlotInfoFlush();
+    if (!black_SlotInfoRead(done, 0, &info)) return 19;
+    const BlackMissionBest *b = &info.missions[1 * 8 + 2];
+    if (b->completions != 1 || b->best_seconds < 59 || b->best_seconds > 61 || b->fewest_deaths || b->best_accuracy != 400 ||
+        b->last_accuracy != 400 || info.missions[2].completions) return 20;
+    /* A faster run with a death and worse aim: best time and accuracy kept apart. */
+    for (double t = 200; t <= 240; t += 0.1) black_StatsTick(t, 1, 5, 1, 1, 0);
+    black_StatsDeath();
+    for (int i = 0; i < 10; ++i) { black_StatsWeaponBegin(); if (i < 2) black_StatsHit(); black_StatsWeaponEnd(1); }
+    uint8_t again[BLACK_PROFILE_SIZE];
+    memcpy(again, done, sizeof again);
+    put32(again + BLACK_PROFILE_STAMP, 0x6666);
+    black_profile_seal(again);
+    black_SlotInfoSaved(0, again, 0x5555);
+    black_SlotInfoFlush();
+    if (!black_SlotInfoRead(again, 0, &info)) return 21;
+    b = &info.missions[1 * 8 + 2];
+    if (b->completions != 2 || b->best_seconds > 41 || b->fewest_deaths != 0 || b->best_accuracy != 400 ||
+        b->last_deaths != 1 || b->last_accuracy != 200 || b->last_seconds > 41) return 22;
+    /* A save that completes nothing keeps them. */
+    uint8_t later[BLACK_PROFILE_SIZE];
+    memcpy(later, again, sizeof later);
+    put32(later + BLACK_PROFILE_STAMP, 0x7777);
+    black_profile_seal(later);
+    black_SlotInfoSaved(0, later, 0x6666);
+    black_SlotInfoFlush();
+    if (!black_SlotInfoRead(later, 0, &info) || info.missions[1 * 8 + 2].completions != 2) return 23;
 
     /* Not playing (paused, a menu) counts nothing and asks for no picture. */
     for (double t = 60; t <= 70; t += 0.1) black_SlotInfoTick(t, 9, 0, -1, -1);

@@ -18,7 +18,17 @@
 
 enum { BLACK_SLOT_PICTURE_WIDTH = 480 };
 
+/* One mission on one difficulty, as completed with this slot (mission_stats.h):
+ * its bests and its last run. Accuracy in tenths of a percent, -1 without
+ * shots. Zero completions: nothing recorded. */
 typedef struct {
+    int completions;
+    double best_seconds; int fewest_deaths, best_accuracy;
+    double last_seconds; int last_deaths, last_checkpoints, last_accuracy;
+} BlackMissionBest;
+
+typedef struct {
+    BlackMissionBest missions[BLACK_PROFILE_MISSIONS]; /* difficulty * 8 + campaign position */
     int level, difficulty;      /* the game's level number and 0..3; -1 when unknown */
     uint64_t mission_seconds;   /* in missions, unpaused, with this slot */
     int64_t saved_at;           /* Unix time of the save */
@@ -34,8 +44,9 @@ void black_SlotInfoTick(double now, uint32_t profile, int playing, int level, in
 
 /* Game thread, after each successful profile save (0x1FE713): the saved
  * slot, its 0x778 bytes as written and the date the file carried before
- * this save (to carry the previous record over). The files are written on
- * a queue of their own, off the game thread. */
+ * this save (to carry the previous record over). A mission run this save
+ * completes (mission_stats.h) joins the slot's bests. The files are written
+ * on a queue of their own, off the game thread. */
 void black_SlotInfoSaved(int slot, const uint8_t bytes[BLACK_PROFILE_SLOT], uint32_t previous_stamp);
 /* Waits for the writes queued so far (tests, quitting). */
 void black_SlotInfoFlush(void);

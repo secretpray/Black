@@ -14,7 +14,9 @@ set(BLACK_RENAMED
     "sub_001E74B0|black_OriginalBulletHit" "sub_001EEFD0|black_OriginalWeaponUpdate"
     # Checkpoints (game_checkpoint_hooks.c): the title's own capture
     "sub_001C8D20|black_OriginalCheckpointCapture"
-    "sub_00124190|black_OriginalRestartMission" "sub_00124250|black_OriginalRestartLevel")
+    "sub_00124190|black_OriginalRestartMission" "sub_00124250|black_OriginalRestartLevel"
+    # Mission statistics (game_checkpoint_hooks.c): Mission Failed's Continue
+    "sub_001240D0|black_OriginalContinueMission")
 foreach(pair IN LISTS BLACK_RENAMED)
     string(REPLACE "|" ";" symbols "${pair}")
     list(GET symbols 0 old)

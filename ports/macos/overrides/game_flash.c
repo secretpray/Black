@@ -29,8 +29,8 @@ static uint32_t alloc_guest(void *opaque,size_t size)
 #include "flash_guest_call.inc"
 static void trace_guest(void *opaque,const char *page,uint32_t list,unsigned count)
 { (void)opaque;if(getenv("RECOMP_INPUT_DEBUG"))fprintf(stderr,"[FLASH-MENU] page=%s list=%08X reachable=%u\n",page,list,count); }
-static int checkpoint_guest(void *opaque,int prepare)
-{ (void)opaque;return prepare?black_CheckpointResumePrepare():black_CheckpointResumeOffer(); }
+static int checkpoint_guest(void *opaque,int mode)
+{ (void)opaque;return mode==2?black_CheckpointsActive():mode?black_CheckpointResumePrepare():black_CheckpointResumeOffer(); }
 static pthread_once_t api_once = PTHREAD_ONCE_INIT;
 static void initialize_api(void)
 { menu.api=(BlackFlashApi){NULL,read_guest,write_guest,call_guest,alloc_guest,trace_guest,getenv("RECOMP_INPUT_DEBUG")!=NULL,checkpoint_guest}; prompts.api=menu.api; }
@@ -100,6 +100,7 @@ static void saves_tick(uint32_t ui)
  * play and its difficulty, read as the checkpoints read them (the profile at
  * [[0x2D19B4]], the core's level at +0x5AEC, difficulty at main+0x2014C). */
 #include "slot_info.h"
+#include "mission_stats.h"
 static void slot_info_tick(void)
 {
     uint32_t manager = MEM32(0x2D19B4), profile = manager && memory_ok(manager, 4) ? MEM32(manager) : 0, key = 0;
@@ -108,15 +109,20 @@ static void slot_info_tick(void)
         for (uint32_t i = 0; i < 80; ++i) key = (key ^ MEM8(profile + 8 + i)) * 16777619u;
         if (!key) key = 1;
     }
-    int in_mission = black_GameInMission(), level = -1, difficulty = -1;
+    /* A mission of a loaded profile: at boot the game passes a mission state
+     * of stage 0 with no profile, which is not one. */
+    int in_mission = black_GameInMission() && key, level = -1, difficulty = -1;
     if (in_mission) {
         uint32_t core = MEM32(0x2D45D4), game = MEM32(0x2D45F0);
-        if (core && game && memory_ok(core + 0x5AEC, 1) && memory_ok(game + 0x2014C, 4)) {
-            uint32_t l = MEM8(core + 0x5AEC), d = MEM32(game + 0x2014C);
-            if (l <= 8 && l != 2 && d <= 3) { level = (int)l; difficulty = (int)d; }
+        if (core && game && memory_ok(core + 0x5AEC, 2) && memory_ok(game + 0x2014C, 4)) {
+            uint32_t l = MEM8(core + 0x5AEC), stage = MEM8(core + 0x5AED), d = MEM32(game + 0x2014C);
+            if (!stage) in_mission = 0;
+            else if (l <= 8 && l != 2 && d <= 3) { level = (int)l; difficulty = (int)d; }
         }
     }
-    black_SlotInfoTick(monotonic(), key, in_mission && !black_GamePaused() && !black_MenuIsOpen(), level, difficulty);
+    int playing = in_mission && !black_GamePaused() && !black_MenuIsOpen();
+    black_SlotInfoTick(monotonic(), key, playing, level, difficulty);
+    black_StatsTick(monotonic(), in_mission, level, difficulty, playing, black_GamePaused());
 }
 /* The front end's input queue, read before the page's own script takes it
  * (the overlay calls this at the title's tick, 0x124369): a CONFIRM on the

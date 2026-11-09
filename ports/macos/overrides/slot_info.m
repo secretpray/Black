@@ -3,6 +3,7 @@
 #import <ImageIO/ImageIO.h>
 #include "slot_info.h"
 #include "display_gamma.h"
+#include "mission_stats.h"
 #include <CommonCrypto/CommonDigest.h>
 #include <dispatch/dispatch.h>
 #include <pthread.h>
@@ -192,8 +193,36 @@ static NSData *png_data(const uint8_t *bgra, uint32_t w, uint32_t h)
     return ok ? out : nil;
 }
 
+static int accuracy(const BlackMissionRun *run)
+{ return run->shots ? (int)((uint64_t)run->hit_shots * 1000 / run->shots) : -1; }
+
+/* The slot's missions with this run joined: completions, bests, the last. */
+static NSDictionary *join_run(NSDictionary *missions, const BlackMissionRun *run)
+{
+    NSMutableDictionary *all = [NSMutableDictionary dictionary];
+    if ([missions isKindOfClass:NSDictionary.class])
+        for (NSString *key in missions) if ([missions[key] isKindOfClass:NSDictionary.class]) all[key] = missions[key];
+    if (!run) return all;
+    NSString *key = [NSString stringWithFormat:@"%d", run->difficulty * 8 + run->mission];
+    NSDictionary *was = all[key];
+    NSMutableDictionary *now = [NSMutableDictionary dictionary];
+    int completions = [was[@"completions"] isKindOfClass:NSNumber.class] ? [was[@"completions"] intValue] : 0;
+    double seconds = run->seconds;
+    int deaths = (int)run->deaths, acc = accuracy(run);
+    now[@"completions"] = @(completions + 1);
+    now[@"best_seconds"] = @(completions && [was[@"best_seconds"] isKindOfClass:NSNumber.class] ? MIN([was[@"best_seconds"] doubleValue], seconds) : seconds);
+    now[@"fewest_deaths"] = @(completions && [was[@"fewest_deaths"] isKindOfClass:NSNumber.class] ? MIN([was[@"fewest_deaths"] intValue], deaths) : deaths);
+    int best_acc = completions && [was[@"best_accuracy"] isKindOfClass:NSNumber.class] ? [was[@"best_accuracy"] intValue] : -1;
+    now[@"best_accuracy"] = @(MAX(best_acc, acc));
+    now[@"last"] = @{@"seconds": @(seconds), @"deaths": @(deaths), @"checkpoints": @(run->checkpoints),
+                     @"shots": @(run->shots), @"hit_shots": @(run->hit_shots), @"accuracy": @(acc),
+                     @"at": @((int64_t)time(NULL))};
+    all[key] = now;
+    return all;
+}
+
 static void write_record(int slot, const uint8_t *bytes, uint32_t previous_stamp, double seconds,
-    int level, int difficulty, const uint8_t *bgra, uint32_t w, uint32_t h)
+    int level, int difficulty, const uint8_t *bgra, uint32_t w, uint32_t h, const BlackMissionRun *run)
 {
     @autoreleasepool {
         NSString *dir = folder();
@@ -221,6 +250,8 @@ static void write_record(int slot, const uint8_t *bytes, uint32_t previous_stamp
         uint64_t total = (uint64_t)(seconds + 0.5);
         if (carry && [previous[@"mission_seconds"] isKindOfClass:NSNumber.class]) total += [previous[@"mission_seconds"] unsignedLongLongValue];
         record[@"mission_seconds"] = @(total);
+        NSDictionary *missions = join_run(carry ? previous[@"missions"] : nil, run);
+        if (missions.count) record[@"missions"] = missions;
         if (level < 0 && carry && [previous[@"level"] isKindOfClass:NSNumber.class] && [previous[@"difficulty"] isKindOfClass:NSNumber.class]) {
             level = [previous[@"level"] intValue]; difficulty = [previous[@"difficulty"] intValue];
         }
@@ -243,6 +274,8 @@ static void write_record(int slot, const uint8_t *bytes, uint32_t previous_stamp
         }
         NSData *json = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:NULL];
         int ok = json && write_atomically(json, json_path);
+        if (run) fprintf(stderr, "[STATS] slot %d: mission %d difficulty %d completed in %.0f s, %u deaths, %u checkpoints, %u/%u shots hit\n",
+            slot + 1, run->mission + 1, run->difficulty, run->seconds, run->deaths, run->checkpoints, run->hit_shots, run->shots);
         fprintf(stderr, "[SLOTINFO] slot %d %s: %llu s in missions, level %d, picture %s%s\n", slot + 1,
             ok ? "recorded" : "NOT RECORDED", (unsigned long long)total, level, record[@"picture"] ? "yes" : "no",
             carry ? "" : " (new record)");
@@ -264,9 +297,11 @@ void black_SlotInfoSaved(int slot, const uint8_t bytes[BLACK_PROFILE_SLOT], uint
         frame = picture; w = picture_w; h = picture_h; picture = NULL; picture_w = picture_h = 0;
     }
     pthread_mutex_unlock(&lock);
+    BlackMissionRun *run = malloc(sizeof *run);
+    if (run && !black_StatsTakeCompleted(copy, run)) { free(run); run = NULL; }
     dispatch_async(queue(), ^{
-        write_record(slot, copy, previous_stamp, seconds, level, difficulty, frame, w, h);
-        free(copy); free(frame);
+        write_record(slot, copy, previous_stamp, seconds, level, difficulty, frame, w, h, run);
+        free(copy); free(frame); free(run);
     });
 }
 
@@ -290,6 +325,23 @@ int black_SlotInfoRead(const uint8_t profile[BLACK_PROFILE_SIZE], int slot, Blac
         }
         if ([record[@"mission_seconds"] isKindOfClass:NSNumber.class]) out->mission_seconds = [record[@"mission_seconds"] unsignedLongLongValue];
         if ([record[@"saved_at_unix"] isKindOfClass:NSNumber.class]) out->saved_at = [record[@"saved_at_unix"] longLongValue];
+        NSDictionary *missions = record[@"missions"];
+        if ([missions isKindOfClass:NSDictionary.class])
+            for (int m = 0; m < BLACK_PROFILE_MISSIONS; ++m) {
+                NSDictionary *one = missions[[NSString stringWithFormat:@"%d", m]], *last = one[@"last"];
+                if (![one isKindOfClass:NSDictionary.class] || ![one[@"completions"] isKindOfClass:NSNumber.class]) continue;
+                BlackMissionBest *b = &out->missions[m];
+                b->completions = [one[@"completions"] intValue];
+                b->best_seconds = [one[@"best_seconds"] doubleValue];
+                b->fewest_deaths = [one[@"fewest_deaths"] intValue];
+                b->best_accuracy = [one[@"best_accuracy"] isKindOfClass:NSNumber.class] ? [one[@"best_accuracy"] intValue] : -1;
+                if ([last isKindOfClass:NSDictionary.class]) {
+                    b->last_seconds = [last[@"seconds"] doubleValue];
+                    b->last_deaths = [last[@"deaths"] intValue];
+                    b->last_checkpoints = [last[@"checkpoints"] intValue];
+                    b->last_accuracy = [last[@"accuracy"] isKindOfClass:NSNumber.class] ? [last[@"accuracy"] intValue] : -1;
+                } else b->last_accuracy = -1;
+            }
         if (picture_matches(record, dir)) {
             out->has_picture = 1;
             snprintf(out->picture, sizeof out->picture, "%s", [dir stringByAppendingPathComponent:record[@"picture"]].fileSystemRepresentation);

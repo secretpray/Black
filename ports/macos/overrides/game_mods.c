@@ -2,6 +2,7 @@
  * live player values per world step, progress flags per front-end tick, the
  * spawn/silencer/recoil points the build overlay inserts and the bullet hit
  * and weapon update it renames (USA code only). */
+#include "mission_stats.h"
 #include "recomp_types.h"
 #include "game_mods.h"
 #include "port_menu.h"
@@ -101,11 +102,19 @@ static uint32_t player_actor(void)
  * the attacker; ret 0x1C): One-Hit Kill. */
 void sub_001E74B0(void)
 {
-    if (!black_SettingsMod(BLACK_MOD_ONE_HIT_KILL)) { black_OriginalBulletHit(); return; }
+    /* Mission statistics: a hit of the player's on someone still standing. */
+    uint32_t actor = player_actor(), victim = g_ecx, attacker = MEM32(g_esp + 0x18);
+    int mine = actor && victim && attacker == actor && victim != actor && !MEM32(victim + BLACK_MOD_DYING);
+    if (!black_SettingsMod(BLACK_MOD_ONE_HIT_KILL)) {
+        black_OriginalBulletHit();
+        if (mine) black_StatsHit();
+        return;
+    }
     int mods[BLACK_MOD_COUNT];
     enabled(mods);
-    BlackModDoomed doomed = black_mod_doom(guest(), player_actor(), g_ecx, MEM32(g_esp + 0x18), mods);
+    BlackModDoomed doomed = black_mod_doom(guest(), actor, victim, attacker, mods);
     black_OriginalBulletHit();
+    if (mine) black_StatsHit();
     black_mod_spare(guest(), doomed);
     if (doomed.victim) {
         static int logged;
@@ -120,19 +129,26 @@ void sub_001EEFD0(void)
 {
     static int log = -1;
     if (log < 0) log = getenv("BLACK_STATE_LOG") != NULL; /* launcher --state-log: each of the player's shots */
+    /* A shot of the player's leaves its weapon a longer wait (the same sign
+     * --state-log uses): one for the mission statistics. */
+    uint32_t weapon = MEM32(g_esp + 4), actor = player_actor();
+    int mine = actor && weapon && MEM32(weapon + BLACK_MOD_WEAPON_OWNER) == actor;
+    float rest = mine ? MEMF(weapon + BLACK_MOD_WEAPON_WAIT) : 0;
     if (!log && !black_SettingsMod(BLACK_MOD_FULL_AMMO) && !black_SettingsMod(BLACK_MOD_RAPID_FIRE)) {
+        if (mine) black_StatsWeaponBegin();
         black_OriginalWeaponUpdate();
+        if (mine) black_StatsWeaponEnd(MEMF(weapon + BLACK_MOD_WEAPON_WAIT) > rest);
         return;
     }
     int mods[BLACK_MOD_COUNT];
     enabled(mods);
-    uint32_t weapon = MEM32(g_esp + 4), actor = player_actor();
-    float rest = MEMF(weapon + BLACK_MOD_WEAPON_WAIT);
     BlackModShot shot = black_mod_before_shot(guest(), actor, weapon, mods);
+    if (mine) black_StatsWeaponBegin();
     black_OriginalWeaponUpdate();
     float wait = MEMF(weapon + BLACK_MOD_WEAPON_WAIT);
+    if (mine) black_StatsWeaponEnd(wait > rest);
     black_mod_after_shot(guest(), shot, mods);
-    if (log && actor && MEM32(weapon + BLACK_MOD_WEAPON_OWNER) == actor && wait > rest) {
+    if (log && mine && wait > rest) {
         uint32_t ammo = MEM32(weapon + BLACK_MOD_WEAPON_AMMO);
         uint32_t view = MEM32(actor + 0x324); /* the view the kick is added to, its pitch at +0x1C */
         fprintf(stderr, "[MODS-SHOT] frame=%u clip=%u total=%d wait=%.3f->%.3f kick=%.4f pitch=%.4f\n", MEM32(0x2F4368),

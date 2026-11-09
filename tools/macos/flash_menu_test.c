@@ -11,7 +11,7 @@ static unsigned char ram[0x600000];
 static uint32_t cursor=0x10000,ui,display,root,list,b1,b2,c1,c2;
 static unsigned calls,confirm_calls,updates;
 static char name[256]="abcd";static int caret=2,max_length=12;
-static int checkpoint_offer,checkpoint_prepared,checkpoint_asked;
+static int checkpoint_offer,checkpoint_prepared,checkpoint_asked,checkpoint_active=1;
 static unsigned resume_calls,run_actions,label_sets,duplicates;
 static char label_text[128];
 static uint32_t last_string,stock_text_field,item_text_field;
@@ -44,7 +44,7 @@ static uint32_t get(uint32_t obj,const char *key)
     for(unsigned i=0;i<count;++i)if(!strcmp((char*)ram+r(entries+i*8)+8,key))return r(entries+i*8+4);
     return 0;
 }
-static int checkpoint_stub(void *p,int prepare){(void)p;++checkpoint_asked;if(prepare)++checkpoint_prepared;return checkpoint_offer;}
+static int checkpoint_stub(void *p,int mode){(void)p;if(mode==2)return checkpoint_active;++checkpoint_asked;if(mode)++checkpoint_prepared;return checkpoint_offer;}
 static const char *label_of(uint32_t text_field)
 {uint32_t string=get(text_field,"variable");return string?(char*)ram+string+8:"";}
 static uint32_t guest_call(void *p,uint32_t target,uint32_t a,uint32_t ec,uint32_t ed,const uint32_t *args,size_t n)
@@ -200,7 +200,11 @@ int main(void)
     }
     /* Without a resume point, or once it goes away, no item and no focus on it. */
     m=setup();setup_title();checkpoint_offer=0;black_FlashCheckpointItem(&m,ui);
-    if(get(text_anim,"CheckpointButton")||duplicates||label_sets||get(stock_text_field,"variable"))return 33;
+    if(get(text_anim,"CheckpointButton")||duplicates||label_sets!=1||strcmp(label_of(stock_text_field),"$FE_STARTMISSION"))return 33;
+    /* Checkpoints off: the stock button keeps its own label. */
+    m=setup();setup_title();checkpoint_offer=0;checkpoint_active=0;black_FlashCheckpointItem(&m,ui);
+    if(get(text_anim,"CheckpointButton")||label_sets||get(stock_text_field,"variable"))return 44;
+    checkpoint_active=1;
     m=setup();setup_title();black_FlashCheckpointItem(&m,ui);
     {
         uint32_t button=get(text_anim,"CheckpointButton"),first=get(root,"continueButton"),last=get(root,"profileButton");
@@ -213,7 +217,11 @@ int main(void)
         if(get(button,"buttonDown")||get(button,"buttonUp"))return 37;
         if(r(button+0x58)&0x100000)return 38;
         if(get(list,"mFocusButton")!=last)return 39;
-        if(label_sets!=3||strcmp(label_of(stock_text_field),"$FE_CONTINUEMISSION"))return 40;
+        /* The checkpoint gone, still Start Mission; checkpoints off, its own label. */
+        if(label_sets!=2||strcmp(label_of(stock_text_field),"$FE_STARTMISSION"))return 40;
+        checkpoint_active=0;m.cp_checked=0;black_FlashCheckpointItem(&m,ui);
+        if(label_sets!=3||strcmp(label_of(stock_text_field),"$FE_CONTINUEMISSION"))return 45;
+        checkpoint_active=1;
     }
     puts("Production Flash graph: hover/click/input priority/hidden/cycles/wheel/widescreen/slider; native script text/caret/limits/one-per-tick/page reset; quick Continue once at the title; checkpoint item made, linked, confirming the title's start, unlinked and hidden without one: PASS");return 0;
 }

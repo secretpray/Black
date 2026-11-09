@@ -383,6 +383,7 @@ void black_FlashCheckpointItem(BlackFlashMenu *m,uint32_t ui)
     if(list!=m->cp_list){m->cp_list=list;m->cp_checked=m->cp_linked=0;m->cp_button=m->cp_stock=0;m->cp_stock_named=0;}
     if(!m->cp_checked){
         m->cp_offer=m->api.checkpoint?m->api.checkpoint(m->api.opaque,0):0;
+        m->cp_active=m->api.checkpoint?m->api.checkpoint(m->api.opaque,2):0;
         m->cp_checked=1;m->cp_reported=0;
     }
     uint32_t button=member(m,holder,"CheckpointButton");
@@ -401,15 +402,21 @@ void black_FlashCheckpointItem(BlackFlashMenu *m,uint32_t ui)
         if(!m->fault){
             if(!m->cp_linked)fprintf(stderr,"[CHECKPOINT] title menu: resume item added\n");
             m->cp_button=button;m->cp_linked=1;
-            if(!m->cp_stock_named&&stock&&relabel(m,stock,"$FE_STARTMISSION")){m->cp_stock=stock;m->cp_stock_named=1;}
         }
     }else if(button&&m->cp_linked){
         unring(m,item,root,button);
         shown(m,button,0);
         m->cp_button=0;m->cp_linked=0;
-        if(m->cp_stock_named&&m->cp_stock)relabel(m,m->cp_stock,"$FE_CONTINUEMISSION");
-        m->cp_stock=0;m->cp_stock_named=0;
         fprintf(stderr,"[CHECKPOINT] title menu: resume item removed\n");
+    }
+    /* While checkpoints are on, "Continue Mission" means the checkpoint, with
+     * or without one now: the stock button, whose own label says the same
+     * but opens the mission list, reads Start Mission. Off, its own label. */
+    if(m->fault)return;
+    if(m->cp_active&&stock&&!m->cp_stock_named&&scratch(m)&&relabel(m,stock,"$FE_STARTMISSION")){m->cp_stock=stock;m->cp_stock_named=1;}
+    else if(!m->cp_active&&m->cp_stock_named&&m->cp_stock){
+        if(scratch(m))relabel(m,m->cp_stock,"$FE_CONTINUEMISSION");
+        m->cp_stock=0;m->cp_stock_named=0;
     }
 }
 /* Read where the front end takes its input, before the page's own script can

@@ -16,7 +16,7 @@ typedef struct {
     int debug;
     /* The title menu's checkpoint item: 1 when the save this profile plays has
      * a checkpoint to resume; prepare asks the game to resume it. */
-    int (*checkpoint)(void *, int prepare);
+    int (*checkpoint)(void *, int mode); /* 0: a resume point to offer, 1: prepare it, 2: checkpoints on */
 } BlackFlashApi;
 typedef struct {
     BlackFlashApi api;
@@ -26,7 +26,7 @@ typedef struct {
     int fault, seen_pointer;
     char logged_name[64];
     uint32_t cp_list, cp_button, cp_names, cp_stock;
-    int cp_offer, cp_checked, cp_linked, cp_panel, cp_reported, cp_stock_named;
+    int cp_offer, cp_active, cp_checked, cp_linked, cp_panel, cp_reported, cp_stock_named;
     uint32_t cp_row_list, cp_row, cp_row_on, cp_row_off;
     int cp_row_linked, cp_row_failed, cp_row_value;
     float cp_row_dy;
