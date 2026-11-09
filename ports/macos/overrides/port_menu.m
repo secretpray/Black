@@ -217,7 +217,9 @@ static int reset_row(int row, int apply)
 }
 /* One rhythm on every page, as the game's own menus and TGP's: rows of one
  * height from one top, no group headings between them. */
-enum { ROWS_TOP = 124, ROW_STEP = 40 };
+/* Nearer the top than before, as the game's own pages sit, which leaves room
+ * for their prompts in a column under the description (PROMPTS_TOP). */
+enum { ROWS_TOP = 108, ROW_STEP = 40, PROMPTS_TOP = 500, PROMPT_STEP = ROW_STEP };
 /* The rail band is wider than the setup screen's, nearer the game's own
  * column, and the page sits that much further right (CONTENT_DX). */
 /* The game's composition, measured on its own menus: a dark margin, the
@@ -240,7 +242,7 @@ static BlackPageGeometry page_geometry(NSSize size)
 /* A setting's value box: left edge and width, on the menu's layout. */
 enum { VALUE_LEFT = 652, VALUE_WIDTH = 224 };
 static CGFloat trail_end = 96; /* where the way here ends, for the page's status */
-static CGFloat back_hint_x = 700, back_hint_w = 120; /* set where the hint is drawn */
+static CGFloat back_hint_x = 700, back_hint_y = 542, back_hint_w = 120; /* set where the hint is drawn */
 static BOOL grouped(int page){(void)page;return NO;}
 static int visible_start(int page,int selected)
 {return MAX(0,black_menu_index(page,selected)-MENU_TAB_MAX_ROWS+1);}
@@ -774,7 +776,7 @@ static NSTimeInterval transition, last_draw;
     for (int i = 0; i < MENU_TABS; ++i)
         categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * yscale, TAB_WIDTH * scale, 38 * yscale);
     /* No buttons under the list: Back is its hint, which a click also takes. */
-    back.frame = NSMakeRect(ox + back_hint_x * scale, oy + 516 * yscale, back_hint_w * scale, 26 * yscale);
+    back.frame = NSMakeRect(ox + back_hint_x * scale, oy + back_hint_y * yscale, back_hint_w * scale, 30 * yscale);
     back.alphaValue = 0; quit.hidden = YES;
     defaults.hidden=YES;
     for (int i = 0; i < MENU_TABS; ++i) categories[i].hidden = YES;
@@ -1472,7 +1474,7 @@ static NSAlert *pack_alert;
     CGFloat rail = (g.rail_x + g.band - g.dx) / g.k, edge = (960 + ox / scale - g.dx) / g.k;
     /* The game's own nesting: the menu's name large, the way here under it
      * (SETTINGS > SAVES > PROFILE BACKUPS); Back climbs one level. */
-    text(T(@"RECOMP SETTINGS"), 96, 34, 26, TEXT, 1);
+    text(T(@"RECOMP SETTINGS"), 96, 18, 26, TEXT, 1);
     int tab = black_menu_tab(page);
     {
         NSMutableArray *trail = [NSMutableArray array];
@@ -1485,8 +1487,8 @@ static NSAlert *pack_alert;
         CGFloat x = 96;
         if (trail.count) {
             NSString *last = trail.lastObject; [trail removeLastObject];
-            for (NSString *step in trail) { NSString *item = [step stringByAppendingString:@"  ›  "]; text(item, x, 88, 13, DIM, 0); x += text_width(item, 13, 0); }
-            fitted_text(last, x, 88, 13, 600 - x, HEADING, 0);
+            for (NSString *step in trail) { NSString *item = [step stringByAppendingString:@"  ›  "]; text(item, x, 72, 13, DIM, 0); x += text_width(item, 13, 0); }
+            fitted_text(last, x, 72, 13, 600 - x, HEADING, 0);
             x += MIN(text_width(last, 13, 0), 600 - x);
         }
         trail_end = x;
@@ -1502,11 +1504,11 @@ static NSAlert *pack_alert;
         }
         NSString *count = [NSString stringWithFormat:@"%02d / %02d", black_menu_index(page, selected) + 1, black_menu_count(page)];
         CGFloat count_x = 868 - text_width(count, 10, 0);
-        text(count, count_x, 90, 10, DIM, 0);
+        text(count, count_x, 74, 10, DIM, 0);
         /* The page's status ends before the counter. */
         /* ...and after the way here; with too little room it is left out. */
         if (info) { CGFloat room = MIN(260, count_x - 24 - (trail_end + 24)), w = MIN(text_width(info, 10, 0), room);
-            if (room >= 60) fitted_text(info, count_x - 24 - w, 90, 10, room, info_color, 0); }
+            if (room >= 60) fitted_text(info, count_x - 24 - w, 74, 10, room, info_color, 0); }
         line(84, 112, 792, HIGHLIGHT, 1);
     }
     int start=visible_start(page,selected),end=MIN(start+MENU_TAB_MAX_ROWS,black_menu_count(page));
@@ -1847,16 +1849,16 @@ static NSAlert *pack_alert;
             selected == ROW_ANY_FILM ? @"A HINT SHOWS THE BUTTON. OFF: ONLY FILMS THE GAME ITSELF LETS YOU SKIP." :
             @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
-    line(84, 450, 792, HIGHLIGHT, 1);
-    fitted_text(T(help), 96, 462, 11, 768, TEXT, 0);
-    fitted_text(T(detail), 96, 482, 10, 768, DIM, 0);
+    line(84, 432, 792, HIGHLIGHT, 1);
+    fitted_text(T(help), 96, 442, 11, 768, TEXT, 0);
+    fitted_text(T(detail), 96, 460, 10, 768, DIM, 0);
     if (page == PAGE_DIAGNOSTICS) {
         BlackControllerMonitor monitor = black_ControllerMonitor();
-        fill(NSMakeRect(704, 147, 1, 264), HEADING, .35);
-        text(T(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER"), 720, 153, 10, HEADING, 0);
-        if (monitor.connected) fitted_text([NSString stringWithUTF8String:monitor.name], 720, 170, 9, 150, DIM, 0);
+        fill(NSMakeRect(704, 131, 1, 264), HEADING, .35);
+        text(T(monitor.connected ? @"LIVE STICKS" : @"NO CONTROLLER"), 720, 137, 10, HEADING, 0);
+        if (monitor.connected) fitted_text([NSString stringWithUTF8String:monitor.name], 720, 154, 9, 150, DIM, 0);
         for (int stick = 0; stick < 2; ++stick) {
-            CGFloat cx = 750, cy = 225 + stick * 118;
+            CGFloat cx = 750, cy = 209 + stick * 118;
             text(T(stick ? @"AIM" : @"MOVE"), 792, cy - 26, 10, TEXT, 0);
             int threshold = black_SettingsStickThreshold(stick);
             CGFloat dz = threshold < 0 ? .2 : threshold / 32767.0;
@@ -1871,35 +1873,58 @@ static NSAlert *pack_alert;
             fitted_text([NSString stringWithFormat:T(@"RAW %+.0f / %+.0f%%"), rawx * 100, -rawy * 100], 720, cy + 38, 9, 150, HEADING, 0);
             fitted_text([NSString stringWithFormat:T(@"OUT %+.0f / %+.0f%%"), outx * 100, -outy * 100], 720, cy + 54, 9, 150, TEXT, 0);
         }
-        text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 410, 9, DIM, 0);
+        text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 394, 9, DIM, 0);
     }
-    /* The game's hint line, and nothing else under the list. */
+    /* The game's prompts, as its own pages show them: select, confirm and back
+     * in a column under the description, one row step apart and one step
+     * below it, a size under the rows. The buttons sit centred in one column,
+     * the words aligned after it; select is two triangles, or a cross where
+     * left and right change the value. Default (Y / Backspace) stands on the
+     * confirm line, in the values' column. */
     char accept[32], cancel[32];
     black_InputGlyphUTF8(black_InputButtonGlyph(0,1),accept,sizeof accept); black_InputGlyphUTF8(black_InputButtonGlyph(1,1),cancel,sizeof cancel);
-    line(84, 508, 792, HIGHLIGHT, 1);
     {
         BOOL adjust = (!black_menu_link(selected) && (!black_menu_save(selected) || selected == ROW_CHECKPOINTS) && selected != ROW_QUIT && selected != ROW_CLOSE_MENU &&
             selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_RESET);
-        NSMutableArray *hints = [NSMutableArray arrayWithObject:[@"▲▼  " stringByAppendingString:T(@"SELECT")]];
-        if (adjust) [hints addObject:T(@"◀▶ CHANGE")];
-        [hints addObject:[NSString stringWithFormat:@"%@ %@", @(accept), T(@"CONFIRM")]];
+        const CGFloat size = 12, wide = 1 / text_aspect;
+        NSString *keys[2] = {@(accept), @(cancel)};
+        CGFloat column = MAX(text_width(keys[0], size, 0), text_width(keys[1], size, 0));
+        column = MAX(column, 26 * wide);
+        CGFloat middle = 96 + column / 2, words_x = 96 + column + 14;
+        /* The select mark, as tall as a key: a cross, or up and down. */
+        {
+            CGFloat cy = PROMPTS_TOP + 9, r = 11, t = 5;
+            NSBezierPath *path = [NSBezierPath bezierPath];
+            if (adjust) {
+                [path moveToPoint:NSMakePoint(middle, cy - r)]; [path lineToPoint:NSMakePoint(middle + t * wide, cy - 3)]; [path lineToPoint:NSMakePoint(middle - t * wide, cy - 3)]; [path closePath];
+                [path moveToPoint:NSMakePoint(middle, cy + r)]; [path lineToPoint:NSMakePoint(middle + t * wide, cy + 3)]; [path lineToPoint:NSMakePoint(middle - t * wide, cy + 3)]; [path closePath];
+                [path moveToPoint:NSMakePoint(middle - r * wide, cy)]; [path lineToPoint:NSMakePoint(middle - 3 * wide, cy - t)]; [path lineToPoint:NSMakePoint(middle - 3 * wide, cy + t)]; [path closePath];
+                [path moveToPoint:NSMakePoint(middle + r * wide, cy)]; [path lineToPoint:NSMakePoint(middle + 3 * wide, cy - t)]; [path lineToPoint:NSMakePoint(middle + 3 * wide, cy + t)]; [path closePath];
+            } else {
+                CGFloat w = 5 * wide, gap = 3 * wide, left = middle - gap / 2 - 2 * w, right = middle + gap / 2;
+                [path moveToPoint:NSMakePoint(left + w, cy - 6)]; [path lineToPoint:NSMakePoint(left + 2 * w, cy + 6)]; [path lineToPoint:NSMakePoint(left, cy + 6)]; [path closePath];
+                [path moveToPoint:NSMakePoint(right, cy - 6)]; [path lineToPoint:NSMakePoint(right + 2 * w, cy - 6)]; [path lineToPoint:NSMakePoint(right + w, cy + 6)]; [path closePath];
+            }
+            [black_ui_color(TEXT, 1) setFill]; [path fill];
+        }
+        CGFloat confirm_y = PROMPTS_TOP + PROMPT_STEP, back_y = PROMPTS_TOP + 2 * PROMPT_STEP;
+        text(T(@"SELECT"), words_x, PROMPTS_TOP, size, TEXT, 0);
+        text(keys[0], middle - text_width(keys[0], size, 0) / 2, confirm_y, size, TEXT, 0);
+        text(T(@"CONFIRM"), words_x, confirm_y, size, TEXT, 0);
         if (reset_row(selected, 0)) {
             char reset[32];
             black_InputGlyphUTF8(black_InputPromptFamily() == BLACK_PROMPTS_KEYBOARD ? 0xE200 + 51 : black_InputButtonGlyph(3, 1), reset, sizeof reset);
-            [hints addObject:[NSString stringWithFormat:@"%@ %@", @(reset), T(@"DEFAULT")]];
+            CGFloat key_x = VALUE_LEFT + 9;
+            text(@(reset), key_x, confirm_y, size, TEXT, 0);
+            text(T(@"DEFAULT"), key_x + text_width(@(reset), size, 0) + 14, confirm_y, size, TEXT, 0);
         }
-        CGFloat x = 96;
-        /* The hints share the line: smaller and closer when they would not fit. */
-        NSString *back_hint = [NSString stringWithFormat:@"%@ %@", @(cancel), T(@"BACK")];
-        CGFloat hint_size = 12, gap = 36, total = text_width(back_hint, hint_size, 0);
-        for (NSString *hint in hints) total += text_width(hint, hint_size, 0) + gap;
-        if (total > 780) hint_size *= 780 / total, gap *= 780 / total;
-        for (NSString *hint in hints) { text(hint, x, 522, hint_size, DIM, 0); x += text_width(hint, hint_size, 0) + gap; }
-        back_hint_x = x - 8; back_hint_w = text_width(back_hint, hint_size, 0) + 16;
-        text(back_hint, x, 522, hint_size, DIM, 0);
+        text(keys[1], middle - text_width(keys[1], size, 0) / 2, back_y, size, TEXT, 0);
+        text(T(@"BACK"), words_x, back_y, size, TEXT, 0);
+        back_hint_x = 88; back_hint_y = back_y - 8;
+        back_hint_w = words_x - 88 + text_width(T(@"BACK"), size, 0) + 8;
         BOOL failed = black_SettingsSaveFailed();
         NSString *status = T(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"");
-        if (status.length) { CGFloat w = MIN(text_width(status, 11, 0), 240); fitted_text(status, 876 - w, 523, 11, 240, failed ? WARN : DIM, 0); }
+        if (status.length) { CGFloat w = MIN(text_width(status, 11, 0), 240); fitted_text(status, 876 - w, back_y + 1, 11, 240, failed ? WARN : DIM, 0); }
     }
     text_scale = 1; text_aspect = 1;
     [NSGraphicsContext restoreGraphicsState];

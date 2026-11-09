@@ -192,7 +192,7 @@ RU = {
     "MOVES EVERY BACKUP TO THE TRASH. YOUR PROFILE IS NOT CHANGED.": "Переносит все копии в Корзину. Профиль не меняется.",
     "CLOSE THE MENU": "Выйти из меню", "CLOSE THE SETTINGS AND GO BACK TO THE GAME.": "Закрыть настройки и вернуться в игру.",
     "BACK, F1 OR HOME DO THE SAME.": "То же делают «Назад», F1 и Home.",
-    "▲▼ SELECT": "▲▼ Выбор", "◀▶ CHANGE": "◀▶ Изменить",
+    "▲▼ SELECT": "▲▼ Выбор", "◀▶ CHANGE": "◀▶ Изменить", "CHANGE": "Изменить",
     "PUT %@ BACK TO THE DEFAULTS?": "Вернуть «%@» к значениям по умолчанию?",
     "ONLY THIS PAGE'S SETTINGS CHANGE.": "Изменятся только настройки этой страницы.",
     "RECOMMENDED FOR THIS PAGE": "Рекомендуемые для раздела", "RESET ALL SETTINGS": "Сбросить все настройки",

@@ -67,6 +67,7 @@ static const BlackMenuText black_menu_text[] = {
     {"CAMERA ANGLE IN DEGREES. ORIGINAL: 70.", {"", "", "", "", "Угол камеры в градусах. Исходный: 70."}},
     {"CAMERA: LOWER FOR FINER AIM NEAR THE CENTER.", {"", "", "", "", "Камера: меньше — точнее прицел у центра."}},
     {"CANCEL", {"", "", "", "", "Отмена"}},
+    {"CHANGE", {"", "", "", "", "Изменить"}},
     {"CHANGE WEAPON DOWN", {"Arme précédente", "Vorige Waffe", "Arma anterior", "Arma precedente", "Предыдущее оружие"}},
     {"CHANGE WEAPON UP", {"Arme suivante", "Nächste Waffe", "Arma siguiente", "Arma successiva", "Следующее оружие"}},
     {"CHANGES APPLY AT ONCE AND KEEP THE FILE BEFORE THEM IN THE BACKUPS.", {"", "", "", "", "Изменения применяются сразу; прежний файл остаётся в резервных копиях."}},
