@@ -10,7 +10,12 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.6.1 is an experimental macOS release.** Saved profiles load again after the
+> **0.7.0 is an experimental macOS release.** The game's own checkpoint is kept
+> between launches: **Continue Mission** on the title resumes it, and F9 or
+> Back + Y go back to it in a mission after a question. Checkpoints follow the
+> game's Autosave, with a Checkpoints row under it in Options → Profile.
+> **Display Brightness** and **Display Gamma** adjust the picture over the game's
+> own brightness. From 0.6.1: saved profiles load again after the
 > first profile list instead of showing every slot as damaged. The settings are a
 > nested menu in the game's style with a **Saves** section: import, export,
 > delete and back up profile slots. On the name keyboard X deletes, Y types a
@@ -52,11 +57,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.6.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.6.1)**
+**[BLACK 0.7.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.7.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.6.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.7.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -99,7 +104,10 @@ PS2 and Xbox 360 files are not supported.
 - Saved 1–6× render scale, camera FOV, SMAA/FXAA, anisotropic filtering and MetalFX
   spatial upscaling. Graphics changes take effect on the next launch.
 - The game's own brightness and gamma ramp, with its fades to and from black,
-  as the Xbox's video output applies it.
+  as the Xbox's video output applies it; **Display Brightness** and **Display
+  Gamma** adjust the picture over it, and leave it exactly as it is at 0 / 1.00.
+- **Checkpoints between launches**: Continue Mission on the title resumes the
+  last one, F9 or Back + Y go back to it in a mission.
 - At render scales above 1×, the game's small glow and blur buffers are averaged
   over one Xbox texel before its blur samples them, as on the console's
   resolution.
@@ -179,6 +187,7 @@ unrecognised executable leaves every mod off.
 | --- | --- |
 | Recomp settings | F1 / F10 / Cmd+, / Back + Start / tap Home, Xbox Guide or PS |
 | Quit page: continue, main menu, quit | Hold Home, Xbox Guide or PS for 1.5 s / settings → Quit Game |
+| Restart from the checkpoint (asks first) | F9 / Back + Y in a mission |
 | Change settings page | Q / E, Tab, LB / RB |
 | Fullscreen / quit | Cmd+Return / Cmd+Q |
 | Move / crouch / walk | W A S D / C / Alt |
@@ -277,6 +286,27 @@ console.
   <img src="docs/screenshots/settings-saves.jpg" alt="Saves page: three profile slots with their names and progress, the autosave slot marked, import, export and backups" width="85%">
 </p>
 
+## Checkpoints
+
+The console keeps a mission's checkpoint only while the game runs, so a long
+mission had to be played again from its start after quitting. BLACK writes the
+game's own checkpoint beside the saves as it is reached, for each saved profile
+slot, mission and difficulty, and restores it the way the game's own Continue
+does after a death: health, ammunition, weapons, objectives and the part of the
+level.
+
+- **Continue Mission** on the title resumes the active slot's checkpoint. While
+  it is there, the game's own button reads **Start Mission**: it opens the
+  mission list and starts the chosen mission from its start.
+- **F9** or **Back + Y** in a mission ask, then go back to the last checkpoint
+  of this run.
+- The game's own **Restart** (pause menu, Mission Failed) starts the mission over
+  and removes its checkpoint, as on the console. Completing any mission retires
+  the profile's checkpoints.
+- Checkpoints need the game's **Autosave**. **Options → Profile → Checkpoints**,
+  under Autosave, and **Saves → Save Checkpoints** are the same switch, on by
+  default. A slot's page shows its checkpoint and can delete it.
+
 ## Your data and updates
 
 Data is stored in `~/Library/Application Support/BLACK/`:
@@ -286,6 +316,7 @@ Data is stored in `~/Library/Application Support/BLACK/`:
 | `Game/` | Your privately installed game files |
 | `Data/xboxrecomp/` | Xbox saves, profile backups, metadata and virtual cache partitions |
 | `Data/Import/`, `Data/Export/` | Profiles to import, and exported slots |
+| `Data/xboxrecomp/Checkpoints/` | Checkpoints kept between launches |
 | `settings.ini` | Recomp preferences and bindings |
 | `Logs/run-*/` | A separate log for every launch |
 

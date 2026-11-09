@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 — 2026-11-09
+
+- **Checkpoints kept between launches.** The game's own checkpoint is written
+  beside the saves when it is reached. **Continue Mission** on the title resumes
+  it after quitting or a restart of the app; the game's own button, which opens
+  the mission list, reads **Start Mission** meanwhile and starts the chosen
+  mission from its start. The game's own Restart in the pause and Mission Failed
+  menus starts the mission over and removes its checkpoint, as the console does.
+  Completing a mission retires the checkpoints of that profile.
+- **Restart from the checkpoint:** F9 or Back + Y in a mission ask first, in the
+  pause page's style, then go back to the run's last checkpoint.
+- **Checkpoints follow Autosave.** With the game's Autosave off they are neither
+  written nor restored. Options → Profile gains a **Checkpoints On / Off** row
+  under Autosave, the same setting as **Saves → Save Checkpoints**; each slot's
+  page shows its checkpoint and can delete it.
+- **Display Brightness and Display Gamma** on General, over the game's own
+  brightness: black level and midtones, live; 0 and 1.00 keep the game's picture
+  exactly.
 ## 0.6.1 — 2026-11-09
 
 - **Saved profiles.** After the first profile list Load Profile said there were

@@ -1,7 +1,58 @@
 # Release validation and current limits
 
-Release: **BLACK 0.6.1**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.7.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Checkpoints and display brightness in 0.7.0
+
+**Checkpoints.** The game keeps one checkpoint in memory (live flag `0x2F3BF8`)
+and loses it on quit. Its capture (`0x1C8D20`) is wrapped and the record is
+written atomically to `Data/xboxrecomp/Checkpoints/` per save stamp, player
+name, difficulty and mission: the player record, weapons, objective counters and
+states, statistics and the streaming unit, no guest pointers (after
+portingpete's `black_checkpoint.inc`, MIT). It is restored before the first
+streaming unit starts (`0x1EE310`), only for a load that asked for it: the
+title's Continue Mission item or F9 / Back + Y. The game's own RestartLevel
+(pause, `InGameOn.bin` RestartConfirm) and RestartMission (Mission Failed) clear
+the live flag and set the first unit, a restart from the start; they now also
+remove the file unless F9 armed the restart. The title stamps a save's date only
+into the slot copy it writes (`0x1FB3F0` → `0x1F1A00`), so after a profile save
+the running game keeps the old date: the files move to the saved date and this
+launch maps one to the other. A changed campaign record on save retires the
+slot's checkpoints.
+
+**Autosave.** Checkpoints are written and restored only with the game's Autosave
+on (`main+0x20164`, `FE_MemcardAutosaveOn`). Options → Profile gains a
+Checkpoints row: copies of the Autosave label and its On / Off values one row
+lower, their tokens set again so the fields draw, the label a token of ours
+answered by the string lookup in the game's language. It is a focus stop only
+while Autosave is on.
+
+**Checked.** On a validation copy of the saves, scripted runs with muted audio
+and only scripted input: Continue Mission restored unit 4 of mission 2; Back + Y
+in that mission opened the question, Restart from Checkpoint ran RestartLevel and
+the reload restored the same checkpoint; the Profile row toggled On / Off, left
+the ring with Autosave off (after the game's own confirmation) and returned with
+it on, in English and Russian. Unit tests cover capture, the armed restore, both
+restarts, a damaged file, F9 without a valid file, a profile save in the same
+launch and the Autosave gate. Earlier the user resumed from the title item by
+hand.
+
+**Not checked.** A checkpoint reached in normal play on each mission and
+difficulty, death and the game's own Continue after a restore, the game's own
+Restart removing the file, a profile save in the middle of a session, F9 on the
+keyboard and Back + Y on a physical controller.
+
+**Display Brightness and Gamma.** A curve after the game's ramp: brightness
+moves the black level, gamma bends the midtones; the presenter composes it into
+a 16-bit lookup. At 0 / 1.00 the lookup is the game's table exactly (tested
+bitwise). Checked on the main menu frames; not judged in missions.
+
+**Tests.** 121 CTest checks and 49 Python tests passed. The final DMG was
+checked read-only in English and Russian with isolated data and system-only
+PATH: both opened the settings and quit normally, and source game files and user
+preferences kept their hashes. The matching source archive was verified without
+game or private data.
 
 ## Saves, the settings menu and the Mac window in 0.6.1
 
