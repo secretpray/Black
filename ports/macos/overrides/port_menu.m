@@ -44,8 +44,15 @@ static CGImageRef hint_image(unsigned code)
 }
 static CGFloat icon_width(unsigned code,CGFloat size)
 { CGImageRef image=hint_image(code);return image?(size*1.5*CGImageGetWidth(image)/CGImageGetHeight(image)+size*.2):0; }
+/* The settings page sets this while it draws: its text is larger than the
+ * layout's sizes, grown about each line's middle, as the game's menus are. */
+static CGFloat text_scale = 1;
+/* The settings page is scaled more in height than in width (page_geometry);
+ * text undoes that, height over width, so letters keep their shape. */
+static CGFloat text_aspect = 1;
 static CGFloat text_width(NSString *value, CGFloat size, int large)
 {
+    size *= text_scale;
     CGFloat width=0;NSUInteger start=0;
     for(NSUInteger i=0;i<value.length;++i)if(black_InputGlyphValid([value characterAtIndex:i])){
         width+=black_ui_text_width(large?&big_font:&small_font,fallback(large),[value substringWithRange:NSMakeRange(start,i-start)],size);
@@ -55,6 +62,15 @@ static CGFloat text_width(NSString *value, CGFloat size, int large)
 }
 static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned rgb, int large)
 {
+    y -= size * (text_scale - 1) * .5; size *= text_scale;
+    if (text_aspect != 1) {
+        CGContextRef ctx = NSGraphicsContext.currentContext.CGContext; CGFloat mid = y + size * .5, keep = text_aspect;
+        CGContextSaveGState(ctx); CGContextTranslateCTM(ctx, 0, mid); CGContextScaleCTM(ctx, 1, keep); CGContextTranslateCTM(ctx, 0, -mid);
+        text_aspect = 1; CGFloat scale = text_scale; text_scale = 1;
+        text(value, x, y, size, rgb, large);
+        text_scale = scale; text_aspect = keep; CGContextRestoreGState(ctx);
+        return;
+    }
     NSUInteger start=0;
     for(NSUInteger i=0;i<value.length;++i){unsigned code=[value characterAtIndex:i];if(!black_InputGlyphValid(code))continue;
         NSString *part=[value substringWithRange:NSMakeRange(start,i-start)];
@@ -70,8 +86,9 @@ static void text(NSString *value, CGFloat x, CGFloat y, CGFloat size, unsigned r
 }
 static void fitted_text(NSString *value, CGFloat x, CGFloat y, CGFloat size, CGFloat width, unsigned rgb, int large)
 {
-    CGFloat advance = text_width(value, size, large);
-    text(value, x, y, advance > width ? size * width / advance : size, rgb, large);
+    CGFloat advance = text_width(value, size, large); /* already scaled */
+    CGFloat fit = advance > width ? size * width / advance : size;
+    text(value, x, y + (size - fit) * .5, fit, rgb, large); /* shrunk about its middle */
 }
 static void centered_text(NSString *value, CGFloat center, CGFloat y, CGFloat size, unsigned rgb)
 { text(value, center - text_width(value, size, 0) / 2, y, size, rgb, 0); }
@@ -198,7 +215,26 @@ static int reset_row(int row, int apply)
 enum { ROWS_TOP = 124, ROW_STEP = 40 };
 /* The rail band is wider than the setup screen's, nearer the game's own
  * column, and the page sits that much further right (CONTENT_DX). */
-enum { RAIL_BAND = 60, CONTENT_DX = 26 };
+/* The game's composition, measured on its own menus: a dark margin, the
+ * rail band from 25% to 44% of the window's width, the menu from 46% to 93%.
+ * The band is drawn on the 960x600 page; the menu's own 960x600 layout is
+ * scaled by k and moved by dx, dy into that column, centred in height. The
+ * same numbers place the rows' hit targets and read mouse clicks. */
+typedef struct { CGFloat scale, ox, oy, rail_x, band, dx, dy, k, ky; } BlackPageGeometry;
+static BlackPageGeometry page_geometry(NSSize size)
+{
+    BlackPageGeometry g;
+    g.scale = MIN(size.width / 960.0, size.height / 600.0);
+    g.ox = (size.width - 960 * g.scale) / 2; g.oy = (size.height - 600 * g.scale) / 2;
+    CGFloat left = -g.ox / g.scale, width = size.width / g.scale;
+    g.rail_x = left + .25 * width; g.band = .185 * width;
+    CGFloat from = left + .46 * width, to = left + .93 * width;
+    g.k = (to - from) / 792; g.ky = MAX(g.k, .82); g.dx = from - 84 * g.k; g.dy = (600 - 560 * g.ky) / 2;
+    return g;
+}
+/* A setting's value box: left edge and width, on the menu's layout. */
+enum { VALUE_LEFT = 652, VALUE_WIDTH = 224 };
+static CGFloat trail_end = 96; /* where the way here ends, for the page's status */
 static CGFloat back_hint_x = 700, back_hint_w = 120; /* set where the hint is drawn */
 static BOOL grouped(int page){(void)page;return NO;}
 static int visible_start(int page,int selected)
@@ -691,24 +727,25 @@ static NSTimeInterval transition, last_draw;
 - (void)layoutRows
 {
     NSSize size = self.bounds.size;
-    CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
-    CGFloat ox = (size.width - 960 * scale) / 2 + CONTENT_DX * scale, oy = (size.height - 600 * scale) / 2;
+    /* The menu's layout, as drawRect places it right of the band. */
+    BlackPageGeometry g = page_geometry(size);
+    CGFloat ox = g.ox + g.dx * g.scale, oy = g.oy + g.dy * g.scale, scale = g.scale * g.k, yscale = g.scale * g.ky;
     int start = visible_start(page,selected);
     for (int i = 0; i < MENU_ROWS; ++i) {
         int index=black_menu_index(page,i);
         rows[i].hidden=index<start||index>=start+MENU_TAB_MAX_ROWS||index<0;
-        rows[i].frame = NSMakeRect(ox + 84 * scale, oy + row_y(page,i,selected) * scale,
-            (page == PAGE_DIAGNOSTICS ? 600 : 792) * scale, 38 * scale);
+        rows[i].frame = NSMakeRect(ox + 84 * scale, oy + row_y(page,i,selected) * yscale,
+            (page == PAGE_DIAGNOSTICS ? 600 : 792) * scale, 38 * yscale);
     }
     for (int i = 0; i < MENU_TABS; ++i)
-        categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * scale, TAB_WIDTH * scale, 38 * scale);
+        categories[i].frame = NSMakeRect(ox + (84 + i * TAB_WIDTH) * scale, oy + 82 * yscale, TAB_WIDTH * scale, 38 * yscale);
     /* No buttons under the list: Back is its hint, which a click also takes. */
-    back.frame = NSMakeRect(ox + back_hint_x * scale, oy + 516 * scale, back_hint_w * scale, 26 * scale);
+    back.frame = NSMakeRect(ox + back_hint_x * scale, oy + 516 * yscale, back_hint_w * scale, 26 * yscale);
     back.alphaValue = 0; quit.hidden = YES;
     defaults.hidden=YES;
     for (int i = 0; i < MENU_TABS; ++i) categories[i].hidden = YES;
     for (int i = ROW_SLOT_MISSIONS; i <= ROW_SLOT_DELETE; ++i) rows[i].enabled = !row_disabled(i);
-    defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * scale, 138 * scale, 30 * scale);
+    defaults.frame = NSMakeRect(ox + 738 * scale, oy + 526 * yscale, 138 * scale, 30 * yscale);
 }
 - (void)refreshValues
 {
@@ -858,7 +895,8 @@ static NSTimeInterval transition, last_draw;
         NSSize size = self.bounds.size;
         CGFloat scale = MIN(size.width / 960.0, size.height / 600.0);
         NSPoint point = [self convertPoint:NSApp.currentEvent.locationInWindow fromView:nil];
-        CGFloat x = (point.x - (size.width - 960 * scale) / 2) / scale - CONTENT_DX;
+        BlackPageGeometry g = page_geometry(size);
+        CGFloat x = ((point.x - g.ox) / g.scale - g.dx) / g.k; (void)scale;
         if (selected >= ROW_PAD_FIRST && selected <= ROW_PAD_LAST) {
             if (x >= 600 && x < 876) [self adjustOption:1 cycle:YES];
             return;
@@ -877,10 +915,10 @@ static NSTimeInterval transition, last_draw;
                 [self setNeedsDisplay:YES];}
             return;
         }
-        CGFloat left=selected==ROW_DEVICE||selected==ROW_PROMPTS?500:752;
-        CGFloat selector_width=selected==ROW_DEVICE||selected==ROW_PROMPTS?376:122;
-        if (x >= left && x < left + 26) { [self adjustOption:-1 cycle:NO]; return; }
-        if (x >= left + selector_width - 26 && x < left + selector_width) { [self adjustOption:1 cycle:NO]; return; }
+        CGFloat left=selected==ROW_DEVICE||selected==ROW_PROMPTS?500:VALUE_LEFT;
+        CGFloat selector_width=selected==ROW_DEVICE||selected==ROW_PROMPTS?376:VALUE_WIDTH;
+        if (x >= left && x < left + 40) { [self adjustOption:-1 cycle:NO]; return; }
+        if (x >= left + selector_width - 40 && x < left + selector_width) { [self adjustOption:1 cycle:NO]; return; }
         return;
     }
     [self adjustOption:1 cycle:YES];
@@ -1340,7 +1378,16 @@ static NSAlert *pack_alert;
         });
     }
     NSSize size = self.bounds.size;
-    fill(self.bounds, BLACK_UI_BACKDROP, .9);
+    /* The game shows through the margin and the rail band, as in its own
+     * menus; the menu's column is dense enough that the game's options under
+     * it do not read through (fill replaces, so each area gets its own alpha). */
+    fill(self.bounds, BLACK_UI_BACKDROP, .6);
+    {
+        BlackPageGeometry g0 = page_geometry(size);
+        CGFloat column = g0.ox + (g0.rail_x + g0.band) * g0.scale;
+        fill(NSMakeRect(column, 0, size.width - column, size.height), BLACK_UI_BACKDROP, .94);
+    }
+    text_scale = 1.8;
     [NSGraphicsContext saveGraphicsState];
     CGFloat scale = MIN(size.width / 960.0, size.height / 600.0), ox = (size.width - 960 * scale) / 2, oy = (size.height - 600 * scale) / 2;
     NSAffineTransform *transform = [NSAffineTransform transform];
@@ -1348,10 +1395,13 @@ static NSAlert *pack_alert;
     [transform scaleBy:scale]; [transform concat];
     /* The game's page: rails on the left, heading in its large font, rows to the right. */
     BOOL still = NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
-    black_ui_rails_band(30, RAIL_BAND, -oy / scale, 600 + oy / scale, still ? -1 : fmod(CACurrentMediaTime() / 7, 1) * 1.3 - .15);
+    BlackPageGeometry g = page_geometry(size);
+    black_ui_rails_band(g.rail_x, g.band, -oy / scale, 600 + oy / scale, still ? -1 : fmod(CACurrentMediaTime() / 7, 1) * 1.3 - .15, .9);
     /* The rows from here on, shifted right of the wider band. */
-    NSAffineTransform *shift = [NSAffineTransform transform]; [shift translateXBy:CONTENT_DX yBy:0]; [shift concat];
-    CGFloat rail = 30 + RAIL_BAND + 12 - CONTENT_DX, edge = 960 - CONTENT_DX + ox / scale;
+    NSAffineTransform *shift = [NSAffineTransform transform];
+    [shift translateXBy:g.dx yBy:g.dy]; [shift scaleXBy:g.k yBy:g.ky]; [shift concat];
+    text_aspect = g.k / g.ky;
+    CGFloat rail = (g.rail_x + g.band - g.dx) / g.k, edge = (960 + ox / scale - g.dx) / g.k;
     /* The game's own nesting: the menu's name large, the way here under it
      * (SETTINGS > SAVES > PROFILE BACKUPS); Back climbs one level. */
     text(T(@"RECOMP SETTINGS"), 96, 34, 26, TEXT, 1);
@@ -1369,7 +1419,9 @@ static NSAlert *pack_alert;
             NSString *last = trail.lastObject; [trail removeLastObject];
             for (NSString *step in trail) { NSString *item = [step stringByAppendingString:@"  ›  "]; text(item, x, 88, 13, DIM, 0); x += text_width(item, 13, 0); }
             fitted_text(last, x, 88, 13, 600 - x, HEADING, 0);
+            x += MIN(text_width(last, 13, 0), 600 - x);
         }
+        trail_end = x;
         /* What the page is about, on the right: the game's revision, the device in use. */
         NSString *info = nil; unsigned info_color = DIM;
         if (page == PAGE_MODS) {
@@ -1380,12 +1432,17 @@ static NSAlert *pack_alert;
             BlackControllerMonitor monitor = black_ControllerMonitor();
             info = black_InputKeyboardActive() ? T(@"KEYBOARD AND MOUSE") : monitor.connected ? @(monitor.name) : T(@"NO CONTROLLER");
         }
-        if (info) fitted_text(info, 610, 90, 10, 200, info_color, 0);
-        text([NSString stringWithFormat:@"%02d / %02d", black_menu_index(page, selected) + 1, black_menu_count(page)], 830, 90, 10, DIM, 0);
+        NSString *count = [NSString stringWithFormat:@"%02d / %02d", black_menu_index(page, selected) + 1, black_menu_count(page)];
+        CGFloat count_x = 868 - text_width(count, 10, 0);
+        text(count, count_x, 90, 10, DIM, 0);
+        /* The page's status ends before the counter. */
+        /* ...and after the way here; with too little room it is left out. */
+        if (info) { CGFloat room = MIN(260, count_x - 24 - (trail_end + 24)), w = MIN(text_width(info, 10, 0), room);
+            if (room >= 60) fitted_text(info, count_x - 24 - w, 90, 10, room, info_color, 0); }
         line(84, 112, 792, HIGHLIGHT, 1);
     }
     int start=visible_start(page,selected),end=MIN(start+MENU_TAB_MAX_ROWS,black_menu_count(page));
-    CGFloat width=page==PAGE_DIAGNOSTICS?600:792,left=752;
+    CGFloat width=page==PAGE_DIAGNOSTICS?600:792,left=VALUE_LEFT;
     for(int position=start;position<end;++position){
         int index=black_menu_row(page,position);
         CGFloat y=row_y(page,index,selected);
@@ -1517,12 +1574,12 @@ static NSAlert *pack_alert;
             index == ROW_ANY_FILM ? (black_SettingsSkipAnyFilm() ? @"ON" : @"OFF") :
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
         CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : left;
-        CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : 122;
+        CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : VALUE_WIDTH;
         if (index != ROW_MEASURE && index != ROW_RESET) {
             text(@"<", value_left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
-            text(@">", value_left + value_width - 17, y + 13, 13, focus ? TEXT : DIM, 0);
+            text(@">", value_left + value_width - 24, y + 13, 13, focus ? TEXT : DIM, 0);
         }
-        fitted_text(T(value), value_left + 32, y + 13, 12, value_width - 61, focus ? TEXT : DIM, 0);
+        fitted_text(T(value), value_left + 36, y + 13, 12, value_width - 72, focus ? TEXT : DIM, 0);
     }
     NSString *help, *detail;
     if(selected==ROW_DEFAULTS){
@@ -1701,7 +1758,6 @@ static NSAlert *pack_alert;
             selected == ROW_ANY_FILM ? @"A HINT SHOWS THE BUTTON. OFF: ONLY FILMS THE GAME ITSELF LETS YOU SKIP." :
             @"FILMS PLAY BRIEFLY BEFORE SKIPPING.";
     }
-    line(84, 430, 792, HIGHLIGHT, 1);
     line(84, 450, 792, HIGHLIGHT, 1);
     fitted_text(T(help), 96, 462, 11, 768, TEXT, 0);
     fitted_text(T(detail), 96, 482, 10, 768, DIM, 0);
@@ -1735,7 +1791,7 @@ static NSAlert *pack_alert;
     {
         BOOL adjust = !black_menu_link(selected) && !black_menu_save(selected) && selected != ROW_QUIT && selected != ROW_CLOSE_MENU &&
             selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_RESET;
-        NSMutableArray *hints = [NSMutableArray arrayWithObject:T(@"▲▼ SELECT")];
+        NSMutableArray *hints = [NSMutableArray arrayWithObject:[@"▲▼  " stringByAppendingString:T(@"SELECT")]];
         if (adjust) [hints addObject:T(@"◀▶ CHANGE")];
         [hints addObject:[NSString stringWithFormat:@"%@ %@", @(accept), T(@"CONFIRM")]];
         if (reset_row(selected, 0)) {
@@ -1744,14 +1800,19 @@ static NSAlert *pack_alert;
             [hints addObject:[NSString stringWithFormat:@"%@ %@", @(reset), T(@"DEFAULT")]];
         }
         CGFloat x = 96;
-        for (NSString *hint in hints) { text(hint, x, 522, 12, DIM, 0); x += text_width(hint, 12, 0) + 36; }
+        /* The hints share the line: smaller and closer when they would not fit. */
         NSString *back_hint = [NSString stringWithFormat:@"%@ %@", @(cancel), T(@"BACK")];
-        back_hint_x = x - 8; back_hint_w = text_width(back_hint, 12, 0) + 16;
-        text(back_hint, x, 522, 12, DIM, 0);
+        CGFloat hint_size = 12, gap = 36, total = text_width(back_hint, hint_size, 0);
+        for (NSString *hint in hints) total += text_width(hint, hint_size, 0) + gap;
+        if (total > 780) hint_size *= 780 / total, gap *= 780 / total;
+        for (NSString *hint in hints) { text(hint, x, 522, hint_size, DIM, 0); x += text_width(hint, hint_size, 0) + gap; }
+        back_hint_x = x - 8; back_hint_w = text_width(back_hint, hint_size, 0) + 16;
+        text(back_hint, x, 522, hint_size, DIM, 0);
         BOOL failed = black_SettingsSaveFailed();
         NSString *status = T(failed ? @"COULD NOT SAVE. SESSION ONLY." : changed ? @"SAVED" : @"");
         if (status.length) { CGFloat w = MIN(text_width(status, 11, 0), 240); fitted_text(status, 876 - w, 523, 11, 240, failed ? WARN : DIM, 0); }
     }
+    text_scale = 1; text_aspect = 1;
     [NSGraphicsContext restoreGraphicsState];
 }
 - (void)mouseDown:(NSEvent *)event { (void)event; }
@@ -1799,6 +1860,14 @@ static BOOL reduced_motion(void)
     return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
 }
 
+/* A page asked for at launch (BLACK_OPEN_SETTINGS), shown when the panel opens. */
+static int requested_page = -1, requested_row;
+static void request_page(const char *name, int row)
+{
+    int number = name[0] == '#' ? atoi(name + 1) : -1; /* "#3": by page number, for pages that share a name */
+    for (int p = 0; p < MENU_PAGES && strcmp(name, "1"); ++p)
+        if (p == number || !strcasecmp(page_names[p].UTF8String, name)) { requested_page = p; requested_row = black_menu_row(p, row); break; }
+}
 static void set_open(int open)
 {
     if (open) {
@@ -1815,7 +1884,8 @@ static void set_open(int open)
             menu_view.alphaValue = reduced_motion() ? 1 : 0;
             transition = CACurrentMediaTime();
             [menu_view setFrameSize:container.bounds.size];
-            if(black_menu_tab(menu_view->page)==1)[menu_view openPage:PAGE_CONTROLS row:ROW_DEVICE];
+            if (requested_page >= 0) { [menu_view openPage:requested_page row:requested_row]; requested_page = -1; }
+            else if(black_menu_tab(menu_view->page)==1)[menu_view openPage:PAGE_CONTROLS row:ROW_DEVICE];
             else [menu_view selectRow:menu_view->selected];
             fprintf(stderr,"[MENU] opened %s\n",page_names[menu_view->page].UTF8String);
         }
@@ -2069,13 +2139,37 @@ void black_MenuAttach(void *window, void (*capture)(int))
         item.submenu = window_menu; [main addItem:item];
         NSApp.windowsMenu = window_menu;
     }
-    if (getenv("BLACK_OPEN_SETTINGS")) black_MenuCommand(BLACK_MENU_TOGGLE);
+    const char *open = getenv("BLACK_OPEN_SETTINGS");
+    if (open && strchr(open, '@')) return; /* "...@seconds": black_MenuPump opens it later */
+    if (open) {
+        /* "1": the top menu; "PAGE NAME[/ROW]": that page and row (README
+         * screenshots and checks; the page's English name, any case). */
+        char name[64]; snprintf(name, sizeof name, "%s", open);
+        char *slash = strchr(name, '/'); int row = slash ? atoi(slash + 1) : 0; if (slash) *slash = 0;
+        request_page(name, row);
+        black_MenuCommand(BLACK_MENU_TOGGLE);
+    }
 }
 
 #include "window_state.h"
 void black_MenuPump(void)
 {
     black_WindowStatePump();
+    {   /* BLACK_OPEN_SETTINGS="PAGE[/ROW]@seconds": open it that long after
+         * the panel exists, once the game is past its title (screenshots). */
+        static double opened_at; static int opened;
+        const char *open = getenv("BLACK_OPEN_SETTINGS"), *at = open ? strchr(open, '@') : NULL;
+        if (at && menu_view && !opened) {
+            if (!opened_at) opened_at = CACurrentMediaTime();
+            if (CACurrentMediaTime() - opened_at >= atof(at + 1)) {
+                opened = 1;
+                char name[64]; snprintf(name, sizeof name, "%.*s", (int)(at - open), open);
+                char *slash = strchr(name, '/'); int row = slash ? atoi(slash + 1) : 0; if (slash) *slash = 0;
+                request_page(name, row);
+                black_MenuCommand(BLACK_MENU_TOGGLE);
+            }
+        }
+    }
     /* Local process-only integration check; never injects OS keyboard input. */
     static double test_start;
     static int test_sent;

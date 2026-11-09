@@ -481,7 +481,7 @@ def play_locked(args, settings_path, data, name, binary, state):
     if args.texture_dir:
         env["BLACK_TEXTURE_DIR"] = str(Path(args.texture_dir).expanduser().resolve())
     if args.open_settings:
-        env["BLACK_OPEN_SETTINGS"] = "1"
+        env["BLACK_OPEN_SETTINGS"] = args.open_settings
     # SDL otherwise turns SIGTERM into a queued SDL_QUIT event, which the
     # pinned input loop discards; a bounded run then needs SIGKILL.
     env["SDL_NO_SIGNAL_HANDLERS"] = "1"
@@ -676,7 +676,8 @@ def main():
             sub.add_argument("--aspect", choices=("4:3", "16:9"), default="16:9", help="Presentation shape; not an ultrawide camera/HUD patch")
             sub.add_argument("--windowed", action="store_true")
             sub.add_argument("--game-mode", action="store_true", help="Use local signed BLACK.app with Game Mode opt-in; macOS activates it in native full screen")
-            sub.add_argument("--open-settings", action="store_true", help="Open the built-in recomp settings menu at launch")
+            sub.add_argument("--open-settings", nargs="?", const="1", default=None, metavar="PAGE[/ROW]",
+                             help="Open the recomp settings at launch; optionally on a page by its English name (e.g. MODS/12) for screenshots")
             sub.add_argument("--settings-file", help="Use an explicit settings file (separate profiles or isolated developer checks)")
             sub.add_argument("--texture-dir", help="Folder holding replacement/ with your own HD texture pack (default: ~/Library/Application Support/BLACK/Textures)")
             sub.add_argument("--texture-audit", action="store_true", help="Record unique texture keys and map matches in this run's texture-audit.csv; no pixels")

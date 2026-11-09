@@ -1,4 +1,5 @@
 /* Shared native drawing in the look of BLACK's menus; see black_ui.h. */
+#import <QuartzCore/QuartzCore.h>
 #import "black_ui.h"
 #include "input_atlas.h"
 #include <math.h>
@@ -149,24 +150,31 @@ static void over(NSRect r, unsigned rgb, CGFloat opacity)
 { [black_ui_color(rgb, opacity) setFill]; NSRectFillUsingOperation(r, NSCompositingOperationSourceOver); }
 
 void black_ui_rails(CGFloat x, CGFloat top, CGFloat bottom, CGFloat glow)
-{ black_ui_rails_band(x, 34, top, bottom, glow); }
+{ black_ui_rails_band(x, 48, top, bottom, glow, .9); }
 
-void black_ui_rails_band(CGFloat x, CGFloat band, CGFloat top, CGFloat bottom, CGFloat glow)
+/* The game's rail band, as its own menus draw it: black between a broad pale
+ * rail on the left (a thin line beside it) and two thin lines and a broad
+ * rail on the right; `band` spans both rails. A warm light passes down it and
+ * the scales outside both rails creep downwards; still when glow < 0. */
+void black_ui_rails_band(CGFloat x, CGFloat band, CGFloat top, CGFloat bottom, CGFloat glow, CGFloat fill)
 {
-    over(NSMakeRect(x + 3, top, band, bottom - top), BLACK_UI_BAR, .9);
+    over(NSMakeRect(x, top, band, bottom - top), 0x010201, fill);
     if (glow >= 0) {
-        /* A warm light passing down the band, faded at both ends. */
-        CGFloat center = top + (bottom - top) * glow, reach = 70;
+        CGFloat center = top + (bottom - top) * glow, reach = 90;
         NSGradient *light = [[[NSGradient alloc] initWithColorsAndLocations:
-            black_ui_color(0xd9a54a, 0), 0.0, black_ui_color(0xe8c27a, .28), 0.5, black_ui_color(0xd9a54a, 0), 1.0, nil] autorelease];
-        [light drawInRect:NSMakeRect(x + 3, center - reach, band, reach * 2) angle:90];
+            black_ui_color(0xd9a54a, 0), 0.0, black_ui_color(0xf0c86a, .42), 0.5, black_ui_color(0xd9a54a, 0), 1.0, nil] autorelease];
+        [light drawInRect:NSMakeRect(x + 6, center - reach, band - 24, reach * 2) angle:90];
     }
-    over(NSMakeRect(x, top, 3, bottom - top), BLACK_UI_RAIL, .85);
-    over(NSMakeRect(x + band + 3, top, 2, bottom - top), BLACK_UI_RAIL, .85);
-    over(NSMakeRect(x + band + 7, top, 2, bottom - top), BLACK_UI_RAIL, .7);
-    for (CGFloat y = top + 6; y < bottom; y += 16) {
-        over(NSMakeRect(x - 7, y, 7, 1), BLACK_UI_RAIL, .45);
-        over(NSMakeRect(x + band + 9, y, 6, 1), BLACK_UI_RAIL, .45);
+    over(NSMakeRect(x, top, 6, bottom - top), BLACK_UI_RAIL, .95);
+    over(NSMakeRect(x + 10, top, 1.5, bottom - top), BLACK_UI_RAIL, .7);
+    over(NSMakeRect(x + band - 17, top, 1.5, bottom - top), BLACK_UI_RAIL, .8);
+    over(NSMakeRect(x + band - 12, top, 1.5, bottom - top), BLACK_UI_RAIL, .8);
+    over(NSMakeRect(x + band - 5, top, 5, bottom - top), BLACK_UI_RAIL, .95);
+    CGFloat creep = glow >= 0 ? fmod(CACurrentMediaTime() * 6, 16) : 0;
+    for (CGFloat y = top + 6 - 16 + creep; y < bottom; y += 16) {
+        if (y < top) continue;
+        over(NSMakeRect(x - 7, y, 6, 1), BLACK_UI_RAIL, .5);
+        over(NSMakeRect(x + band + 1, y, 6, 1), BLACK_UI_RAIL, .5);
     }
 }
 
