@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 — 2026-11-10
+
+- **A slot's record in Saves.** After each profile save BLACK keeps, beside the
+  saves, the mission last played and its difficulty, the time spent in missions
+  and the date, and a picture of the game from that run. A slot's page lists
+  them under its rows and shows the picture in the rail band beside them; the
+  Saves list shows the selected slot's picture. The profile is not changed: the
+  record names the slot's bytes, so after an import or a restore the page shows
+  the profile alone.
+- **Mission statistics and best results.** Each mission run counts its time
+  played, deaths (Mission Failed's Continue and Restart), the checkpoints the
+  game reached, shots and the shots that hit a soldier. A completed run joins
+  the slot's record: Saves → slot → Missions shows the best time, fewest deaths,
+  best accuracy, completions and the last run of the selected mission.
+- **Start Mission stays Start Mission.** While checkpoints are on, the title's
+  own button reads Start Mission with or without a checkpoint; after a mission
+  retired the checkpoint it went back to the game's own Continue Mission label,
+  which opens the mission list.
+
 ## 0.7.1 — 2026-11-09
 
 - **Settings prompts as on the game's pages.** Select, Confirm and Back stand in a

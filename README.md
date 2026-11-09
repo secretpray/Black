@@ -10,8 +10,10 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.7.1 is an experimental macOS release.** The settings' prompts stand in a
-> column as on the game's own pages. From 0.7.0: the game's own checkpoint is kept
+> **0.8.0 is an experimental macOS release.** Each save slot shows its last
+> mission, the time spent in missions and a picture of the game, and each mission
+> its best time, fewest deaths and best accuracy. From 0.7.1: the settings'
+> prompts stand in a column as on the game's own pages. From 0.7.0: the game's own checkpoint is kept
 > between launches: **Continue Mission** on the title resumes it, and F9 or
 > Back + Y go back to it in a mission after a question. Checkpoints follow the
 > game's Autosave, with a Checkpoints row under it in Options → Profile.
@@ -58,11 +60,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.7.1 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.7.1)**
+**[BLACK 0.8.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.8.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.7.1-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.8.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 
@@ -287,6 +289,22 @@ console.
   <img src="docs/screenshots/settings-saves.jpg" alt="Saves page: three profile slots with their names and progress, Save Checkpoints and Profile Backups" width="85%">
 </p>
 
+After each profile save BLACK also keeps a record of the slot beside the saves,
+in `Data/xboxrecomp/SlotInfo/`: the mission last played, the time spent in
+missions, the date and a picture of the game from that run. Each completed
+mission run adds its time, deaths (Mission Failed's Continue or Restart), the
+checkpoints reached and its accuracy: the shots that hit a soldier, so fire at
+cover and vehicles counts as missed. The profile itself is not changed; when it
+no longer matches the record (an import, a restore), the page shows the profile
+alone. Time and results count from the first save made with 0.8.0.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/saves-slot-record.jpg" alt="Saves, slot 1 page: a picture of the last run in the rail band, the rows, then Last Mission Hard, Mission 1 and Time in Missions 13 min, Saved 09.11.2026 23:40"><br><sub>A slot's last mission, time and picture.</sub></td>
+    <td width="50%"><img src="docs/screenshots/saves-missions-record.jpg" alt="A slot's Missions page, Hard Mission 1 selected, Target Met: best time 6:55, fewest deaths 0, best accuracy 7.4%, completions 1, and the last run"><br><sub>A mission's best results and last run.</sub></td>
+  </tr>
+</table>
+
 ## Checkpoints
 
 The console keeps a mission's checkpoint only while the game runs, so a long
@@ -308,8 +326,8 @@ level.
 </table>
 
 - **Continue Mission** on the title resumes the active slot's checkpoint. While
-  it is there, the game's own button reads **Start Mission**: it opens the
-  mission list and starts the chosen mission from its start.
+  checkpoints are on, the game's own button reads **Start Mission**: it opens
+  the mission list and starts the chosen mission from its start.
 - **F9** or **Back + Y** in a mission ask, then go back to the last checkpoint
   of this run.
 - The game's own **Restart** (pause menu, Mission Failed) starts the mission over
@@ -329,6 +347,7 @@ Data is stored in `~/Library/Application Support/BLACK/`:
 | `Data/xboxrecomp/` | Xbox saves, profile backups, metadata and virtual cache partitions |
 | `Data/Import/`, `Data/Export/` | Profiles to import, and exported slots |
 | `Data/xboxrecomp/Checkpoints/` | Checkpoints kept between launches |
+| `Data/xboxrecomp/SlotInfo/` | Each slot's last mission, time, picture and mission results |
 | `settings.ini` | Recomp preferences and bindings |
 | `Logs/run-*/` | A separate log for every launch |
 

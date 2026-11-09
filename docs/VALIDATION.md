@@ -1,7 +1,47 @@
 # Release validation and current limits
 
-Release: **BLACK 0.7.1**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.8.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
+
+## Slot records and mission statistics in 0.8.0
+
+**Slot records.** Every successful profile save (`0x1FE713`, the hook the
+checkpoints already used, now run with checkpoints off too) writes
+`Data/xboxrecomp/SlotInfo/slot-N.json` and `slot-N.png` on a queue of its own,
+atomically. The JSON names the slot's 0x770 payload bytes by SHA-256 and the PNG
+by size and SHA-256; the Saves page shows a record only while they match. The
+profile file, its format and its signature are not changed. Time in missions is
+counted while a mission is played, not paused and without the panel; the
+picture is the frame before SMAA and MetalFX, copied in the presenter's own
+command buffer every 8 s of play and reduced once the GPU is done, through the
+game's gamma ramp, 480 pixels wide at the display aspect; nearly black frames
+are skipped. The boot's stage-0 mission state without a profile is not a
+mission.
+
+**Mission statistics.** A run lasts from entering a mission until a profile
+save records it with a result (0-2) in the saved slot, during the run or within
+60 s of leaving it; leaving from the pause menu gives it up. Deaths are Mission
+Failed's Continue (`0x1240D0`, now wrapped) and Restart (`0x124190`): the
+player's dying flag is also set at a mission's end. Shots are the player's
+weapon updates (`0x1EEFD0`) that lengthen its wait; hit shots are the player's
+bullet hits on a standing soldier (`0x1E74B0`), which land inside that update,
+pellets once. Checkpoints are the game's captures (`0x1C8D20`).
+
+Checked: `macos_slot_info`, `macos_mission_stats` and `macos_flash_menu`
+(also under ASan); 123 CTest checks and 49 Python tests passed. On the
+developer's own data a real autosave wrote the record and the slot page showed
+it; a played mission 1 on Hard recorded `415 s, 0 deaths, 0 checkpoints,
+36/486 shots hit`, shown as 6:55, 0, 7.4 %, one completion. That play first found
+two bugs, fixed before release: the dying flag at a mission's end gave the run
+up, and hits inside the weapon update were lost. In a sandbox, mission 2 started
+at streaming unit 2 captured its checkpoint on entering unit 4 and not on 2→3
+or 4→5; mission 1 has a single unit and no checkpoint. In mission, frame
+grabs kept 30.0 fps with a slowest frame of 35-41 ms, as before. The title's
+stock button reads Start Mission whenever checkpoints are on.
+
+Not checked in play: a death answered with Continue or Restart, a second
+completion of a mission, a save in the middle of a mission completed before
+(which would count as a completion).
 
 ## Settings prompts in 0.7.1
 
