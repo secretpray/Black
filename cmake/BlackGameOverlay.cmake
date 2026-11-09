@@ -11,7 +11,9 @@ set(BLACK_RENAMED
     "sub_000D6850|black_OriginalStrip" "sub_001217C0|black_OriginalFilmDraw"
     "sub_000DA4B0|black_OriginalListDraw"
     # Mods page (ports/macos/overrides/game_mods.c): bullet hit, weapon update
-    "sub_001E74B0|black_OriginalBulletHit" "sub_001EEFD0|black_OriginalWeaponUpdate")
+    "sub_001E74B0|black_OriginalBulletHit" "sub_001EEFD0|black_OriginalWeaponUpdate"
+    # Checkpoints (game_checkpoint_hooks.c): the title's own capture
+    "sub_001C8D20|black_OriginalCheckpointCapture")
 foreach(pair IN LISTS BLACK_RENAMED)
     string(REPLACE "|" ";" symbols "${pair}")
     list(GET symbols 0 old)
@@ -30,6 +32,9 @@ foreach(point HOLD_AIM LOOK_ASSIST SHOT_ASSIST MOD_SPAWN MOD_SILENCER MOD_RECOIL
 endforeach()
 set(BLACK_FOUND_LANGUAGE 0)
 set(BLACK_FOUND_GAMMA 0)
+set(BLACK_FOUND_TEST_UNIT 0)
+set(BLACK_FOUND_CP_LOAD 0)
+set(BLACK_FOUND_CP_SAVED 0)
 set(BLACK_GAME_OVERLAY_SOURCES "")
 foreach(source IN LISTS BLACK_GENERATED)
     file(READ "${source}" original)
@@ -125,6 +130,48 @@ foreach(source IN LISTS BLACK_GENERATED)
             string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\n${mod_declaration}" edited "${edited}")
         endif()
     endforeach()
+    # Checkpoint load (ports/macos/overrides/game_checkpoint.inc): 0x1EDC90
+    # just before the first streaming unit starts. The record's unit is what
+    # the title then streams, and its player state is what Continue restores.
+    set(cp_anchor "loc_001EE310: ;\n    MEM32(ebp + 0x5AE0) = 0x10;")
+    string(REPLACE "${cp_anchor}" "" without_cp "${edited}")
+    string(LENGTH "${edited}" before_length)
+    string(LENGTH "${without_cp}" after_length)
+    string(LENGTH "${cp_anchor}" anchor_length)
+    math(EXPR matches "(${before_length} - ${after_length}) / ${anchor_length}")
+    if(matches GREATER 0)
+        math(EXPR BLACK_FOUND_CP_LOAD "${BLACK_FOUND_CP_LOAD} + ${matches}")
+        string(REPLACE "${cp_anchor}" "loc_001EE310: ;\n    black_CheckpointEvent(2u, ebp);\n    MEM32(ebp + 0x5AE0) = 0x10;" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_CheckpointEvent(uint32_t, uint32_t);" edited "${edited}")
+    endif()
+    # A successful profile autosave keeps this slot's checkpoints under the
+    # profile's new date (only failed writes skip 0x1FE713).
+    set(cp_saved_anchor "loc_001FE713: ;\n    eax = ebp;")
+    string(REPLACE "${cp_saved_anchor}" "" without_cp_saved "${edited}")
+    string(LENGTH "${edited}" before_length)
+    string(LENGTH "${without_cp_saved}" after_length)
+    string(LENGTH "${cp_saved_anchor}" anchor_length)
+    math(EXPR matches "(${before_length} - ${after_length}) / ${anchor_length}")
+    if(matches GREATER 0)
+        math(EXPR BLACK_FOUND_CP_SAVED "${BLACK_FOUND_CP_SAVED} + ${matches}")
+        string(REPLACE "${cp_saved_anchor}" "loc_001FE713: ;\n    black_CheckpointEvent(4u, ebp);\n    eax = ebp;" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_CheckpointEvent(uint32_t, uint32_t);" edited "${edited}")
+    endif()
+    # Developer start unit (ports/macos/overrides/game_test_unit.c): right
+    # after 0x1EDC90 stores the mission's streaming table and before native
+    # streaming reads the unit, so a checkpoint part can be reached quickly.
+    # Off unless the launcher sets RECOMP_BLACK_TEST_UNIT.
+    set(unit_anchor "loc_001EDD8F: ;\n    MEM32(ebp + 0x5AF4) = eax;\n")
+    string(REPLACE "${unit_anchor}" "" without_unit "${edited}")
+    string(LENGTH "${edited}" before_length)
+    string(LENGTH "${without_unit}" after_length)
+    string(LENGTH "${unit_anchor}" anchor_length)
+    math(EXPR matches "(${before_length} - ${after_length}) / ${anchor_length}")
+    if(matches GREATER 0)
+        math(EXPR BLACK_FOUND_TEST_UNIT "${BLACK_FOUND_TEST_UNIT} + ${matches}")
+        string(REPLACE "${unit_anchor}" "${unit_anchor}    black_TestStreamUnit(ebp);\n" edited "${edited}")
+        string(REPLACE "#include \"recomp_funcs.h\"" "#include \"recomp_funcs.h\"\nvoid black_TestStreamUnit(uint32_t);" edited "${edited}")
+    endif()
     # Gamma ramp (ports/macos/overrides/display_gamma.c): BLACK's renderer
     # 0x1762B0 builds its brightness ramp and, when it changed, copies it to
     # the device's pending slot (+0x1E04 + slot * 0x300) and flags it for the
@@ -257,6 +304,15 @@ foreach(point MOD_SPAWN MOD_SILENCER MOD_RECOIL)
         message(FATAL_ERROR "Expected exactly one verified USA ${point} hook (0x1EE1FF / 0x1E61BF / 0x1E5FB7)")
     endif()
 endforeach()
+if(NOT BLACK_FOUND_TEST_UNIT EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified developer stream-unit anchor at 0x1EDD8F")
+endif()
+if(NOT BLACK_FOUND_CP_LOAD EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified checkpoint load anchor at 0x1EE310")
+endif()
+if(NOT BLACK_FOUND_CP_SAVED EQUAL 1)
+    message(FATAL_ERROR "Expected exactly one verified checkpoint profile-save anchor at 0x1FE713")
+endif()
 if(NOT BLACK_FOUND_STICK_LOOK EQUAL 1)
     message(FATAL_ERROR "Expected exactly one verified StickLook point at 0x1BD69F")
 endif()

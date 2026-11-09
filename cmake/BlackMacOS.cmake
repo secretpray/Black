@@ -53,6 +53,7 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/save_profiles.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/window_state.m"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_profile.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_checkpoint.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_menu.m")
 target_link_libraries(black-port-ui PUBLIC "-framework Cocoa" "-framework QuartzCore" "-framework GameController" "-framework CoreText")
 target_link_libraries(xbox_input PUBLIC black-port-ui)
@@ -129,6 +130,11 @@ add_executable(black-port-settings tools/macos/port_settings_test.c
     ports/macos/overrides/flash_input.c ports/macos/overrides/input_profile.c)
 target_link_libraries(black-port-settings PRIVATE Threads::Threads)
 add_test(NAME macos_port_settings COMMAND black-port-settings)
+add_executable(black-checkpoints tools/macos/checkpoint_test.c)
+target_link_libraries(black-checkpoints PRIVATE Threads::Threads)
+add_test(NAME macos_checkpoints COMMAND black-checkpoints)
+add_executable(black-menu-layout tools/macos/menu_layout_test.c)
+add_test(NAME macos_menu_layout COMMAND black-menu-layout)
 add_executable(black-hud-prompts tools/macos/hud_prompts_test.c)
 target_link_libraries(black-hud-prompts PRIVATE black-port-ui)
 add_test(NAME macos_hud_prompts COMMAND black-hud-prompts)
@@ -500,6 +506,8 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_language.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_audio.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_hud.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_test_unit.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_checkpoint_hooks.c"
         "${BLACK_MAC_GAME}/src/recomp_manual.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_natives.c"
         ${BLACK_GAME_OVERLAY_SOURCES})

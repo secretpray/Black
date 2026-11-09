@@ -16,6 +16,9 @@
 static pthread_once_t initialized = PTHREAD_ONCE_INIT;
 static pthread_mutex_t save_lock = PTHREAD_MUTEX_INITIALIZER;
 static atomic_int skip_intros, skip_missions, skip_any_film = 1, save_failed, menu_open;
+/* The title's own checkpoint beside the saves, written as the game makes it
+ * and restored at the next mission start; on by default. */
+static atomic_int save_checkpoints = 1;
 static atomic_int render_scale = 2, field_of_view = 70;
 /* anti_aliasing: 0 off, 1 FXAA, 2 SMAA. anisotropic_filtering: 0 keeps the
  * game's own level, else 2, 4, 8 or 16. */
@@ -78,6 +81,10 @@ static void load_settings(void)
             if (sscanf(line, " skip_any_film = %15s %c", value, &extra) == 1) {
                 if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&skip_any_film, 1);
                 else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&skip_any_film, 0);
+            }
+            if (sscanf(line, " save_checkpoints = %15s %c", value, &extra) == 1) {
+                if (!strcmp(value, "1") || !strcmp(value, "true")) atomic_store(&save_checkpoints, 1);
+                else if (!strcmp(value, "0") || !strcmp(value, "false")) atomic_store(&save_checkpoints, 0);
             }
             char *end;
             const char *keys[] = {"left_stick_deadzone", "right_stick_deadzone",
@@ -240,6 +247,12 @@ int black_SettingsSkipAnyFilm(void)
     return atomic_load(&skip_any_film);
 }
 
+int black_SettingsSaveCheckpoints(void)
+{
+    pthread_once(&initialized, load_settings);
+    return atomic_load(&save_checkpoints);
+}
+
 int black_SettingsRenderScale(void)
 {
     pthread_once(&initialized, load_settings);
@@ -350,6 +363,7 @@ static int write_settings(void)
                 written &= fprintf(file, "# Display over the game's ramp: brightness %d..%d percent, gamma %d..%d hundredths; 0 and 100 neutral\ndisplay_brightness=%d\ndisplay_gamma=%d\n",
                     BLACK_BRIGHTNESS_MIN, BLACK_BRIGHTNESS_MAX, BLACK_GAMMA_MIN, BLACK_GAMMA_MAX,
                     atomic_load(&display_brightness), atomic_load(&display_gamma)) > 0;
+                written &= fprintf(file, "# The title's own checkpoint beside the saves; 1 on, 0 off\nsave_checkpoints=%d\n", atomic_load(&save_checkpoints)) > 0;
                 written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
                     atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language),
                     atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
@@ -386,6 +400,7 @@ static int write_settings(void)
 int black_SettingsSetSkipIntros(int enabled) { return save_setting(&skip_intros, !!enabled); }
 int black_SettingsSetSkipMissionIntros(int enabled) { return save_setting(&skip_missions, !!enabled); }
 int black_SettingsSetSkipAnyFilm(int enabled) { return save_setting(&skip_any_film, !!enabled); }
+int black_SettingsSetSaveCheckpoints(int enabled) { return save_setting(&save_checkpoints, !!enabled); }
 int black_SettingsSetRenderScale(int scale)
 { return scale >= 1 && scale <= 6 ? save_setting(&render_scale, scale) : 0; }
 int black_SettingsSetFov(int degrees)

@@ -11,6 +11,10 @@ int black_SettingsSkipMissionIntros(void);
 int black_SettingsSetSkipMissionIntros(int enabled);
 int black_SettingsSkipAnyFilm(void);
 int black_SettingsSetSkipAnyFilm(int enabled);
+/* The title's own checkpoint beside the saves: written when the game makes
+ * one and restored at the next mission start; on by default. */
+int black_SettingsSaveCheckpoints(void);
+int black_SettingsSetSaveCheckpoints(int enabled);
 int black_SettingsRenderScale(void);
 int black_SettingsSetRenderScale(int scale);
 int black_SettingsFov(void);

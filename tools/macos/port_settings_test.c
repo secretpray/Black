@@ -22,6 +22,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "fail"))
             return black_SettingsSetSkipIntros(1) || !black_SettingsSaveFailed() || !black_SettingsSkipIntros();
         if (!strcmp(argv[1], "mission")) return !black_SettingsSkipMissionIntros();
+        if (!strcmp(argv[1], "checkpoints")) return !black_SettingsSaveCheckpoints();
         if (!strcmp(argv[1], "mods")) return !black_SettingsMod(BLACK_MOD_GOD_MODE) || !black_SettingsMod(BLACK_MOD_BFG) ||
             black_SettingsMod(BLACK_MOD_AMMO) || black_SettingsMod(-1) || black_SettingsMod(BLACK_MOD_COUNT) ||
             black_SettingsRenderScale() != 3;
@@ -88,6 +89,10 @@ int main(int argc, char **argv)
     if (!black_SettingsSetSkipMissionIntros(1) || child(argv[0], "mission", path)) return 11;
     if (!black_SettingsSetSkipIntros(0) || child(argv[0], "0", path)) return 4;
     if (child(argv[0], "mission", path) || !black_SettingsSetSkipMissionIntros(0)) return 12;
+    /* Checkpoint saving is on until switched off, then stays off. */
+    if (child(argv[0], "checkpoints", path) || !black_SettingsSetSaveCheckpoints(0) ||
+        !child(argv[0], "checkpoints", path) || !black_SettingsSetSaveCheckpoints(1) ||
+        child(argv[0], "checkpoints", path)) return 39;
     if (!black_SettingsSetRenderScale(3) || !black_SettingsSetFov(85) || child(argv[0], "graphics", path)) return 13;
     if (black_SettingsSetRenderScale(0) || black_SettingsSetRenderScale(7) ||
         black_SettingsSetFov(44) || black_SettingsSetFov(141) || child(argv[0], "graphics", path)) return 14;
@@ -159,7 +164,7 @@ int main(int argc, char **argv)
     FILE *file = fopen(path, "w");
     if (!file) return 8;
     fputs("skip_intro_movies=broken\nrender_scale=7\nfield_of_view=45oops\nrender_scale=3 extra\n"
-          "anti_aliasing=5\nanisotropic_filtering=6\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\nmod_god_mode=2\nmod_bfg=on\nwindow_frame=1,2,50,50\nwindow_full_screen=3\ndisplay_brightness=30\ndisplay_gamma=1.2\n", file); fclose(file);
+          "anti_aliasing=5\nanisotropic_filtering=6\nsave_checkpoints=maybe\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\nmod_god_mode=2\nmod_bfg=on\nwindow_frame=1,2,50,50\nwindow_full_screen=3\ndisplay_brightness=30\ndisplay_gamma=1.2\n", file); fclose(file);
     if (child(argv[0], "0", path)) return 9;
     if (child(argv[0], "defaults", path) || child(argv[0], "input-defaults", path) || child(argv[0],"keyboard-defaults",path) ||
         child(argv[0], "mods-defaults", path) || child(argv[0], "window-defaults", path) ||

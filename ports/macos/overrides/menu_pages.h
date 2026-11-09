@@ -18,6 +18,8 @@ enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_BRIGHTNESS, ROW_GAMMA, ROW_
        ROW_EDIT_DEVICE, ROW_MOUSE_LOOK_PAIR, ROW_MOUSE_AIM_PAIR, ROW_PAD_LOOK_PAIR, ROW_PAD_AIM_PAIR, ROW_QUIT,
        ROW_SAVE_FIRST, ROW_SAVE_LAST = ROW_SAVE_FIRST + BLACK_PROFILE_SLOTS - 1,
        ROW_SLOT_MISSIONS, ROW_SLOT_IMPORT, ROW_SLOT_EXPORT, ROW_SLOT_DELETE,
+       ROW_SLOT_CHECKPOINT, ROW_SLOT_CHECKPOINT_DELETE,
+       ROW_CHECKPOINTS,
        ROW_MISSION_FIRST, ROW_MISSION_LAST = ROW_MISSION_FIRST + BLACK_PROFILE_MISSIONS - 1,
        ROW_BACKUP_FIRST, ROW_BACKUP_LAST = ROW_BACKUP_FIRST + BLACK_SAVE_BACKUPS - 1,
        ROW_PICK_FIRST, ROW_PICK_LAST = ROW_PICK_FIRST + BLACK_SAVE_IMPORTS - 1, ROW_PICK_FOLDER, ROW_PICK_FINDER,
@@ -32,7 +34,7 @@ enum { MENU_TABS = 4, MENU_TAB_MAX_ROWS = 8, TAB_WIDTH = 198 };
  * backups listed, profiles found to import, the slot page's actions, and the
  * page and row a confirmation returns to. */
 static int black_menu_backup_rows = 1, black_menu_pick_rows = 0;
-static int black_menu_slot_rows[4] = {ROW_SLOT_MISSIONS}, black_menu_slot_count = 1;
+static int black_menu_slot_rows[6] = {ROW_SLOT_MISSIONS}, black_menu_slot_count = 1;
 static int black_menu_confirm_page = -1, black_menu_confirm_row = -1;
 static inline int black_menu_clamp(int n,int low,int high){return n<low?low:n>high?high:n;}
 /* Pages whose last row puts their settings back to the defaults. */
@@ -41,10 +43,10 @@ static inline int black_menu_has_defaults(int page)
 static inline int black_menu_count(int page)
 {
     static const int counts[]={12,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT,
-        BLACK_PROFILE_SLOTS+1,1,1,2,BLACK_PROFILE_MISSIONS,2,2,6};
+        BLACK_PROFILE_SLOTS+2,1,1,2,BLACK_PROFILE_MISSIONS,2,2,6};
     /* The backups, then "delete all" when there are any. */
     if(page==PAGE_BACKUPS)return black_menu_backup_rows>0?black_menu_clamp(black_menu_backup_rows,1,BLACK_SAVE_BACKUPS)+1:1;
-    if(page==PAGE_SLOT)return black_menu_clamp(black_menu_slot_count,1,4);
+    if(page==PAGE_SLOT)return black_menu_clamp(black_menu_slot_count,1,6);
     if(page==PAGE_IMPORT_PICK)return 2+black_menu_clamp(black_menu_pick_rows,0,BLACK_SAVE_IMPORTS);
     /* General also ends with "reset all settings". */
     return page>=0&&page<MENU_PAGES?counts[page]+black_menu_has_defaults(page)+(page==PAGE_PORT):0;
@@ -69,7 +71,7 @@ static inline int black_menu_row(int page,int index)
     case PAGE_ADVANCED:return advanced[index];
     case PAGE_DIAGNOSTICS:return ROW_MEASURE;
     case PAGE_MODS:return ROW_ANY_FILM+index;
-    case PAGE_SAVES:return index<BLACK_PROFILE_SLOTS?ROW_SAVE_FIRST+index:ROW_NAV_BACKUPS;
+    case PAGE_SAVES:return index<BLACK_PROFILE_SLOTS?ROW_SAVE_FIRST+index:index==BLACK_PROFILE_SLOTS?ROW_CHECKPOINTS:ROW_NAV_BACKUPS;
     case PAGE_BACKUPS:return black_menu_backup_rows>0&&index==black_menu_count(page)-1?ROW_BACKUPS_CLEAR:ROW_BACKUP_FIRST+index;
     case PAGE_BACKUP:return index?ROW_BACKUP_DELETE:ROW_BACKUP_RESTORE;
     case PAGE_SLOT:return black_menu_slot_rows[index];

@@ -1,8 +1,8 @@
 /* BLACK's profile file: one save (folder named from FE_MCSAVE_PROFILE,
  * "Profile" / "ПРОФИЛЬ"), 0x1800 bytes, three operator slots of 0x778 and an
  * XCalculateSignature at 0x17EC. A slot starts with a 0x26 marker and its
- * size (marker 0: a slot the game found damaged and wrote off), carries the
- * name at +0xD0 and 32 campaign records at +0x124 (8 missions on 4 difficulties), and a sum of its 0x770 payload bytes
+ * size (marker 0: a slot the game found damaged and wrote off), carries its
+ * save stamp at +0xC8, the name at +0xD0 and 32 campaign records at +0x124 (8 missions on 4 difficulties), and a sum of its 0x770 payload bytes
  * as 32-bit words at +0x770; an empty slot keeps the marker with +0x76D set,
  * as saves from consoles show.
  * Layout, checksums and signature as portingpete's launcher reads them
@@ -17,6 +17,7 @@ enum {
     BLACK_PROFILE_SIZE = 0x1800, BLACK_PROFILE_SLOTS = 3, BLACK_PROFILE_SLOT = 0x778,
     BLACK_PROFILE_PAYLOAD = 0x770, BLACK_PROFILE_SIGNATURE = 0x17EC, BLACK_PROFILE_MARKER = 0x26,
     BLACK_PROFILE_NAME = 0xD0, BLACK_PROFILE_NAME_SIZE = 0x50, BLACK_PROFILE_EMPTY = 0x76D,
+    BLACK_PROFILE_STAMP = 0xC8,
     BLACK_PROFILE_RECORDS = 0x124, BLACK_PROFILE_RECORD = 0x20, BLACK_PROFILE_MISSIONS = 32,
     BLACK_PROFILE_AVAILABLE = 0x1A
 };

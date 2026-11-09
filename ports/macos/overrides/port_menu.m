@@ -13,6 +13,7 @@
 #import "input_glyphs.h"
 #include "game_mods.h"
 #include "game_language.h"
+#include "game_checkpoint.h"
 #include "subtitles.h"
 #include "menu_text.h"
 #include "texture_pack.h"
@@ -149,7 +150,7 @@ static int group_of(int row)
     if(row>=ROW_SAVE_FIRST&&row<=ROW_SAVE_LAST)return 19;
     if(row==ROW_NAV_BACKUPS||row==ROW_PICK_FOLDER||row==ROW_PICK_FINDER)return 20;
     if(row>=ROW_BACKUP_FIRST&&row<=ROW_BACKUP_LAST)return 21;
-    if(row>=ROW_SLOT_MISSIONS&&row<=ROW_SLOT_DELETE)return 22;
+    if(row>=ROW_SLOT_MISSIONS&&row<=ROW_SLOT_CHECKPOINT_DELETE)return 22;
     if(row>=ROW_MISSION_FIRST&&row<=ROW_MISSION_LAST)return 25+(row-ROW_MISSION_FIRST)/8;
     if(row>=ROW_PICK_FIRST&&row<=ROW_PICK_LAST)return 24;
     if(row==ROW_CONFIRM_YES||row==ROW_CONFIRM_NO)return 23;
@@ -192,6 +193,7 @@ static int reset_row(int row, int apply)
     R(row == ROW_TEXTURE_SIZE, black_SettingsSetTextureMaxSize(2048))
     R(row == ROW_ANY_FILM, black_SettingsSetSkipAnyFilm(1)) R(row == ROW_INTROS, black_SettingsSetSkipIntros(0))
     R(row == ROW_MISSIONS, black_SettingsSetSkipMissionIntros(0))
+    R(row == ROW_CHECKPOINTS, black_SettingsSetSaveCheckpoints(1))
     R(row >= ROW_MOD_FIRST && row <= ROW_MOD_LAST, black_SettingsSetMod(row - ROW_MOD_FIRST, 0))
     R(row >= ROW_LOOK_X && row <= ROW_AIM_Y, black_SettingsSetLookSpeed(row - ROW_LOOK_X, 50))
     R(row == ROW_INVERT_X, black_SettingsSetInvertX(0)) R(row == ROW_HOLD_AIM, black_SettingsSetHoldAim(0))
@@ -260,7 +262,7 @@ static NSArray *row_labels(void)
     for (int i = 0; i < BLACK_MOD_COUNT; ++i) [labels addObject:[NSString stringWithUTF8String:black_mod_info[i].label]];
     [labels addObjectsFromArray:@[@"Button Bindings",@"Mouse and Aiming",@"Gamepad and Vibration",@"Advanced Gamepad",@"Controller Diagnostics",@"Profile Backups",@"General",@"Controls",@"Mods",@"Saves",@"Edit Bindings For",@"Mouse Look",@"Mouse Aiming",@"Gamepad Look",@"Gamepad Aiming",@"Quit Game"]];
     for (int i = 0; i < BLACK_PROFILE_SLOTS; ++i) [labels addObject:@"Profile Slot"];
-    [labels addObjectsFromArray:@[@"Missions", @"Import", @"Export", @"Delete"]];
+    [labels addObjectsFromArray:@[@"Missions", @"Import", @"Export", @"Delete", @"Checkpoint", @"Delete the Checkpoint", @"Save Checkpoints"]];
     for (int i = 0; i < BLACK_PROFILE_MISSIONS; ++i) [labels addObject:@"Mission"];
     for (int i = 0; i < BLACK_SAVE_BACKUPS; ++i) [labels addObject:@"Backup"];
     for (int i = 0; i < BLACK_SAVE_IMPORTS; ++i) [labels addObject:@"Import"];
@@ -275,7 +277,8 @@ static NSArray *row_labels(void)
 static uint8_t profile_data[BLACK_PROFILE_SIZE], confirm_edited[BLACK_PROFILE_SIZE];
 static BlackProfileSlot profile_slots[BLACK_PROFILE_SLOTS];
 static BlackSaveBackup backups[BLACK_SAVE_BACKUPS];
-static int profile_ok, backup_count, slot_open, backup_open, save_waiting, save_outcome, confirm_reason;
+static BlackCheckpointInfo slot_checkpoint;
+static int profile_ok, slot_checkpoint_ok, backup_count, slot_open, backup_open, save_waiting, save_outcome, confirm_reason;
 /* What Yes does: 0 an edit of the profile (the game's thread applies it),
  * 1 this backup to the Trash, 2 every backup to the Trash, 3 the page it
  * came from back to its defaults. */
@@ -293,12 +296,17 @@ static void refresh_saves(void)
     backup_count = black_SaveBackups(backups, BLACK_SAVE_BACKUPS);
     black_menu_backup_rows = backup_count;
 }
-/* The slot page's rows: what can be done with this slot. */
+/* The slot page's rows: what can be done with this slot. Its checkpoint rows
+ * appear only while this profile has a checkpoint file. */
 static void refresh_slot_rows(void)
 {
     const BlackProfileSlot *s = &profile_slots[slot_open];
     int n = 0;
-    if (s->active) { black_menu_slot_rows[n++] = ROW_SLOT_MISSIONS; black_menu_slot_rows[n++] = ROW_SLOT_IMPORT;
+    slot_checkpoint_ok = profile_ok && s->active && black_CheckpointForSlot(profile_data, slot_open, &slot_checkpoint);
+    if (s->active) { black_menu_slot_rows[n++] = ROW_SLOT_MISSIONS;
+                     if (slot_checkpoint_ok) { black_menu_slot_rows[n++] = ROW_SLOT_CHECKPOINT;
+                                               black_menu_slot_rows[n++] = ROW_SLOT_CHECKPOINT_DELETE; }
+                     black_menu_slot_rows[n++] = ROW_SLOT_IMPORT;
                      black_menu_slot_rows[n++] = ROW_SLOT_EXPORT; black_menu_slot_rows[n++] = ROW_SLOT_DELETE; }
     else if (s->damaged) { black_menu_slot_rows[n++] = ROW_SLOT_DELETE; black_menu_slot_rows[n++] = ROW_SLOT_IMPORT; }
     else black_menu_slot_rows[n++] = ROW_SLOT_IMPORT;
@@ -334,6 +342,12 @@ static NSString *slot_text(const BlackProfileSlot *slot)
 {
     return slot->active ? [NSString stringWithFormat:@"%@ · %d %@ 32", [@(slot->name) uppercaseString], slot->completed, T(@"OF")] :
         slot->damaged ? T(@"DAMAGED") : T(@"EMPTY");
+}
+static NSString *checkpoint_text(const BlackCheckpointInfo *info)
+{
+    static NSString *const difficulty[4] = {@"EASY", @"NORMAL", @"HARD", @"BLACK OPS"};
+    return [NSString stringWithFormat:@"%@ · %@ %u · %@ %u", T(difficulty[info->difficulty < 4 ? info->difficulty : 0]),
+        T(@"MISSION"), info->level + 1, T(@"PART"), info->stage];
 }
 static NSString *const reason_labels[BLACK_SAVE_REASONS] = {@"BEFORE A DELETE", @"BEFORE AN IMPORT", @"BEFORE A RESTORE", @"AT LAUNCH"};
 static NSString *const result_labels[3] = {@"DONE", @"BELOW TARGET", @"TARGET MET"};
@@ -769,6 +783,8 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_INTROS] setAccessibilityValue:black_SettingsSkipIntros() ? @"On" : @"Off"];
     [rows[ROW_MISSIONS] setAccessibilityValue:black_SettingsSkipMissionIntros() ? @"On" : @"Off"];
     [rows[ROW_ANY_FILM] setAccessibilityValue:black_SettingsSkipAnyFilm() ? @"On" : @"Off"];
+    [rows[ROW_CHECKPOINTS] setAccessibilityValue:black_SettingsSaveCheckpoints() ? @"On" : @"Off"];
+    if (slot_checkpoint_ok) [rows[ROW_SLOT_CHECKPOINT] setAccessibilityValue:checkpoint_text(&slot_checkpoint)];
     [rows[ROW_SCALE] setAccessibilityValue:[NSString stringWithFormat:@"%d times, next launch", black_SettingsRenderScale()]];
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
     [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
@@ -952,6 +968,19 @@ static NSTimeInterval transition, last_draw;
             detail:T(@"GRAPHICS, CONTROLS, BINDINGS AND MODS. THE GAME'S LANGUAGE AND YOUR SAVES STAY.") reason:0];
         confirm_kind=4;return;
     }
+    if(selected==ROW_CHECKPOINTS){
+        int current=black_SettingsSaveCheckpoints(),value=cycle?!current:direction>0;
+        if(value==current)return;
+        black_SettingsSetSaveCheckpoints(value);
+        changed=CACurrentMediaTime();[self refreshValues];[self setNeedsDisplay:YES];return;
+    }
+    if(selected==ROW_SLOT_CHECKPOINT)return; /* the slot's newest checkpoint, shown */
+    if(selected==ROW_SLOT_CHECKPOINT_DELETE){
+        if(!cycle)return;
+        [self confirm:[NSString stringWithFormat:T(@"DELETE THE CHECKPOINT OF %@?"),profile_label(&profile_slots[slot_open])]
+            detail:T(@"THE PROFILE AND ITS MISSIONS STAY. THE GAME STARTS THIS PROFILE'S NEXT MISSION FROM ITS BEGINNING.") reason:0];
+        confirm_kind=5;return;
+    }
     if(black_menu_save(selected)){
         if(!cycle||save_waiting||row_disabled(selected))return;
         set_note(nil);
@@ -1020,6 +1049,12 @@ static NSTimeInterval transition, last_draw;
         if(selected==ROW_CONFIRM_YES&&confirm_kind==3){
             confirm_kind=0;page=black_menu_confirm_page;[self restoreDefaults:nil];
             [self openPage:page row:ROW_DEFAULTS];return;
+        }
+        if(selected==ROW_CONFIRM_YES&&confirm_kind==5){
+            confirm_kind=0;
+            int n=black_CheckpointRemoveSlot(profile_data,slot_open);
+            set_note(n?[NSString stringWithFormat:T(@"%d CHECKPOINT FILES DELETED."),n]:@"NOTHING WAS DELETED.");
+            [self openPage:PAGE_SLOT row:-1];[self setNeedsDisplay:YES];return;
         }
         if(selected==ROW_CONFIRM_YES&&confirm_kind){
             int n=confirm_kind==2?black_SaveBackupsTrashAll():black_SaveBackupTrash(backups[backup_open].path);
@@ -1486,6 +1521,9 @@ static NSAlert *pack_alert;
             }else if(index==ROW_SLOT_IMPORT){name=T(profile_slots[slot_open].active?@"REPLACE FROM A FILE":@"IMPORT HERE");more=YES;
             }else if(index==ROW_SLOT_EXPORT){name=T(@"EXPORT TO A FILE");
             }else if(index==ROW_SLOT_DELETE){name=T(profile_slots[slot_open].damaged?@"CLEAR THE SLOT":@"DELETE");
+            }else if(index==ROW_SLOT_CHECKPOINT){name=T(@"CHECKPOINT");value=checkpoint_text(&slot_checkpoint);
+            }else if(index==ROW_SLOT_CHECKPOINT_DELETE){name=T(@"DELETE THE CHECKPOINT");warn=YES;
+            }else if(index==ROW_CHECKPOINTS){name=T(@"SAVE CHECKPOINTS");value=black_SettingsSaveCheckpoints()?@"ON":@"OFF";
             }else if(index>=ROW_MISSION_FIRST&&index<=ROW_MISSION_LAST){int m=index-ROW_MISSION_FIRST;
                 const uint8_t *rec=profile_data+slot_open*BLACK_PROFILE_SLOT+BLACK_PROFILE_RECORDS+m*BLACK_PROFILE_RECORD;
                 uint32_t result=rec[0]|rec[1]<<8|rec[2]<<16|(uint32_t)rec[3]<<24;
@@ -1515,6 +1553,12 @@ static NSAlert *pack_alert;
             }
             CGFloat value_x=index>=ROW_PICK_FIRST&&index<=ROW_PICK_LAST?560:500;
             fitted_text(name,96,y+13,13,value_x-110,focus?(warn&&index!=ROW_CONFIRM_YES?WARN:TEXT):warn?WARN:DIM,0);
+            if(index==ROW_CHECKPOINTS){
+                text(@"<",509,y+13,13,focus?TEXT:DIM,0);
+                text(@">",846,y+13,13,focus?TEXT:DIM,0);
+                fitted_text(value,536,y+13,12,274,focus?TEXT:DIM,0);
+                continue;
+            }
             if(value.length)fitted_text(value,value_x,y+13,12,more?330:370,focus?TEXT:DIM,0);
             if(more)text(@">",850,y+13,13,focus?TEXT:DIM,0);
             continue;
@@ -1631,6 +1675,10 @@ static NSAlert *pack_alert;
             selected==ROW_SLOT_DELETE?(profile_slots[slot_open].damaged?@"MAKES THE SLOT EMPTY AGAIN.":@"EMPTIES THIS SLOT. YOU CONFIRM FIRST."):
             @"COPY A PROFILE FROM A ZIP, SAVE FOLDER OR PROFILE FILE INTO THIS SLOT.";
         else if(selected==ROW_SLOT_EXPORT)help=@"SAVES THIS PROFILE AS A FILE OF ITS OWN, TO KEEP OR TO IMPORT ELSEWHERE.";
+        else if(selected==ROW_SLOT_CHECKPOINT){help=@"THE RESUME POINT THIS PROFILE HAS IN THE GAME'S CHECKPOINT FILES: DIFFICULTY, MISSION AND PART.";detail=@"";}
+        else if(selected==ROW_SLOT_CHECKPOINT_DELETE)help=@"REMOVES THIS PROFILE'S CHECKPOINT FILES. THE PROFILE AND ITS MISSIONS STAY.";
+        else if(selected==ROW_CHECKPOINTS){help=@"WRITES THE GAME'S OWN CHECKPOINT BESIDE THE SAVES AS YOU PLAY; IT IS RESTORED AT THE NEXT MISSION START.";
+            detail=@"ON BY DEFAULT. OFF NEITHER WRITES NOR RESTORES; THE GAME'S OWN CHECKPOINT STILL WORKS.";}
         else if(selected>=ROW_MISSION_FIRST&&selected<=ROW_MISSION_LAST){help=@"AS THE PROFILE HAS IT. THE GAME CHANGES IT AS YOU PLAY.";detail=@"";}
         else if(selected>=ROW_PICK_FIRST&&selected<=ROW_PICK_LAST)help=[NSString stringWithFormat:T(@"COPY THIS PROFILE INTO SLOT %d. THE FILE ITSELF IS NOT CHANGED."),slot_open+1];
         else if(selected==ROW_PICK_FOLDER)help=pick_count?@"PUT A ZIP, SAVE FOLDER OR PROFILE FILE THERE; ITS PROFILES ARE LISTED ABOVE.":@"NOTHING TO IMPORT YET: PUT A ZIP, SAVE FOLDER OR PROFILE FILE IN THIS FOLDER.";
@@ -1818,8 +1866,8 @@ static NSAlert *pack_alert;
     black_InputGlyphUTF8(black_InputButtonGlyph(0,1),accept,sizeof accept); black_InputGlyphUTF8(black_InputButtonGlyph(1,1),cancel,sizeof cancel);
     line(84, 508, 792, HIGHLIGHT, 1);
     {
-        BOOL adjust = !black_menu_link(selected) && !black_menu_save(selected) && selected != ROW_QUIT && selected != ROW_CLOSE_MENU &&
-            selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_RESET;
+        BOOL adjust = (!black_menu_link(selected) && (!black_menu_save(selected) || selected == ROW_CHECKPOINTS) && selected != ROW_QUIT && selected != ROW_CLOSE_MENU &&
+            selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_RESET);
         NSMutableArray *hints = [NSMutableArray arrayWithObject:[@"▲▼  " stringByAppendingString:T(@"SELECT")]];
         if (adjust) [hints addObject:T(@"◀▶ CHANGE")];
         [hints addObject:[NSString stringWithFormat:@"%@ %@", @(accept), T(@"CONFIRM")]];
@@ -1889,13 +1937,14 @@ static BOOL reduced_motion(void)
     return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
 }
 
-/* A page asked for at launch (BLACK_OPEN_SETTINGS), shown when the panel opens. */
+/* A page asked for at launch (BLACK_OPEN_SETTINGS), shown when the panel opens.
+ * The row is an index resolved there: the Saves pages list what is on disk. */
 static int requested_page = -1, requested_row;
 static void request_page(const char *name, int row)
 {
     int number = name[0] == '#' ? atoi(name + 1) : -1; /* "#3": by page number, for pages that share a name */
     for (int p = 0; p < MENU_PAGES && strcmp(name, "1"); ++p)
-        if (p == number || !strcasecmp(page_names[p].UTF8String, name)) { requested_page = p; requested_row = black_menu_row(p, row); break; }
+        if (p == number || !strcasecmp(page_names[p].UTF8String, name)) { requested_page = p; requested_row = row; break; }
 }
 static void set_open(int open)
 {
@@ -1913,7 +1962,14 @@ static void set_open(int open)
             menu_view.alphaValue = reduced_motion() ? 1 : 0;
             transition = CACurrentMediaTime();
             [menu_view setFrameSize:container.bounds.size];
-            if (requested_page >= 0) { [menu_view openPage:requested_page row:requested_row]; requested_page = -1; }
+            if (requested_page >= 0) {
+                const int page = requested_page, index = requested_row;
+                requested_page = -1;
+                if (black_menu_tab(page) == 3 && page != PAGE_CONFIRM) {
+                    refresh_saves(); refresh_slot_rows(); if (page == PAGE_IMPORT_PICK) refresh_picks();
+                }
+                [menu_view openPage:page row:black_menu_row(page, index)];
+            }
             else if(black_menu_tab(menu_view->page)==1)[menu_view openPage:PAGE_CONTROLS row:ROW_DEVICE];
             else [menu_view selectRow:menu_view->selected];
             fprintf(stderr,"[MENU] opened %s\n",page_names[menu_view->page].UTF8String);

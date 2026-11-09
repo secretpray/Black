@@ -482,6 +482,11 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["BLACK_TEXTURE_DIR"] = str(Path(args.texture_dir).expanduser().resolve())
     if args.open_settings:
         env["BLACK_OPEN_SETTINGS"] = args.open_settings
+    if args.test_unit is not None:
+        env["RECOMP_BLACK_TEST_UNIT"] = str(args.test_unit)
+    if args.checkpoint_test:
+        env["RECOMP_BLACK_CHECKPOINT_TEST"] = "1"
+        env["RECOMP_BLACK_CHECKPOINT_TRACE"] = "1"
     # SDL otherwise turns SIGTERM into a queued SDL_QUIT event, which the
     # pinned input loop discards; a bounded run then needs SIGKILL.
     env["SDL_NO_SIGNAL_HANDLERS"] = "1"
@@ -617,6 +622,10 @@ def play_locked(args, settings_path, data, name, binary, state):
         print(f"Verified save backup: {run_dir / 'saves-before.tar.gz'}", flush=True)
     (run_dir / "launch.json").write_text(json.dumps(launch, indent=2) + "\n")
     print(f"Log: {log_path}\nCmd+Return: fullscreen; Esc: pause/release mouse", flush=True)
+    if args.test_unit is not None:
+        print(f"Developer start: the next mission begins at streaming unit {args.test_unit}; not a gameplay pass.", flush=True)
+    if args.checkpoint_test:
+        print("Checkpoint test: the game's next checkpoint is written beside the saves; not a gameplay pass.", flush=True)
     if not args.metal:
         print("Renderer: legacy OpenGL (--opengl), for comparisons only; Metal is the default and much faster in heavy scenes.", flush=True)
     if args.game_clock == "console":
@@ -699,6 +708,8 @@ def main():
             sub.add_argument("--state-log", action="store_true", help="Sample guest camera/world state for input diagnostics")
             sub.add_argument("--diagnostics", action="store_true")
             sub.add_argument("--save-trace", action="store_true", help="Log save-folder enumeration and file allocation calls")
+            sub.add_argument("--test-unit", type=int, choices=range(1, 128), help="Developer start: begin a mission at this streaming unit, to reach a checkpoint without replaying earlier parts")
+            sub.add_argument("--checkpoint-test", action="store_true", help="Developer test: write the game's next checkpoint under the run data; not a gameplay pass")
             sub.add_argument("--restore-window", action="store_true", help="Window or full screen as last left, as the app does (overrides --windowed)")
             sub.add_argument("--frame-times", action="store_true", help="Log game FPS and longest frame every two seconds without full diagnostics")
             sub.add_argument("--profile-frames", action="store_true", help="Buffered per-frame CPU/GPU-readback/presenter timing, no images")
