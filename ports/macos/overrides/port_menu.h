@@ -29,6 +29,11 @@ int black_SettingsGameLanguage(void);
 int black_SettingsSetGameLanguage(int language);
 int black_SettingsMenuLanguage(void);
 int black_SettingsSetMenuLanguage(int language);
+/* Display brightness and gamma over the game's ramp (display_gamma.h); live. */
+int black_SettingsDisplayBrightness(void);
+int black_SettingsSetDisplayBrightness(int percent);
+int black_SettingsDisplayGamma(void);
+int black_SettingsSetDisplayGamma(int hundredths);
 int black_SettingsFpsCounter(void);
 int black_SettingsSetFpsCounter(int enabled);
 /* HD texture replacement (texture_pack.h): off by default, live. */

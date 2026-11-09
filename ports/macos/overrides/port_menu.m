@@ -139,6 +139,7 @@ static NSString *D(NSString *english)
 }
 
 #include "menu_pages.h"
+#include "display_gamma.h"
 static NSString *const tab_names[MENU_TABS]={@"GENERAL",@"CONTROLS",@"MODS",@"SAVES"};
 static NSString *const page_names[MENU_PAGES]={@"GENERAL",@"CONTROLS",@"BUTTON BINDINGS",@"BUTTON BINDINGS",@"MOUSE AND AIMING",@"GAMEPAD AND VIBRATION",@"ADVANCED GAMEPAD",@"CONTROLLER DIAGNOSTICS",@"MODS",@"SAVES",@"PROFILE BACKUPS",@"PROFILE SLOT",@"IMPORT A PROFILE",@"MISSIONS",@"CONFIRM",@"BACKUP",@"RECOMP SETTINGS"};
 static int is_binding(int row){return row>=ROW_BIND_FIRST&&row<=ROW_BIND_LAST;}
@@ -163,7 +164,7 @@ static int group_of(int row)
     if (row >= ROW_MOUSE_X) return 9;
     if (row >= ROW_PAD_FIRST) return 16;
     if (row == ROW_DEVICE || row == ROW_PROMPTS) return 15;
-    if (row <= ROW_FPS) return 0;
+    if (row <= ROW_GAMMA) return 0;
     if (row <= ROW_AF) return 1;
     if (row <= ROW_MENU_LANG) return 2;
     if (row == ROW_TEXTURES || row == ROW_TEXTURE_SIZE) return 14;
@@ -184,6 +185,8 @@ static int reset_row(int row, int apply)
     #define R(cond, action) if (cond) { if (apply) { action; } return 1; }
     R(row == ROW_SCALE, black_SettingsSetRenderScale(2)) R(row == ROW_UPSCALE, black_SettingsSetUpscaler(1))
     R(row == ROW_FOV, black_SettingsSetFov(70)) R(row == ROW_FPS, black_SettingsSetFpsCounter(0))
+    R(row == ROW_BRIGHTNESS, black_SettingsSetDisplayBrightness(BLACK_BRIGHTNESS_NEUTRAL))
+    R(row == ROW_GAMMA, black_SettingsSetDisplayGamma(BLACK_GAMMA_NEUTRAL))
     R(row == ROW_AA, black_SettingsSetAntiAliasing(2)) R(row == ROW_AF, black_SettingsSetAniso(0))
     R(row == ROW_MENU_LANG, black_SettingsSetMenuLanguage(0)) R(row == ROW_TEXTURES, black_SettingsSetTextureReplacement(0))
     R(row == ROW_TEXTURE_SIZE, black_SettingsSetTextureMaxSize(2048))
@@ -243,7 +246,7 @@ static CGFloat row_y(int page,int row,int selected)
 { return ROWS_TOP + (black_menu_index(page,row) - visible_start(page,selected)) * ROW_STEP; }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Display Brightness", @"Display Gamma", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size",
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
@@ -341,6 +344,11 @@ enum { TEXT = BLACK_UI_TEXT, DIM = BLACK_UI_ROW, HEADING = BLACK_UI_RAIL, HIGHLI
 static const int aniso_levels[] = {0, 2, 4, 8, 16};
 static NSString *aa_name(int mode) { return mode == 2 ? @"SMAA" : mode == 1 ? @"FXAA" : @"OFF"; }
 static NSString *af_name(int level) { return level ? [NSString stringWithFormat:@"%dX", level] : @"GAME"; }
+/* Display brightness as a signed percent, gamma as its exponent; neutral 0 / 1.00. */
+static NSString *brightness_name(void)
+{ int b = black_SettingsDisplayBrightness(); return b ? [NSString stringWithFormat:@"%+d", b] : @"0"; }
+static NSString *gamma_name(void)
+{ return [NSString stringWithFormat:@"%.2f", black_SettingsDisplayGamma() / 100.0]; }
 static int active_hid, launch_language;
 static NSString *const game_language_names[BLACK_GAME_LANGUAGES] = {@"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
 static NSString *const menu_language_names[] = {@"AUTO", @"ENGLISH", @"FRANÇAIS", @"DEUTSCH", @"ESPAÑOL", @"ITALIANO", @"РУССКИЙ"};
@@ -662,6 +670,8 @@ static NSTimeInterval transition, last_draw;
         NSArray *help = @[@"Internal render resolution, 1 to 6 times native. Applied next launch.",
             @"Off or MetalFX spatial. Applied next launch.", @"Camera angle, 45 to 140 degrees. Applied next launch.",
             @"Displays the game's frame rate on screen. Live.",
+            @"Black level over the game's own brightness, -20 to +20; 0 keeps the game's picture. Live.",
+            @"Midtones over the game's own brightness, 0.60 to 1.60; 1.00 keeps the game's picture. Live.",
             @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
             @"Text of the game itself from your disc's string banks. Applied next launch.",
             @"Language of this settings panel. Auto follows the game language. Live.",
@@ -764,6 +774,8 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
     [rows[ROW_MENU_LANG] setAccessibilityValue:menu_language_names[black_SettingsMenuLanguage()].capitalizedString];
     [rows[ROW_FPS] setAccessibilityValue:black_SettingsFpsCounter() ? @"On" : @"Off"];
+    [rows[ROW_BRIGHTNESS] setAccessibilityValue:brightness_name()];
+    [rows[ROW_GAMMA] setAccessibilityValue:gamma_name()];
     [rows[ROW_TEXTURES] setAccessibilityValue:black_SettingsTextureReplacement() ? @"On" : @"Off"];
     [rows[ROW_TEXTURE_SIZE] setAccessibilityValue:[NSString stringWithFormat:@"%d", black_SettingsTextureMaxSize()]];
     [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
@@ -820,6 +832,7 @@ static NSTimeInterval transition, last_draw;
     else if(page==PAGE_PORT){
         black_SettingsSetRenderScale(2);black_SettingsSetUpscaler(1);black_SettingsSetFov(70);
         black_SettingsSetAntiAliasing(2);black_SettingsSetAniso(0);black_SettingsSetFpsCounter(0);
+        black_SettingsSetDisplayBrightness(BLACK_BRIGHTNESS_NEUTRAL);black_SettingsSetDisplayGamma(BLACK_GAMMA_NEUTRAL);
         black_SettingsSetTextureReplacement(0);black_SettingsSetTextureMaxSize(2048);
     }
     changed=CACurrentMediaTime();[self refreshValues];[self setNeedsDisplay:YES];
@@ -1161,6 +1174,15 @@ static NSTimeInterval transition, last_draw;
         int current = black_SettingsFpsCounter(), value = cycle ? !current : direction > 0;
         if (value == current) return;
         black_SettingsSetFpsCounter(value);
+    } else if (selected == ROW_BRIGHTNESS || selected == ROW_GAMMA) {
+        int gamma = selected == ROW_GAMMA;
+        int low = gamma ? BLACK_GAMMA_MIN : BLACK_BRIGHTNESS_MIN, high = gamma ? BLACK_GAMMA_MAX : BLACK_BRIGHTNESS_MAX;
+        int current = gamma ? black_SettingsDisplayGamma() : black_SettingsDisplayBrightness();
+        int value = current + (gamma ? 5 : 1) * direction;
+        if (cycle && value > high) value = low;
+        value = MAX(low, MIN(high, value));
+        if (value == current) return;
+        if (gamma) black_SettingsSetDisplayGamma(value); else black_SettingsSetDisplayBrightness(value);
     } else if (selected == ROW_TEXTURES) {
         int current = black_SettingsTextureReplacement(), value = cycle ? !current : direction > 0;
         if (value == current) return;
@@ -1563,6 +1585,7 @@ static NSAlert *pack_alert;
             index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
             index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
             index == ROW_FPS ? (black_SettingsFpsCounter() ? @"ON" : @"OFF") :
+            index == ROW_BRIGHTNESS ? brightness_name() : index == ROW_GAMMA ? gamma_name() :
             index == ROW_TEXTURES ? (black_SettingsTextureReplacement() ? @"ON" : @"OFF") :
             index == ROW_TEXTURE_SIZE ? [NSString stringWithFormat:@"%d", black_SettingsTextureMaxSize()] :
             index == ROW_GAME_LANG ? game_language_names[black_SettingsGameLanguage()] :
@@ -1727,6 +1750,12 @@ static NSAlert *pack_alert;
     } else if (selected == ROW_TEXTURE_SIZE) {
         help = @"LARGEST SIDE OF AN HD TEXTURE. LARGER FILES USE A SMALLER LEVEL.";
         detail = @"LIVE. 1024 USES ABOUT A QUARTER OF THE MEMORY OF 2048; MOST OF THE PACK IS 2048.";
+    } else if (selected == ROW_BRIGHTNESS) {
+        help = @"BLACK LEVEL OVER THE GAME'S OWN BRIGHTNESS. WHITE STAYS WHITE.";
+        detail = @"LIVE. 0 KEEPS THE GAME'S PICTURE. ABOVE 0 LIFTS SHADOWS, BELOW DEEPENS THEM.";
+    } else if (selected == ROW_GAMMA) {
+        help = @"MIDTONES OVER THE GAME'S OWN BRIGHTNESS. BLACK AND WHITE STAY.";
+        detail = @"LIVE. 1.00 KEEPS THE GAME'S PICTURE. ABOVE IT BRIGHTER, BELOW DARKER.";
     } else if (selected == ROW_FPS) {
         help = @"DISPLAYS THE FRAME RATE ON SCREEN, IN THE GAME'S OWN FONT.";
         detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN.";

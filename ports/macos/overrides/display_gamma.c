@@ -2,6 +2,7 @@
  * display_gamma.h. */
 #include "display_gamma.h"
 
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,4 +78,34 @@ void black_GammaReset(void)
     s_version = 0;
     s_loads = 0;
     pthread_mutex_unlock(&s_lock);
+}
+
+static int black_GammaClamp(int v, int low, int high) { return v < low ? low : v > high ? high : v; }
+
+int black_GammaUserNeutral(int brightness, int gamma)
+{
+    return black_GammaClamp(brightness, BLACK_BRIGHTNESS_MIN, BLACK_BRIGHTNESS_MAX) == BLACK_BRIGHTNESS_NEUTRAL &&
+        black_GammaClamp(gamma, BLACK_GAMMA_MIN, BLACK_GAMMA_MAX) == BLACK_GAMMA_NEUTRAL;
+}
+
+double black_GammaUserCurve(double x, int brightness, int gamma)
+{
+    double b = black_GammaClamp(brightness, BLACK_BRIGHTNESS_MIN, BLACK_BRIGHTNESS_MAX) / 100.0;
+    double g = black_GammaClamp(gamma, BLACK_GAMMA_MIN, BLACK_GAMMA_MAX) / 100.0;
+    x = x < 0 ? 0 : x > 1 ? 1 : x;
+    if (g != 1.0) x = pow(x, 1.0 / g);
+    if (b > 0) x = b + x * (1.0 - b);
+    else if (b < 0) x = x + b <= 0 ? 0 : (x + b) / (1.0 + b);
+    return x;
+}
+
+void black_GammaCompose(const uint8_t rgb[BLACK_GAMMA_ENTRIES * 3], int brightness, int gamma,
+    uint16_t out[BLACK_GAMMA_ENTRIES * 3])
+{
+    int neutral = black_GammaUserNeutral(brightness, gamma);
+    for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES * 3; ++i) {
+        if (neutral) { out[i] = (uint16_t)(rgb[i] * 257u); continue; }
+        double y = black_GammaUserCurve(rgb[i] / 255.0, brightness, gamma);
+        out[i] = (uint16_t)lround(y * 65535.0);
+    }
 }

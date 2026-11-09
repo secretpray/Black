@@ -21,6 +21,25 @@ void black_GammaSetRamp(const uint8_t ramp[BLACK_GAMMA_ENTRIES * 3]);
 uint32_t black_GammaSnapshot(uint8_t rgb[BLACK_GAMMA_ENTRIES * 3]);
 /* 1 when the interleaved table maps every entry to itself. */
 int black_GammaIsIdentity(const uint8_t rgb[BLACK_GAMMA_ENTRIES * 3]);
+/* The player's display brightness and gamma, applied after the game's ramp,
+ * as a TV's own controls act on the console's signal. Brightness moves the
+ * black level in percent of the range, white staying white: positive lifts
+ * shadows, negative deepens them. Gamma, in hundredths, bends the midtones
+ * with both ends fixed: above 100 brighter, below darker. At the neutral
+ * 0 / 100 the output is the game's table exactly. */
+#define BLACK_BRIGHTNESS_MIN (-20)
+#define BLACK_BRIGHTNESS_MAX 20
+#define BLACK_BRIGHTNESS_NEUTRAL 0
+#define BLACK_GAMMA_MIN 60
+#define BLACK_GAMMA_MAX 160
+#define BLACK_GAMMA_NEUTRAL 100
+int black_GammaUserNeutral(int brightness, int gamma);
+/* One channel value 0..1 through the player's curve. */
+double black_GammaUserCurve(double x, int brightness, int gamma);
+/* The interleaved table through the player's curve, as 16-bit values
+ * (65535 = full), so the curve adds no 8-bit banding of its own. */
+void black_GammaCompose(const uint8_t rgb[BLACK_GAMMA_ENTRIES * 3], int brightness, int gamma,
+    uint16_t out[BLACK_GAMMA_ENTRIES * 3]);
 /* Test hook: back to identity and version 0. */
 void black_GammaReset(void);
 

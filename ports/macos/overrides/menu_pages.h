@@ -5,7 +5,7 @@
 #include "input_profile.h"
 #include "game_mods.h"
 #include "save_profiles.h"
-enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES, ROW_TEXTURE_SIZE,
+enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_BRIGHTNESS, ROW_GAMMA, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES, ROW_TEXTURE_SIZE,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
        ROW_HID, ROW_MEASURE, ROW_RESET, ROW_DEVICE, ROW_PROMPTS,
@@ -40,7 +40,7 @@ static inline int black_menu_has_defaults(int page)
 {return page==PAGE_PORT||page==PAGE_KEYS||page==PAGE_PAD_BINDINGS||page==PAGE_MOUSE||page==PAGE_PAD||page==PAGE_ADVANCED||page==PAGE_MODS;}
 static inline int black_menu_count(int page)
 {
-    static const int counts[]={10,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT,
+    static const int counts[]={12,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT,
         BLACK_PROFILE_SLOTS+1,1,1,2,BLACK_PROFILE_MISSIONS,2,2,6};
     /* The backups, then "delete all" when there are any. */
     if(page==PAGE_BACKUPS)return black_menu_backup_rows>0?black_menu_clamp(black_menu_backup_rows,1,BLACK_SAVE_BACKUPS)+1:1;

@@ -81,12 +81,16 @@ static int black_PresenterSleep(const struct timespec *request, struct timespec 
 #include "flash_menu.h"
 #include "display_gamma.h"
 
-/* The DAC table as a 256x1 lookup for the scaling pass; uploaded only when
- * the game wrote a different one. BLACK_GAMMA=off keeps identity for A/B. */
+/* The DAC table as a 256x1 lookup for the scaling pass, with the player's
+ * display brightness and gamma composed after it (display_gamma.h); 16-bit,
+ * so that curve adds no banding, and uploaded only when the game's table or
+ * those settings change. BLACK_GAMMA=off keeps identity in place of the
+ * game's table for A/B; the player's curve still applies over it. */
 static id<MTLTexture> black_GammaTexture(void)
 {
     static id<MTLTexture> texture;
     static uint32_t uploaded = UINT32_MAX;
+    static int uploaded_brightness = INT32_MIN, uploaded_gamma = INT32_MIN;
     static int disabled = -1;
     if (disabled < 0) {
         const char *mode = getenv("BLACK_GAMMA");
@@ -94,24 +98,32 @@ static id<MTLTexture> black_GammaTexture(void)
     }
     if (!texture) {
         MTLTextureDescriptor *desc = [MTLTextureDescriptor
-            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Unorm
                                          width:BLACK_GAMMA_ENTRIES height:1 mipmapped:NO];
         texture = [s_device newTextureWithDescriptor:desc];
     }
     uint8_t rgb[BLACK_GAMMA_ENTRIES * 3];
     uint32_t version = black_GammaSnapshot(rgb);
-    if (disabled) version = 0;
-    if (texture && version != uploaded) {
-        uint8_t rgba[BLACK_GAMMA_ENTRIES * 4];
+    if (disabled) {
+        version = 0;
+        for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES; ++i)
+            rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = (uint8_t)i;
+    }
+    int brightness = black_SettingsDisplayBrightness(), gamma = black_SettingsDisplayGamma();
+    if (texture && (version != uploaded || brightness != uploaded_brightness || gamma != uploaded_gamma)) {
+        uint16_t composed[BLACK_GAMMA_ENTRIES * 3], rgba[BLACK_GAMMA_ENTRIES * 4];
+        black_GammaCompose(rgb, brightness, gamma, composed);
         for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES; ++i) {
-            rgba[i * 4] = disabled ? (uint8_t)i : rgb[i * 3];
-            rgba[i * 4 + 1] = disabled ? (uint8_t)i : rgb[i * 3 + 1];
-            rgba[i * 4 + 2] = disabled ? (uint8_t)i : rgb[i * 3 + 2];
-            rgba[i * 4 + 3] = 255;
+            rgba[i * 4] = composed[i * 3];
+            rgba[i * 4 + 1] = composed[i * 3 + 1];
+            rgba[i * 4 + 2] = composed[i * 3 + 2];
+            rgba[i * 4 + 3] = 65535;
         }
         [texture replaceRegion:MTLRegionMake2D(0, 0, BLACK_GAMMA_ENTRIES, 1)
                    mipmapLevel:0 withBytes:rgba bytesPerRow:sizeof rgba];
         uploaded = version;
+        uploaded_brightness = brightness;
+        uploaded_gamma = gamma;
     }
     return texture;
 }

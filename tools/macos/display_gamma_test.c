@@ -65,6 +65,60 @@ int main(void)
     black_GammaSnapshot(table);
     if (!black_GammaIsIdentity(table)) return 8;
 
+    /* The player's curve over the game's ramp (display_gamma.h). */
+    uint16_t out[BLACK_GAMMA_ENTRIES * 3];
+    game_ramp(ramp, 1.0);
+    black_GammaSetRamp(ramp);
+    black_GammaSnapshot(table);
+
+    /* Neutral is the game's table exactly, at 16 bits. */
+    if (!black_GammaUserNeutral(BLACK_BRIGHTNESS_NEUTRAL, BLACK_GAMMA_NEUTRAL) || black_GammaUserNeutral(1, 100) ||
+        black_GammaUserNeutral(0, 105)) return 9;
+    black_GammaCompose(table, BLACK_BRIGHTNESS_NEUTRAL, BLACK_GAMMA_NEUTRAL, out);
+    for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES * 3; ++i)
+        if (out[i] != table[i] * 257u) return 10;
+
+    /* Every setting keeps the curve monotonic and white at white; only
+     * positive brightness lifts black, and nothing clips below white. */
+    for (int b = BLACK_BRIGHTNESS_MIN; b <= BLACK_BRIGHTNESS_MAX; ++b)
+        for (int g = BLACK_GAMMA_MIN; g <= BLACK_GAMMA_MAX; g += 5) {
+            double previous = -1;
+            for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES; ++i) {
+                double y = black_GammaUserCurve(i / 255.0, b, g);
+                if (y < previous || y < 0 || y > 1) return 11;
+                previous = y;
+            }
+            if (fabs(black_GammaUserCurve(1.0, b, g) - 1.0) > 1e-12) return 12;
+            double black = black_GammaUserCurve(0.0, b, g);
+            if (b > 0 ? fabs(black - b / 100.0) > 1e-12 : black != 0.0) return 13;
+            if (black_GammaUserCurve(254 / 255.0, b, g) >= 1.0) return 14;
+        }
+
+    /* Gamma above neutral brightens the middle grey, below darkens it; the
+     * ends stay. Brightness moves it the same way. */
+    double mid = black_GammaUserCurve(0.5, 0, 100);
+    if (fabs(mid - 0.5) > 1e-12) return 15;
+    if (black_GammaUserCurve(0.5, 0, 130) <= mid || black_GammaUserCurve(0.5, 0, 70) >= mid) return 16;
+    if (black_GammaUserCurve(0.5, 10, 100) <= mid || black_GammaUserCurve(0.5, -10, 100) >= mid) return 17;
+
+    /* Applied after the game's table: a fade to black stays black unless the
+     * player lifted black, and the composed table follows the curve. */
+    black_GammaCompose(table, 0, 130, out);
+    if (out[0] != 0 || out[255 * 3] != 65535) return 18;
+    for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES * 3; ++i)
+        if (out[i] != (uint16_t)lround(black_GammaUserCurve(table[i] / 255.0, 0, 130) * 65535.0)) return 19;
+    game_ramp(ramp, 0.0);
+    black_GammaSetRamp(ramp);
+    black_GammaSnapshot(table);
+    black_GammaCompose(table, -10, 80, out);
+    for (unsigned i = 0; i < BLACK_GAMMA_ENTRIES * 3; ++i)
+        if (out[i]) return 20;
+    black_GammaCompose(table, 10, 100, out);
+    if (out[0] != (uint16_t)lround(0.1 * 65535.0)) return 21;
+
+    /* Out-of-range values are clamped, not extrapolated. */
+    if (black_GammaUserCurve(0.5, 99, 999) != black_GammaUserCurve(0.5, BLACK_BRIGHTNESS_MAX, BLACK_GAMMA_MAX)) return 22;
+
     puts("display gamma: ok");
     return 0;
 }

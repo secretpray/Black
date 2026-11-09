@@ -107,6 +107,18 @@ int main(int argc, char **argv)
         if (!black_SettingsFpsCounter()) return 23;
         key(window, 123, @"\uF702");
         if (black_SettingsFpsCounter()) return 24;
+        /* Display brightness and gamma: neutral, one step each way, back. */
+        if (black_SettingsDisplayBrightness() != 0 || black_SettingsDisplayGamma() != 100) return 40;
+        key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
+        if (black_SettingsDisplayBrightness() != 1) return 41;
+        key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
+        if (black_SettingsDisplayBrightness() != -1) return 42;
+        key(window, 124, @"\uF703");
+        key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
+        if (black_SettingsDisplayGamma() != 105) return 43;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-display-gamma.png"]);
+        key(window, 123, @"\uF702");
+        if (black_SettingsDisplayBrightness() != 0 || black_SettingsDisplayGamma() != 100) return 44;
         key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
         if (black_SettingsAntiAliasing() != 1) return 30;
         key(window, 124, @"\uF703");

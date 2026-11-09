@@ -3,6 +3,7 @@
 #include "keyboard_mouse.h"
 #include "input_profile.h"
 #include "game_mods.h"
+#include "display_gamma.h"
 #include <stdatomic.h>
 #include <stdint.h>
 #include <pthread.h>
@@ -23,6 +24,9 @@ static atomic_int anti_aliasing = 2, anisotropic_filtering;
  * measured 31.10, SMAA under 0.1 ms and MetalFX about 4 ms of GPU in the 60 Hz
  * presentation pass, with no effect on the game's own frame rate. */
 static atomic_int upscaler = 1;
+/* Player's display brightness (percent) and gamma (hundredths) over the
+ * game's ramp; 0 and 100 leave the game's picture as it is. */
+static atomic_int display_brightness = BLACK_BRIGHTNESS_NEUTRAL, display_gamma = BLACK_GAMMA_NEUTRAL;
 static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top left */
 /* HD textures from the user's pack and the shipped map (texture_pack.h); live. */
 static atomic_int texture_replacement;
@@ -159,6 +163,14 @@ static void load_settings(void)
             if (sscanf(line, " menu_language = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && n >= 0 && n <= 6) atomic_store(&menu_language, (int)n);
+            }
+            if (sscanf(line, " display_brightness = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= BLACK_BRIGHTNESS_MIN && n <= BLACK_BRIGHTNESS_MAX) atomic_store(&display_brightness, (int)n);
+            }
+            if (sscanf(line, " display_gamma = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= BLACK_GAMMA_MIN && n <= BLACK_GAMMA_MAX) atomic_store(&display_gamma, (int)n);
             }
             if (sscanf(line, " fps_counter = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -335,6 +347,9 @@ static int write_settings(void)
                 const BlackKeyAction *actions = black_KeyActions();
                 for (int i = 0; i < BLACK_ACTION_COUNT; ++i) for (int slot = 0; slot < 2; ++slot)
                     written &= fprintf(file,"key_%s_%d=%d\n",actions[i].id,slot+1,atomic_load(&bindings[i][slot])) > 0;
+                written &= fprintf(file, "# Display over the game's ramp: brightness %d..%d percent, gamma %d..%d hundredths; 0 and 100 neutral\ndisplay_brightness=%d\ndisplay_gamma=%d\n",
+                    BLACK_BRIGHTNESS_MIN, BLACK_BRIGHTNESS_MAX, BLACK_GAMMA_MIN, BLACK_GAMMA_MAX,
+                    atomic_load(&display_brightness), atomic_load(&display_gamma)) > 0;
                 written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
                     atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language),
                     atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
@@ -382,6 +397,14 @@ int black_SettingsSetUpscaler(int mode)
 int black_SettingsFpsCounter(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&fps_counter); }
 int black_SettingsSetFpsCounter(int enabled) { return save_setting(&fps_counter, !!enabled); }
+int black_SettingsDisplayBrightness(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&display_brightness); }
+int black_SettingsSetDisplayBrightness(int percent)
+{ return percent >= BLACK_BRIGHTNESS_MIN && percent <= BLACK_BRIGHTNESS_MAX ? save_setting(&display_brightness, percent) : 0; }
+int black_SettingsDisplayGamma(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&display_gamma); }
+int black_SettingsSetDisplayGamma(int hundredths)
+{ return hundredths >= BLACK_GAMMA_MIN && hundredths <= BLACK_GAMMA_MAX ? save_setting(&display_gamma, hundredths) : 0; }
 int black_SettingsTextureReplacement(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&texture_replacement); }
 int black_SettingsSetTextureReplacement(int enabled) { return save_setting(&texture_replacement, !!enabled); }
