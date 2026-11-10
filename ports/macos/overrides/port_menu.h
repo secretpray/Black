@@ -1,6 +1,7 @@
 #ifndef BLACK_PORT_MENU_H
 #define BLACK_PORT_MENU_H
 #include <stdint.h>
+#include "frame_stats.h"
 enum { BLACK_MENU_TOGGLE = 1, BLACK_MENU_CHANGE = 2, BLACK_MENU_BACK = 4,
        BLACK_MENU_OFF = 8, BLACK_MENU_ON = 16, BLACK_MENU_UP = 32, BLACK_MENU_DOWN = 64,
        BLACK_MENU_PREV_TAB = 128, BLACK_MENU_NEXT_TAB = 256, BLACK_MENU_QUIT = 512,
@@ -39,14 +40,16 @@ int black_SettingsDisplayBrightness(void);
 int black_SettingsSetDisplayBrightness(int percent);
 int black_SettingsDisplayGamma(void);
 int black_SettingsSetDisplayGamma(int hundredths);
-int black_SettingsFpsCounter(void);
-int black_SettingsSetFpsCounter(int enabled);
+/* 0 off, 1 the game's frame rate, 2 frame times too (frame_stats.h). */
+int black_SettingsPerformanceOverlay(void);
+int black_SettingsSetPerformanceOverlay(int mode);
 /* HD texture replacement (texture_pack.h): off by default, live. */
 int black_SettingsTextureReplacement(void);
 int black_SettingsSetTextureReplacement(int enabled);
 /* Largest replacement side: 1024, 2048 (default) or 4096; live. */
 int black_SettingsTextureMaxSize(void);
 int black_SettingsSetTextureMaxSize(int size);
+const char *black_SettingsPath(void);
 int black_SettingsSaveFailed(void);
 /* Game window state, saved by the window itself (window_state.m). */
 int black_SettingsValidWindowFrame(const int frame[4]);

@@ -38,6 +38,7 @@ static SDL_bool black_InputSetHint(const char *name, const char *value)
 #include "pad_mapping.h"
 #include "text_pad.h"
 #include "menu_repeat.h"
+#include "black_box.h"
 #include <pthread.h>
 
 /* Unlike the pinned backend, preserve SDL's failure result for diagnostics. */
@@ -292,6 +293,21 @@ DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
 {
     pthread_mutex_lock(&black_input_lock);
     DWORD result = black_InputGetState(port, state);
+    /* A recorded run drives the guest even with no controller attached, so the
+     * replay supersedes the owner, keyboard and no-pad results. */
+    if (!port && state) {
+        uint16_t buttons;
+        uint8_t analog[8];
+        int16_t axes[4];
+        if (black_BoxReplay(&buttons, analog, axes)) {
+            memset(&state->Gamepad, 0, sizeof state->Gamepad);
+            state->Gamepad.wButtons = buttons;
+            memcpy(state->Gamepad.bAnalogButtons, analog, sizeof analog);
+            state->Gamepad.sThumbLX = axes[0]; state->Gamepad.sThumbLY = axes[1];
+            state->Gamepad.sThumbRX = axes[2]; state->Gamepad.sThumbRY = axes[3];
+            result = ERROR_SUCCESS;
+        }
+    }
     if (!port && result == ERROR_SUCCESS && state && !black_MenuIsOpen()) {
         int pulse = atomic_load(&black_start_pulse);
         /* Released for the last polls, so the game sees one press. */
@@ -325,6 +341,11 @@ DWORD xbox_InputGetState(DWORD port, XBOX_INPUT_STATE *state)
             held, SDL_GetTicks());
         for (int i = 0; i < 4; ++i)
             if (!(shown & (1u << i))) state->Gamepad.wButtons &= (WORD)~dirs[i];
+    }
+    if (!port && result == ERROR_SUCCESS && state) {
+        int16_t axes[4] = {state->Gamepad.sThumbLX, state->Gamepad.sThumbLY,
+                           state->Gamepad.sThumbRX, state->Gamepad.sThumbRY};
+        black_BoxRecord(state->Gamepad.wButtons, state->Gamepad.bAnalogButtons, axes);
     }
     if (!port)
         atomic_store(&black_film_button, result == ERROR_SUCCESS && state &&

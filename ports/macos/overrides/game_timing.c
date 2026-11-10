@@ -5,6 +5,7 @@
 #include "game_clock.h"
 #include "port_menu.h"
 #include "frame_trace.h"
+#include "frame_stats.h"
 #include "frame_wait.h"
 #include <pthread.h>
 #include <time.h>
@@ -37,6 +38,16 @@ void sub_000BE3F0(void)
 {
     uint32_t timer = g_ecx;
     uint32_t world = MEM32(0x2D45D4), game = MEM32(0x2D45F0);
+    /* The overlay's history must not span a settings pause: the first frame
+     * after closing would read as a several-second hitch. Restart sampling at
+     * both edges, before this call becomes the new baseline. */
+    static int menu_before;
+    int menu = black_MenuIsOpen();
+    if (menu != menu_before) {
+        menu_before = menu;
+        black_FrameStatsReset();
+    }
+    if (timer == world && world) black_FrameStatsWorld(MEM32(0x2F4368), black_FrameStatsNow());
     /* Freeze only initialized gameplay, from its own thread. Cocoa and the
      * independent USB/APU threads remain live; movie backgrounds keep playing. */
     if (timer == world && world && game &&

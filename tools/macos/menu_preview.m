@@ -2,10 +2,12 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #include "../../ports/macos/overrides/port_menu.h"
+#include "../../ports/macos/overrides/menu_pages.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/input_profile.h"
 #include "../../ports/macos/overrides/controller_monitor.h"
 #include "../../ports/macos/overrides/game_mods.h"
+#include "../../ports/macos/overrides/black_box.h"
 #include <unistd.h>
 static int quit_requests;
 void black_HostQuit(void) { ++quit_requests; }
@@ -60,6 +62,16 @@ static void click(NSWindow *window, NSView *view, CGFloat x, CGFloat y)
     }
     pump(.25);
 }
+/* The page's Defaults row, confirmed: Down from `from`, then Yes on the question. */
+static void page_defaults(NSWindow *window, int page, int from)
+{
+    int count = black_menu_count(page);
+    int steps = (black_menu_index(page, ROW_DEFAULTS) - black_menu_index(page, from) + count) % count;
+    while (steps-- > 0) key(window, 125, @"\uF701");
+    key(window, 36, @"\r");
+    key(window, 126, @"\uF700"); /* the question starts on No */
+    key(window, 36, @"\r");
+}
 int main(int argc, char **argv)
 {
     if (argc < 3) return 1;
@@ -70,6 +82,14 @@ int main(int argc, char **argv)
         NSString *settings = [output stringByAppendingPathComponent:@"preview-settings.ini"];
         [NSFileManager.defaultManager removeItemAtPath:settings error:nil];
         setenv("BLACK_SETTINGS_FILE", settings.fileSystemRepresentation, 1);
+        /* A stub HD pack: the texture rows are checkable without the real one. */
+        NSString *textures = [output stringByAppendingPathComponent:@"textures"];
+        NSString *replacement = [textures stringByAppendingPathComponent:@"replacement"];
+        [NSFileManager.defaultManager createDirectoryAtPath:replacement withIntermediateDirectories:YES attributes:nil error:nil];
+        [[NSData data] writeToFile:[replacement stringByAppendingPathComponent:@"preview.dds"] atomically:YES];
+        [@"1 4 4 0c preview.dds\n" writeToFile:[textures stringByAppendingPathComponent:@"black-hd-reimagined.map"]
+            atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        setenv("BLACK_TEXTURE_DIR", textures.fileSystemRepresentation, 1);
         unsetenv("BLACK_SKIP_INTROS"); unsetenv("BLACK_OPEN_SETTINGS");
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -86,6 +106,8 @@ int main(int argc, char **argv)
         if (!black_MenuUsingGameFonts()) return 11;
         key(window, 122, @"\uF704");
         if (!black_MenuIsOpen()) return 2;
+        key(window, 36, @"\r"); /* Port Settings from the top menu */
+        if (!black_SettingsPanelOpen()) return 2;
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-display.png"]);
         key(window, 124, @"\uF703");
         if (black_SettingsRenderScale() != 3) return 20;
@@ -94,7 +116,7 @@ int main(int argc, char **argv)
         [window makeKeyAndOrderFront:nil]; pump(.1);
         NSButton *resolution = button(window.contentView, @"Render Scale");
         if (!resolution || resolution.hidden) return 25;
-        click(window, resolution, (765.0 - 84) / 792 * resolution.bounds.size.width, resolution.bounds.size.height / 2);
+        key(window, 123, @"\uF702");
         if (black_SettingsRenderScale() != 1) return 27;
         key(window, 124, @"\uF703");
         key(window, 125, @"\uF701"); key(window, 123, @"\uF702");
@@ -104,9 +126,9 @@ int main(int argc, char **argv)
         if (black_SettingsFov() != 75) return 22;
         key(window, 123, @"\uF702");
         key(window, 125, @"\uF701"); key(window, 36, @"\r");
-        if (!black_SettingsFpsCounter()) return 23;
+        if (black_SettingsPerformanceOverlay() != BLACK_PERF_FPS) return 23;
         key(window, 123, @"\uF702");
-        if (black_SettingsFpsCounter()) return 24;
+        if (black_SettingsPerformanceOverlay() != BLACK_PERF_OFF) return 24;
         /* Display brightness and gamma: neutral, one step each way, back. */
         if (black_SettingsDisplayBrightness() != 0 || black_SettingsDisplayGamma() != 100) return 40;
         key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
@@ -135,9 +157,8 @@ int main(int argc, char **argv)
         for (int i = 0; i < 6; ++i) key(window, 124, @"\uF703");
         if (black_SettingsMenuLanguage() != 6) return 82;
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-ru.png"]);
-        key(window, 12, @"q");
-        snapshot(window, [output stringByAppendingPathComponent:@"mods-ru.png"]);
-        key(window, 14, @"e"); key(window, 126, @"\uF700"); /* wraps to HD Texture Size */
+        /* General: the two texture rows, still in Russian. */
+        key(window, 125, @"\uF701"); key(window, 125, @"\uF701"); /* HD Texture Size */
         if (black_SettingsTextureMaxSize() != 2048) return 87;
         key(window, 36, @"\r");
         if (black_SettingsTextureMaxSize() != 4096) return 88;
@@ -157,15 +178,24 @@ int main(int argc, char **argv)
         key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
         if (black_SettingsMenuLanguage() != 4 || black_SettingsRenderScale() != 2) return 83;
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-language-es.png"]);
-        black_SettingsSetMenuLanguage(0);
-        /* Recomp Settings -> Mods (the previous tab wraps): films, then the mods. */
-        key(window, 12, @"q");
+        black_SettingsSetMenuLanguage(6);
+        /* Back to the top menu, then Mods: films, then the mods. */
+        key(window, 53, @"\e");
+        key(window, 125, @"\uF701"); key(window, 125, @"\uF701");
         key(window, 36, @"\r");
-        key(window, 125, @"\uF701"); key(window, 36, @"\r");
-        if (!black_SettingsSkipIntros() || !black_SettingsSkipMissionIntros()) return 3;
+        snapshot(window, [output stringByAppendingPathComponent:@"mods-ru.png"]);
+        black_SettingsSetMenuLanguage(0); pump(.05);
+        key(window, 36, @"\r"); /* Any Film: on by default, off, on again */
+        if (black_SettingsSkipAnyFilm()) return 3;
+        key(window, 36, @"\r");
+        if (!black_SettingsSkipAnyFilm()) return 3;
+        key(window, 125, @"\uF701"); key(window, 36, @"\r"); /* Start-up films */
+        if (!black_SettingsSkipIntros()) return 3;
+        key(window, 125, @"\uF701"); key(window, 36, @"\r"); /* Mission briefings */
+        if (!black_SettingsSkipMissionIntros()) return 3;
         snapshot(window, [output stringByAppendingPathComponent:@"mods-films.png"]);
-        key(window, 125, @"\uF701"); key(window, 124, @"\uF703");
-        key(window, 125, @"\uF701"); key(window, 36, @"\r");
+        key(window, 125, @"\uF701"); key(window, 124, @"\uF703"); /* God Mode */
+        key(window, 125, @"\uF701"); key(window, 36, @"\r"); /* Medkits */
         if (!black_SettingsMod(BLACK_MOD_GOD_MODE) || !black_SettingsMod(BLACK_MOD_MEDKITS)) return 70;
         key(window, 123, @"\uF702");
         if (black_SettingsMod(BLACK_MOD_MEDKITS)) return 71;
@@ -174,15 +204,14 @@ int main(int argc, char **argv)
         key(window, 36, @"\r");
         if (!black_SettingsMod(BLACK_MOD_UNLOCK_MISSIONS)) return 72;
         snapshot(window, [output stringByAppendingPathComponent:@"mods-unlocks.png"]);
-        NSButton *mod_defaults = button(window.contentView, @"Defaults");
-        if (!mod_defaults) return 73;
-        click(window, mod_defaults, mod_defaults.bounds.size.width / 2, mod_defaults.bounds.size.height / 2);
+        page_defaults(window, PAGE_MODS, ROW_MOD_FIRST + BLACK_MOD_UNLOCK_MISSIONS);
         if (black_SettingsMod(BLACK_MOD_GOD_MODE) || black_SettingsMod(BLACK_MOD_UNLOCK_MISSIONS) ||
             black_SettingsSkipIntros() || black_SettingsRenderScale() != 2) return 74;
-        black_SettingsSetSkipIntros(1); black_SettingsSetSkipMissionIntros(1);
-        key(window,14,@"e"); /* Port Settings */
-        key(window,53,@"\e");if(black_MenuIsOpen())return 4;
-        key(window,122,@"\uF704");key(window,14,@"e"); /* Controls */
+        key(window,53,@"\e"); /* the top menu */
+        key(window,53,@"\e"); /* close */
+        if(black_MenuIsOpen())return 4;
+        key(window,122,@"\uF704");
+        key(window,126,@"\uF700");key(window,36,@"\r"); /* Controls */
         int raw[6]={385,-128,-640,256,0,0},mapped[6]={385,128,-640,-256,0,0};
         black_ControllerPublish("Synthetic preview pad",1,raw,mapped,0);
         black_SettingsSetMouseSpeed(0,47);black_SettingsSetMouseSpeed(1,45);
@@ -215,8 +244,7 @@ int main(int argc, char **argv)
         key(window,117,@"\uF728");if(black_SettingsPadBinding(0)!=-1)return 112;
         key(window,36,@"\r");black_PadCapturePoll(0,-1,0);pump(.05);
         if(black_SettingsPadBinding(0)!=-1)return 113;
-        NSButton *defaults=button(window.contentView,@"Defaults");
-        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        page_defaults(window,PAGE_PAD_BINDINGS,ROW_PAD_FIRST);
         if(black_SettingsPadBinding(0)!=0||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION||black_SettingsLookSpeed(0)!=63)return 114;
         key(window,53,@"\e"); /* root, bindings row restored */
         if(![[(NSButton *)window.firstResponder title] isEqual:@"Button Bindings"])return 115;
@@ -232,7 +260,7 @@ int main(int argc, char **argv)
         key(window,36,@"\r");
         NSEvent *bindMouse=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
         [NSApp postEvent:bindMouse atStart:NO];pump(.05);if(black_SettingsBinding(0,1)!=BLACK_MOUSE_RIGHT)return 120;
-        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        page_defaults(window,PAGE_KEYS,ROW_BIND_FIRST);
         if(black_SettingsBinding(0,1)!=-1||black_SettingsMouseSpeed(0)!=47||black_SettingsLookSpeed(1)!=41)return 121;
         key(window,53,@"\e");key(window,125,@"\uF701");key(window,36,@"\r"); /* mouse */
         if(button(window.contentView,@"Mouse Look").hidden)return 122;
@@ -244,33 +272,43 @@ int main(int argc, char **argv)
         snapshot(window,[output stringByAppendingPathComponent:@"mouse-settings.png"]);
         [window setContentSize:NSMakeSize(640,480)];pump(.1);snapshot(window,[output stringByAppendingPathComponent:@"mouse-small.png"]);
         [window setContentSize:NSMakeSize(960,600)];pump(.1);
-        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        page_defaults(window,PAGE_MOUSE,ROW_MOUSE_LOOK_PAIR);
         if(black_SettingsMouseSpeed(0)!=50||black_SettingsLookSpeed(0)!=63||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION)return 126;
         key(window,53,@"\e");key(window,125,@"\uF701");key(window,36,@"\r"); /* gamepad */
         key(window,36,@"\r");key(window,124,@"\uF703");key(window,36,@"\r");
         if(black_SettingsLookSpeed(0)!=64||black_SettingsLookSpeed(1)!=41||black_SettingsMouseSpeed(0)!=50)return 127;
         snapshot(window,[output stringByAppendingPathComponent:@"controller-look.png"]);
-        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        page_defaults(window,PAGE_PAD,ROW_PAD_LOOK_PAIR);
         if(black_SettingsLookSpeed(0)!=50||black_SettingsButtonPrompts()!=BLACK_PROMPTS_PLAYSTATION)return 128;
-        for(int i=0;i<4;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* advanced */
+        for(int i=0;i<5;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* advanced */
         key(window,125,@"\uF701");key(window,125,@"\uF701");key(window,124,@"\uF703");
         if(black_SettingsStickDeadzone(0)!=21)return 129;
         snapshot(window,[output stringByAppendingPathComponent:@"controller-zones.png"]);
         black_SettingsSetInputDevice(BLACK_INPUT_KEYBOARD);black_SettingsSetBinding(0,1,35);black_SettingsSetLookSpeed(0,61);
-        click(window,defaults,defaults.bounds.size.width/2,defaults.bounds.size.height/2);
+        page_defaults(window,PAGE_ADVANCED,ROW_LEFT_DZ);
         if(black_SettingsStickDeadzone(0)!=-1||black_SettingsLookSpeed(0)!=61||black_SettingsBinding(0,1)!=35||black_SettingsInputDevice()!=BLACK_INPUT_KEYBOARD)return 136;
         black_SettingsSetInputDevice(BLACK_INPUT_AUTO);
-        for(int i=0;i<5;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* diagnostics */
+        for(int i=0;i<8;++i)key(window,125,@"\uF701");key(window,36,@"\r"); /* diagnostics */
         if(button(window.contentView,@"Measure Stick Drift").hidden)return 130;
+        /* Black Box: two differing polls, then Enter on its row saves beside this preview's settings. */
+        int16_t bb_zero[4]={0,0,0,0},bb_push[4]={-12000,4000,0,0};
+        uint8_t bb_idle[8]={0},bb_press[8]={0};
+        bb_press[2]=200;
+        black_BoxRecord(0,bb_idle,bb_zero);usleep(20000);black_BoxRecord(1,bb_press,bb_push);
+        if(button(window.contentView,@"Save Black Box").hidden)return 137;
+        key(window,125,@"\uF701");key(window,36,@"\r");
+        if(!black_BoxPath()[0]||access(black_BoxPath(),R_OK))return 138;
         snapshot(window,[output stringByAppendingPathComponent:@"controller-diagnostics.png"]);
         key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Controller Diagnostics"])return 131;
         key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Advanced Gamepad"])return 132;
         key(window,53,@"\e");if(![[(NSButton *)window.firstResponder title]isEqual:@"Gamepad and Vibration"])return 133;
         black_SettingsSetMenuLanguage(6);pump(.05);snapshot(window,[output stringByAppendingPathComponent:@"controls-home-ru.png"]);
         key(window,36,@"\r");snapshot(window,[output stringByAppendingPathComponent:@"controller-look-ru.png"]);
-        black_SettingsSetMenuLanguage(0);key(window,53,@"\e");key(window,53,@"\e");if(black_MenuIsOpen())return 134;
-        key(window,122,@"\uF704");if(button(window.contentView,@"Input Device").hidden)return 135;
-        key(window,53,@"\e");
+        black_SettingsSetMenuLanguage(0);pump(.05);
+        key(window,53,@"\e");key(window,53,@"\e");key(window,53,@"\e");if(black_MenuIsOpen())return 134;
+        key(window,122,@"\uF704");key(window,36,@"\r"); /* Controls */
+        if(button(window.contentView,@"Input Device").hidden)return 135;
+        key(window,53,@"\e");key(window,53,@"\e");
         for (int open = 0; open < 2; ++open) {
             if (open) { key(window, 122, @"\uF704"); }
             NSEvent *quit = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint

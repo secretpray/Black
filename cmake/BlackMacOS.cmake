@@ -39,6 +39,8 @@ add_library(black-port-ui STATIC
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/controller_look.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/controller_monitor.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_trace.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_stats.c"
+    "${CMAKE_SOURCE_DIR}/ports/macos/overrides/black_box.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/frame_wait.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/display_gamma.c"
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/port_settings.c"
@@ -121,6 +123,13 @@ add_executable(black-text-pad tools/macos/text_pad_test.c)
 add_test(NAME macos_text_pad COMMAND black-text-pad)
 add_executable(black-menu-repeat tools/macos/menu_repeat_test.c)
 add_test(NAME macos_menu_repeat COMMAND black-menu-repeat)
+add_executable(black-black-box tools/macos/black_box_test.c)
+target_include_directories(black-black-box PRIVATE "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
+target_link_libraries(black-black-box PRIVATE black-port-ui)
+add_test(NAME macos_black_box COMMAND black-black-box)
+add_executable(black-frame-stats tools/macos/frame_stats_test.c ports/macos/overrides/frame_stats.c)
+target_include_directories(black-frame-stats PRIVATE "${CMAKE_SOURCE_DIR}/ports/macos/overrides")
+add_test(NAME macos_frame_stats COMMAND black-frame-stats)
 add_executable(black-window-geometry tools/macos/window_geometry_test.c)
 add_test(NAME macos_window_geometry COMMAND black-window-geometry)
 add_executable(black-save-profiles tools/macos/save_profiles_test.m

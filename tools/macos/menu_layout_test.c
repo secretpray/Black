@@ -46,6 +46,11 @@ int main(void)
     black_menu_slot_count = 1;
     black_menu_slot_rows[0] = ROW_SLOT_MISSIONS;
 
+    /* Diagnostics: measure the sticks, then save the input Black Box. */
+    assert(black_menu_count(PAGE_DIAGNOSTICS) == 2);
+    expect_row(PAGE_DIAGNOSTICS, 0, ROW_MEASURE);
+    expect_row(PAGE_DIAGNOSTICS, 1, ROW_BLACK_BOX);
+
     /* The top menu and the way back from the Saves pages. */
     assert(black_menu_count(PAGE_ROOT) == 6);
     expect_row(PAGE_ROOT, 3, ROW_NAV_SAVES);

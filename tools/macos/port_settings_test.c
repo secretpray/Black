@@ -29,7 +29,7 @@ int main(int argc, char **argv)
             black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "language")) return black_SettingsGameLanguage() != BLACK_LANG_GERMAN ||
             black_SettingsMenuLanguage() != 6;
-        if (!strcmp(argv[1], "fps")) return !black_SettingsFpsCounter() || black_SettingsRenderScale() != 3;
+        if (!strcmp(argv[1], "fps")) return black_SettingsPerformanceOverlay() != BLACK_PERF_FRAMES || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "textures")) return !black_SettingsTextureReplacement() || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "texture-size")) return black_SettingsTextureMaxSize() != 1024;
         if (!strcmp(argv[1], "display")) return black_SettingsDisplayBrightness() != -7 || black_SettingsDisplayGamma() != 125;
@@ -139,7 +139,8 @@ int main(int argc, char **argv)
     if (!black_SettingsSetGameLanguage(BLACK_LANG_GERMAN) || !black_SettingsSetMenuLanguage(6) ||
         black_SettingsSetGameLanguage(BLACK_GAME_LANGUAGES) || black_SettingsSetMenuLanguage(7) || black_SettingsSetGameLanguage(-1) ||
         child(argv[0], "language", path) || !black_SettingsSetGameLanguage(0) || !black_SettingsSetMenuLanguage(0)) return 34;
-    if (!black_SettingsSetFpsCounter(1) || child(argv[0], "fps", path) || !black_SettingsSetFpsCounter(0) ||
+    if (!black_SettingsSetPerformanceOverlay(BLACK_PERF_FRAMES) || child(argv[0], "fps", path) ||
+        black_SettingsSetPerformanceOverlay(3) || !black_SettingsSetPerformanceOverlay(BLACK_PERF_OFF) ||
         !child(argv[0], "fps", path)) return 33;
     /* Texture replacement is off until chosen, then saved like the others. */
     if (child(argv[0], "textures", path) != 1 || !black_SettingsSetTextureReplacement(1) ||

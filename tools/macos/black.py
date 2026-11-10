@@ -563,6 +563,13 @@ def play_locked(args, settings_path, data, name, binary, state):
         pictures = run_dir / "slot-pictures"
         pictures.mkdir()
         env["BLACK_SLOT_PICTURES"] = str(pictures)
+    if args.black_box:
+        boxes = run_dir / "black-box"
+        boxes.mkdir()
+        env["BLACK_BLACK_BOX_DIR"] = str(boxes)
+        print(f"Black Box stream: {boxes}", flush=True)
+    if args.replay_input:
+        env["BLACK_INPUT_REPLAY"] = str(Path(args.replay_input).expanduser().resolve(strict=True))
     if args.mute:
         env["SDL_AUDIODRIVER"] = "dummy"
     if args.input_script:
@@ -726,6 +733,8 @@ def main():
             sub.add_argument("--capture", action="store_true", help="Capture framebuffer images locally")
             sub.add_argument("--mute", action="store_true", help="Use SDL's dummy audio device for a silent smoke")
             sub.add_argument("--slot-pictures", action="store_true", help="Also write each picture kept for the Saves page to this run's slot-pictures/")
+            sub.add_argument("--black-box", action="store_true", help="Stream every guest-visible pad poll of this run to an input CSV inside black-box/")
+            sub.add_argument("--replay-input", metavar="CSV", help="Feed a saved Black Box CSV to the game instead of the pad; the real game still runs")
             sub.add_argument("--input-script", help="Runtime test harness: ms:button[:hold_ms], comma separated; times from boot")
             sub.add_argument("--test-input", action="store_true", help="Enable the runtime's local input.txt test harness")
             sub.add_argument("--script-only", action="store_true", help="Ignore physical pads/window input during a controlled scripted validation run")

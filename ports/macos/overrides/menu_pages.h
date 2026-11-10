@@ -8,7 +8,7 @@
 enum { ROW_SCALE, ROW_UPSCALE, ROW_FOV, ROW_FPS, ROW_BRIGHTNESS, ROW_GAMMA, ROW_AA, ROW_AF, ROW_GAME_LANG, ROW_MENU_LANG, ROW_TEXTURES, ROW_TEXTURE_SIZE,
        ROW_LOOK_X, ROW_LOOK_Y, ROW_AIM_X, ROW_AIM_Y, ROW_INVERT_X, ROW_HOLD_AIM, ROW_AIM_ASSIST,
        ROW_LEFT_DZ, ROW_RIGHT_DZ, ROW_TRIGGER_DZ, ROW_VIBRATION, ROW_RUMBLE,
-       ROW_HID, ROW_MEASURE, ROW_RESET, ROW_DEVICE, ROW_PROMPTS,
+       ROW_HID, ROW_MEASURE, ROW_BLACK_BOX, ROW_RESET, ROW_DEVICE, ROW_PROMPTS,
        ROW_PAD_FIRST, ROW_PAD_LAST = ROW_PAD_FIRST + BLACK_PAD_CONTROLS - 1,
        ROW_MOUSE_X, ROW_MOUSE_Y, ROW_MOUSE_AIM_X, ROW_MOUSE_AIM_Y, ROW_MOUSE_INVERT_X, ROW_MOUSE_INVERT_Y,
        ROW_MOUSE_HOLD, ROW_WALK_SPEED, ROW_BIND_FIRST, ROW_BIND_LAST = ROW_BIND_FIRST + BLACK_ACTION_COUNT - 1,
@@ -44,7 +44,7 @@ static inline int black_menu_has_defaults(int page)
 {return page==PAGE_PORT||page==PAGE_KEYS||page==PAGE_PAD_BINDINGS||page==PAGE_MOUSE||page==PAGE_PAD||page==PAGE_ADVANCED||page==PAGE_MODS;}
 static inline int black_menu_count(int page)
 {
-    static const int counts[]={12,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,1,3+BLACK_MOD_COUNT,
+    static const int counts[]={12,5,1+BLACK_ACTION_COUNT,1+BLACK_PAD_CONTROLS,6,5,8,2,3+BLACK_MOD_COUNT,
         BLACK_PROFILE_SLOTS+2,1,1,2,BLACK_PROFILE_MISSIONS,2,2,6};
     /* The backups, then "delete all" when there are any. */
     if(page==PAGE_BACKUPS)return black_menu_backup_rows>0?black_menu_clamp(black_menu_backup_rows,1,BLACK_SAVE_BACKUPS)+1:1;
@@ -71,7 +71,7 @@ static inline int black_menu_row(int page,int index)
     case PAGE_MOUSE:return mouse[index];
     case PAGE_PAD:return pad[index];
     case PAGE_ADVANCED:return advanced[index];
-    case PAGE_DIAGNOSTICS:return ROW_MEASURE;
+    case PAGE_DIAGNOSTICS:{static const int diagnostics[]={ROW_MEASURE,ROW_BLACK_BOX};return diagnostics[index];}
     case PAGE_MODS:return ROW_ANY_FILM+index;
     case PAGE_SAVES:return index<BLACK_PROFILE_SLOTS?ROW_SAVE_FIRST+index:index==BLACK_PROFILE_SLOTS?ROW_CHECKPOINTS:ROW_NAV_BACKUPS;
     case PAGE_BACKUPS:return black_menu_backup_rows>0&&index==black_menu_count(page)-1?ROW_BACKUPS_CLEAR:ROW_BACKUP_FIRST+index;

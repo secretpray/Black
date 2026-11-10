@@ -18,7 +18,7 @@ int main(int argc,char **argv)
         if (cli) setenv("BLACK_INPUT_DEVICE","gamepad",1);
         assert(black_SettingsInputDevice()==(cli ? BLACK_INPUT_GAMEPAD : BLACK_INPUT_KEYBOARD));
         if (cli) {
-            assert(black_SettingsSetFpsCounter(1));
+            assert(black_SettingsSetPerformanceOverlay(BLACK_PERF_FPS));
             assert(black_SettingsInputDevice()==BLACK_INPUT_GAMEPAD);
             assert(black_SettingsSetInputDevice(BLACK_INPUT_KEYBOARD));
             assert(black_SettingsInputDevice()==BLACK_INPUT_KEYBOARD);

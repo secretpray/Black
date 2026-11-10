@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <string.h>
 #include "frame_trace.h"
+#include "frame_stats.h"
 #import <QuartzCore/QuartzCore.h>
 #include "smaa_metal.h"
 #include "upscale_metal.h"
@@ -225,6 +226,7 @@ static int update_pixels(void)
 static void render_frame(void)
 {
     uint64_t start = black_trace_ns();
+    black_FrameStatsPresent((uint32_t)s_fb_frames_presented, black_FrameStatsNow());
     uint32_t before = xnv2a_flip_count ? xnv2a_flip_count() : 0;
     black_OriginalRenderFrame();
     black_trace(BLACK_TRACE_PRESENT, (uint32_t)s_fb_frames_presented, start, black_trace_ns(),

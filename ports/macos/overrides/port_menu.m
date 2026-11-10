@@ -14,6 +14,7 @@
 #include "game_mods.h"
 #include "game_language.h"
 #include "game_checkpoint.h"
+#include "black_box.h"
 #include "slot_info.h"
 #include <time.h>
 #include "subtitles.h"
@@ -187,7 +188,7 @@ static int reset_row(int row, int apply)
 {
     #define R(cond, action) if (cond) { if (apply) { action; } return 1; }
     R(row == ROW_SCALE, black_SettingsSetRenderScale(2)) R(row == ROW_UPSCALE, black_SettingsSetUpscaler(1))
-    R(row == ROW_FOV, black_SettingsSetFov(70)) R(row == ROW_FPS, black_SettingsSetFpsCounter(0))
+    R(row == ROW_FOV, black_SettingsSetFov(70)) R(row == ROW_FPS, black_SettingsSetPerformanceOverlay(BLACK_PERF_OFF))
     R(row == ROW_BRIGHTNESS, black_SettingsSetDisplayBrightness(BLACK_BRIGHTNESS_NEUTRAL))
     R(row == ROW_GAMMA, black_SettingsSetDisplayGamma(BLACK_GAMMA_NEUTRAL))
     R(row == ROW_AA, black_SettingsSetAntiAliasing(2)) R(row == ROW_AF, black_SettingsSetAniso(0))
@@ -252,11 +253,11 @@ static CGFloat row_y(int page,int row,int selected)
 { return ROWS_TOP + (black_menu_index(page,row) - visible_start(page,selected)) * ROW_STEP; }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"FPS Counter", @"Display Brightness", @"Display Gamma", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"Performance Overlay", @"Display Brightness", @"Display Gamma", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size",
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
-        @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Reset Input", @"Input Device", @"Button Prompts"]];
+        @"Rumble Intensity", @"DualSense Raw HID", @"Measure Stick Drift", @"Save Black Box", @"Reset Input", @"Input Device", @"Button Prompts"]];
     for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) [labels addObject:@(black_PadControlLabel(i))];
     [labels addObjectsFromArray:@[@"Mouse Horizontal Sensitivity", @"Mouse Vertical Sensitivity",
         @"Mouse Aim Horizontal Sensitivity", @"Mouse Aim Vertical Sensitivity", @"Invert Mouse X", @"Invert Mouse Y",
@@ -496,14 +497,16 @@ static NSString *dz_name(int right)
 - (void)drawRect:(NSRect)dirty { (void)dirty; }
 @end
 
-/* TGP's FPS COUNTER (src/game/fps_counter.cpp): "FPS: 30.0" in the game's
- * small font, HUD grey with a black shadow, in the top left corner; smaller
- * than TGP's 15-line text so it stays unobtrusive over the picture. It
- * counts the game's finished frames, not the fixed-rate presentation. */
-uint32_t black_GameFrameCount(void);
+/* TGP's FPS COUNTER (src/game/fps_counter.cpp) with optional frame times:
+ * "FPS: 30.0" in the game's small font, HUD grey with a black shadow, in the
+ * top left corner; smaller than TGP's 15-line text so it stays unobtrusive
+ * over the picture. It counts the game's finished frames, not the fixed-rate
+ * presentation; the detailed mode also shows the presentation rate and the
+ * world frame's median, 95th percentile and worst interval. */
 @interface BlackFpsView : NSView {
 @public
-    double fps;
+    int mode;
+    BlackFrameStats stats;
 }
 @end
 @implementation BlackFpsView
@@ -515,9 +518,19 @@ uint32_t black_GameFrameCount(void);
     /* text() sizes by capital height: about 5 lines of a 480 frame, never
      * below 7 points, with a one-point shadow. */
     CGFloat unit = self.bounds.size.height / 480, cap = MAX(7, 5 * unit), margin = 6 * unit;
-    NSString *value = [NSString stringWithFormat:@"FPS: %.1f", fps];
+    NSString *value = stats.samples > 1 ?
+        [NSString stringWithFormat:@"FPS: %.1f", stats.fps] : @"FPS: --";
+    if (mode >= BLACK_PERF_FRAMES && stats.display_samples > 1)
+        value = [value stringByAppendingFormat:@"  DISPLAY: %.1f", stats.display_fps];
     text(value, margin + 1, margin + 1, cap, 0x000000, 0);
     text(value, margin, margin, cap, 0xbababa, 0);
+    if (mode >= BLACK_PERF_FRAMES && stats.samples > 1) {
+        NSString *times = [NSString stringWithFormat:@"FRAME: %.1f MS  P50 %.1f  P95 %.1f  MAX %.1f",
+            stats.average, stats.p50, stats.p95, stats.max];
+        CGFloat y = margin + cap * 1.5;
+        text(times, margin + 1, y + 1, cap, 0x000000, 0);
+        text(times, margin, y, cap, 0xbababa, 0);
+    }
 }
 @end
 
@@ -752,7 +765,7 @@ static NSTimeInterval transition, last_draw;
         NSArray *labels = row_labels();
         NSArray *help = @[@"Internal render resolution, 1 to 6 times native. Applied next launch.",
             @"Off or MetalFX spatial. Applied next launch.", @"Camera angle, 45 to 140 degrees. Applied next launch.",
-            @"Displays the game's frame rate on screen. Live.",
+            @"The game's frame rate; frame times add the median, 95th percentile and worst. Live.",
             @"Black level over the game's own brightness, -20 to +20; 0 keeps the game's picture. Live.",
             @"Midtones over the game's own brightness, 0.60 to 1.60; 1.00 keeps the game's picture. Live.",
             @"Off, FXAA or SMAA. Applied next launch.", @"Game default, 2, 4, 8 or 16 times. Applied next launch.",
@@ -770,6 +783,7 @@ static NSTimeInterval transition, last_draw;
             @"Enable controller rumble. Live.", @"Strength of the game's vibration, 0 to 200 percent. Live.",
             @"SDL raw HID or platform driver. Restart required.",
             @"Release both sticks for two seconds, then start. Sets neutral noise plus a two percent margin. Movement or disconnect cancels.",
+            @"Saves the last minute of game input, with your settings and launch options, for a bug report.",
             @"Restore original controller response and driver defaults. Other settings are kept."];
         for (int i = 0; i < MENU_ROWS; ++i) {
             rows[i] = [[BlackMenuButton alloc] initWithFrame:NSZeroRect];
@@ -858,7 +872,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_UPSCALE] setAccessibilityValue:black_SettingsUpscaler() ? @"MetalFX, next launch" : @"Off, next launch"];
     [rows[ROW_GAME_LANG] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", game_language_names[black_SettingsGameLanguage()].capitalizedString]];
     [rows[ROW_MENU_LANG] setAccessibilityValue:menu_language_names[black_SettingsMenuLanguage()].capitalizedString];
-    [rows[ROW_FPS] setAccessibilityValue:black_SettingsFpsCounter() ? @"On" : @"Off"];
+    [rows[ROW_FPS] setAccessibilityValue:@[@"Off", @"Frames per second", @"Frame times"][black_SettingsPerformanceOverlay()]];
     [rows[ROW_BRIGHTNESS] setAccessibilityValue:brightness_name()];
     [rows[ROW_GAMMA] setAccessibilityValue:gamma_name()];
     [rows[ROW_TEXTURES] setAccessibilityValue:black_SettingsTextureReplacement() ? @"On" : @"Off"];
@@ -890,6 +904,7 @@ static NSTimeInterval transition, last_draw;
     for (int i = 0; i < BLACK_PAD_CONTROLS; ++i) [rows[ROW_PAD_FIRST+i] setAccessibilityValue:
         @(black_PadButtonName(black_SettingsPadBinding(i),black_InputPromptFamily()))];
     [rows[ROW_MEASURE] setAccessibilityValue:[NSString stringWithFormat:@"Measurement state %d", black_ControllerMonitor().calibration]];
+    [rows[ROW_BLACK_BOX] setAccessibilityValue:black_BoxPath()[0] ? @"Saved" : @"Saves the last minute of input"];
 }
 - (void)goBack:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_BACK); }
 - (void)quitGame:(id)sender { (void)sender; black_MenuCommand(BLACK_MENU_QUIT); }
@@ -916,7 +931,7 @@ static NSTimeInterval transition, last_draw;
     }else if(page==PAGE_MODS)black_SettingsResetMods();
     else if(page==PAGE_PORT){
         black_SettingsSetRenderScale(2);black_SettingsSetUpscaler(1);black_SettingsSetFov(70);
-        black_SettingsSetAntiAliasing(2);black_SettingsSetAniso(0);black_SettingsSetFpsCounter(0);
+        black_SettingsSetAntiAliasing(2);black_SettingsSetAniso(0);black_SettingsSetPerformanceOverlay(BLACK_PERF_OFF);
         black_SettingsSetDisplayBrightness(BLACK_BRIGHTNESS_NEUTRAL);black_SettingsSetDisplayGamma(BLACK_GAMMA_NEUTRAL);
         black_SettingsSetTextureReplacement(0);black_SettingsSetTextureMaxSize(2048);
     }
@@ -1222,6 +1237,11 @@ static NSTimeInterval transition, last_draw;
         else black_ControllerMeasure();
         [self setNeedsDisplay:YES];
         return;
+    } else if (selected == ROW_BLACK_BOX) {
+        if (direction <= 0) return;
+        black_BoxSave();
+        [self setNeedsDisplay:YES];
+        return;
     } else if (selected == ROW_RESET) {
         if (direction < 0) return;
         black_ControllerCancelMeasure();
@@ -1276,9 +1296,11 @@ static NSTimeInterval transition, last_draw;
         if (value == current) return;
         black_SettingsSetMenuLanguage(value);
     } else if (selected == ROW_FPS) {
-        int current = black_SettingsFpsCounter(), value = cycle ? !current : direction > 0;
+        int current = black_SettingsPerformanceOverlay();
+        int value = cycle ? (current + 1) % 3 : current + direction;
+        value = MAX(BLACK_PERF_OFF, MIN(BLACK_PERF_FRAMES, value));
         if (value == current) return;
-        black_SettingsSetFpsCounter(value);
+        black_SettingsSetPerformanceOverlay(value);
     } else if (selected == ROW_BRIGHTNESS || selected == ROW_GAMMA) {
         int gamma = selected == ROW_GAMMA;
         int low = gamma ? BLACK_GAMMA_MIN : BLACK_BRIGHTNESS_MIN, high = gamma ? BLACK_GAMMA_MAX : BLACK_BRIGHTNESS_MAX;
@@ -1708,10 +1730,11 @@ static NSAlert *pack_alert;
             index == ROW_VIBRATION ? (black_SettingsVibration() ? @"ON" : @"OFF") :
             index == ROW_HID ? (black_SettingsDualSenseHid() ? @"ON" : @"OFF") :
             index == ROW_MEASURE ? (black_ControllerMonitor().calibration == BLACK_CAL_MEASURING ? @"WAIT" : @"START") :
+            index == ROW_BLACK_BOX ? (black_BoxPath()[0] ? @"SAVED" : @"SAVE") :
             index == ROW_RESET ? @"RESET" :
             index == ROW_FOV ? [NSString stringWithFormat:@"%d", black_SettingsFov()] :
             index == ROW_UPSCALE ? (black_SettingsUpscaler() ? @"METALFX" : @"OFF") :
-            index == ROW_FPS ? (black_SettingsFpsCounter() ? @"ON" : @"OFF") :
+            index == ROW_FPS ? (@[@"OFF", @"FPS", @"FRAME TIMES"])[black_SettingsPerformanceOverlay()] :
             index == ROW_BRIGHTNESS ? brightness_name() : index == ROW_GAMMA ? gamma_name() :
             index == ROW_TEXTURES ? (black_SettingsTextureReplacement() ? @"ON" : @"OFF") :
             index == ROW_TEXTURE_SIZE ? [NSString stringWithFormat:@"%d", black_SettingsTextureMaxSize()] :
@@ -1725,7 +1748,7 @@ static NSAlert *pack_alert;
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
         CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : left;
         CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : VALUE_WIDTH;
-        if (index != ROW_MEASURE && index != ROW_RESET) {
+        if (index != ROW_MEASURE && index != ROW_BLACK_BOX && index != ROW_RESET) {
             text(@"<", value_left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
             text(@">", value_left + value_width - 24, y + 13, 13, focus ? TEXT : DIM, 0);
         }
@@ -1873,6 +1896,12 @@ static NSAlert *pack_alert;
         case BLACK_CAL_CANCELLED: detail = @"MEASUREMENT CANCELLED. NO SETTINGS CHANGED."; break;
         default: detail = @"SETS INNER ZONES ONLY. NEVER CHANGES THE STICK CENTER.";
         }
+    } else if (selected == ROW_BLACK_BOX) {
+        help = @"SAVES THE LAST MINUTE OF GAME INPUT, WITH YOUR SETTINGS AND LAUNCH OPTIONS.";
+        const char *path = black_BoxPath();
+        const char *name = *path ? strrchr(path, '/') : NULL;
+        detail = *path ? [NSString stringWithFormat:T(@"SAVED TO %@. REPLAY IT WITH BLACK_INPUT_REPLAY."),
+                @(name ? name + 1 : path)] : @"FOR A BUG REPORT. THE FILE IS WRITTEN BESIDE THE SETTINGS.";
     } else if (selected == ROW_RESET) {
         help = @"RESTORE ORIGINAL LOOK, STICK ZONES AND CONTROLLER DEFAULTS.";
         detail = @"ENTER / A RESETS INPUT ONLY. DRIVER CHANGES NEED A RESTART.";
@@ -1898,8 +1927,8 @@ static NSAlert *pack_alert;
         help = @"MIDTONES OVER THE GAME'S OWN BRIGHTNESS. BLACK AND WHITE STAY.";
         detail = @"LIVE. 1.00 KEEPS THE GAME'S PICTURE. ABOVE IT BRIGHTER, BELOW DARKER.";
     } else if (selected == ROW_FPS) {
-        help = @"DISPLAYS THE FRAME RATE ON SCREEN, IN THE GAME'S OWN FONT.";
-        detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN.";
+        help = @"SHOWS THE GAME'S FRAME RATE; FRAME TIMES ADD THE MEDIAN, 95TH PERCENTILE AND WORST FRAME.";
+        detail = @"LIVE. GAME FRAMES PER SECOND; BLACK RUNS NEAR 30 BY DESIGN. DISPLAY IS THE PRESENTATION RATE.";
     } else if (selected == ROW_AA) {
         const char *aa = getenv("RECOMP_AA");
         int active = !aa ? 1 : !strcmp(aa, "smaa") ? 2 : strcmp(aa, "0") ? 1 : 0;
@@ -1982,7 +2011,7 @@ static NSAlert *pack_alert;
     black_InputGlyphUTF8(black_InputButtonGlyph(0,1),accept,sizeof accept); black_InputGlyphUTF8(black_InputButtonGlyph(1,1),cancel,sizeof cancel);
     {
         BOOL adjust = (!black_menu_link(selected) && (!black_menu_save(selected) || selected == ROW_CHECKPOINTS) && selected != ROW_QUIT && selected != ROW_CLOSE_MENU &&
-            selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_RESET);
+            selected != ROW_DEFAULTS && selected != ROW_MEASURE && selected != ROW_BLACK_BOX && selected != ROW_RESET);
         const CGFloat size = 12, wide = 1 / text_aspect;
         NSString *keys[2] = {@(accept), @(cancel)};
         CGFloat column = MAX(text_width(keys[0], size, 0), text_width(keys[1], size, 0));
@@ -2433,18 +2462,21 @@ void black_MenuPump(void)
         menu_view->changed = CACurrentMediaTime();
         [menu_view refreshValues];
     }
-    static uint32_t fps_frames;
     static double fps_time;
-    if (black_SettingsFpsCounter()) {
-        uint32_t frames = black_GameFrameCount();
+    static int fps_mode;
+    int overlay = black_SettingsPerformanceOverlay();
+    if (!overlay) {
+        if (!fps_view.hidden) { fps_view.hidden = YES; fps_time = 0; fps_mode = BLACK_PERF_OFF; }
+    } else {
         double now = CACurrentMediaTime();
-        if (!fps_time || frames < fps_frames) { fps_time = now; fps_frames = frames; }
-        else if (now - fps_time >= .5) {
-            fps_view->fps = (frames - fps_frames) / (now - fps_time);
-            fps_time = now; fps_frames = frames;
+        /* A mode change redraws at once; the numbers refresh twice a second. */
+        if (overlay != fps_mode || !fps_time || now - fps_time >= .5) {
+            fps_mode = overlay; fps_time = now;
+            black_FrameStatsSnapshot(&fps_view->stats);
+            fps_view->mode = overlay;
             fps_view.hidden = NO; [fps_view setNeedsDisplay:YES];
         }
-    } else if (!fps_view.hidden) { fps_view.hidden = YES; fps_time = 0; }
+    }
     {
         /* A stalled game thread leaves no stale hint behind. */
         BOOL hint = atomic_load(&film_hint) && !shown && CACurrentMediaTime() - atomic_load(&film_hint_seen) < .5;

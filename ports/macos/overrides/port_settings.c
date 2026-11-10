@@ -30,7 +30,9 @@ static atomic_int upscaler = 1;
 /* Player's display brightness (percent) and gamma (hundredths) over the
  * game's ramp; 0 and 100 leave the game's picture as it is. */
 static atomic_int display_brightness = BLACK_BRIGHTNESS_NEUTRAL, display_gamma = BLACK_GAMMA_NEUTRAL;
-static atomic_int fps_counter; /* TGP's FPS COUNTER: the game's frame rate, top left */
+/* TGP's FPS counter extended: 0 off, 1 the game's frame rate, 2 that plus
+ * frame times. Kept as fps_counter in the file so old settings still apply. */
+static atomic_int performance_overlay;
 /* HD textures from the user's pack and the shipped map (texture_pack.h); live. */
 static atomic_int texture_replacement;
 /* Largest side of a replacement: 1024, 2048 or 4096; larger files lose top levels. */
@@ -181,7 +183,7 @@ static void load_settings(void)
             }
             if (sscanf(line, " fps_counter = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
-                if (*value && !*end && n >= 0 && n <= 1) atomic_store(&fps_counter, (int)n);
+                if (*value && !*end && n >= 0 && n <= 2) atomic_store(&performance_overlay, (int)n);
             }
             if (sscanf(line, " texture_replacement = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -365,7 +367,7 @@ static int write_settings(void)
                     atomic_load(&display_brightness), atomic_load(&display_gamma)) > 0;
                 written &= fprintf(file, "# The title's own checkpoint beside the saves; 1 on, 0 off\nsave_checkpoints=%d\n", atomic_load(&save_checkpoints)) > 0;
                 written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
-                    atomic_load(&fps_counter), atomic_load(&game_language), atomic_load(&menu_language),
+                    atomic_load(&performance_overlay), atomic_load(&game_language), atomic_load(&menu_language),
                     atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
                     written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
@@ -409,9 +411,10 @@ int black_SettingsSetAntiAliasing(int mode)
 { return mode >= 0 && mode <= 2 ? save_setting(&anti_aliasing, mode) : 0; }
 int black_SettingsSetUpscaler(int mode)
 { return mode >= 0 && mode <= 1 ? save_setting(&upscaler, mode) : 0; }
-int black_SettingsFpsCounter(void)
-{ pthread_once(&initialized, load_settings); return atomic_load(&fps_counter); }
-int black_SettingsSetFpsCounter(int enabled) { return save_setting(&fps_counter, !!enabled); }
+int black_SettingsPerformanceOverlay(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&performance_overlay); }
+int black_SettingsSetPerformanceOverlay(int mode)
+{ return mode >= BLACK_PERF_OFF && mode <= BLACK_PERF_FRAMES ? save_setting(&performance_overlay, mode) : 0; }
 int black_SettingsDisplayBrightness(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&display_brightness); }
 int black_SettingsSetDisplayBrightness(int percent)
@@ -482,6 +485,10 @@ int black_SettingsResetInput(void)
     atomic_store(&hold_aim, 0); atomic_store(&aim_assist, 1);
     return save_setting(&dualsense_hid, 1);
 }
+
+/* Where the INI lives: the Black Box saves beside it and copies it. */
+const char *black_SettingsPath(void)
+{ pthread_once(&initialized, load_settings); return settings_path; }
 
 int black_SettingsSaveFailed(void) { return atomic_load(&save_failed); }
 /* Settings panel or the Home quit dialog: either one freezes the world and
