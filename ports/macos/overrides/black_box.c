@@ -16,6 +16,9 @@
 /* An unchanged state is still written now and then: the file then shows the
  * poll cadence and a hold that lasts. */
 #define BOX_HEARTBEAT_MS 250u
+/* The guest polls once a frame (30 Hz), so every poll is far below the
+ * heartbeat: it must be measured from the last written sample, not the last
+ * poll, or a hold would leave a single row. */
 
 typedef struct {
     uint32_t t;          /* ms since the first poll */
@@ -29,7 +32,8 @@ static BoxSample ring[BOX_CAPACITY];
 static unsigned ring_count, ring_next;
 static uint32_t start_ms;
 static int started;
-static BoxSample last;
+static BoxSample last, kept;
+static int have_kept;
 
 static char saved_path[1024];
 static FILE *session;
@@ -63,7 +67,7 @@ static void write_header(FILE *file, uint32_t recorded_ms)
     char when[32];
     stamp(when, sizeof when, "");
     fprintf(file, "# BLACK input box\n# recorded %s, %.0f s from the first poll\n", when, recorded_ms / 1000.0);
-    fprintf(file, "# t_ms buttons lt rt a b x y black white lx ly rx ry\n");
+    fprintf(file, "# t_ms buttons a b x y black white lt rt lx ly rx ry\n");
     const char *settings = black_SettingsPath();
     FILE *ini = settings ? fopen(settings, "r") : NULL;
     if (ini) {
@@ -128,14 +132,16 @@ void black_BoxRecord(uint16_t buttons, const uint8_t analog[8], const int16_t ax
     }
     sample.t = now - start_ms;
     if (session_tried == 0) open_session(sample.t);
-    int unchanged = ring_count && last.buttons == buttons &&
-        !memcmp(last.analog, analog, 8) && !memcmp(last.axes, axes, sizeof last.axes) &&
-        sample.t - last.t < BOX_HEARTBEAT_MS;
-    if (!unchanged) {
+    int changed = ring_count && (last.buttons != buttons ||
+        memcmp(last.analog, analog, 8) || memcmp(last.axes, axes, sizeof last.axes));
+    int beat = have_kept && sample.t - kept.t >= BOX_HEARTBEAT_MS;
+    if (!have_kept || changed || beat) {
         ring[ring_next] = sample;
         ring_next = (ring_next + 1) % BOX_CAPACITY;
         if (ring_count < BOX_CAPACITY) ++ring_count;
         if (session) write_sample(session, &sample), fflush(session);
+        kept = sample;
+        have_kept = 1;
     }
     last = sample;
     pthread_mutex_unlock(&lock);

@@ -1576,12 +1576,25 @@ static NSAlert *pack_alert;
                 profile_slots[slot_open].active ? [@": " stringByAppendingString:[@(profile_slots[slot_open].name) uppercaseString]] : @""] : T(page_names[p]);
             [trail insertObject:name atIndex:0]; p = black_menu_parent(p, NULL);
         }
-        CGFloat x = 96;
+        /* The way here stops at 500: the counter and the page's status live to
+         * its right, and a deep path must not run under them. Longer paths
+         * drop their first steps, marked with an ellipsis. */
+        CGFloat x = 96, limit = 500;
+        BOOL clipped = NO;
+        while (trail.count > 1) {
+            CGFloat total = clipped ? text_width(@"…  ›  ", 13, 0) : 0;
+            for (NSUInteger i = 0; i < trail.count; ++i)
+                total += text_width(i + 1 < trail.count ? [trail[i] stringByAppendingString:@"  ›  "] : trail[i], 13, 0);
+            if (total <= limit) break;
+            [trail removeObjectAtIndex:0]; clipped = YES;
+        }
+        if (clipped) { text(@"…  ›  ", x, 72, 13, DIM, 0); x += text_width(@"…  ›  ", 13, 0); }
         if (trail.count) {
             NSString *last = trail.lastObject; [trail removeLastObject];
             for (NSString *step in trail) { NSString *item = [step stringByAppendingString:@"  ›  "]; text(item, x, 72, 13, DIM, 0); x += text_width(item, 13, 0); }
-            fitted_text(last, x, 72, 13, 600 - x, HEADING, 0);
-            x += MIN(text_width(last, 13, 0), 600 - x);
+            CGFloat room = MAX(0, limit - x);
+            fitted_text(last, x, 72, 13, room, HEADING, 0);
+            x += MIN(text_width(last, 13, 0), room);
         }
         trail_end = x;
         /* What the page is about, on the right: the game's revision, the device in use. */
@@ -1746,8 +1759,10 @@ static NSAlert *pack_alert;
             index == ROW_MISSIONS ? (black_SettingsSkipMissionIntros() ? @"ON" : @"OFF") :
             index == ROW_ANY_FILM ? (black_SettingsSkipAnyFilm() ? @"ON" : @"OFF") :
             [NSString stringWithFormat:@"%dX", black_SettingsRenderScale()];
-        CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : left;
-        CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : VALUE_WIDTH;
+        /* Diagnostics shares its column with the live sticks at 704. */
+        BOOL diagnostics = page == PAGE_DIAGNOSTICS;
+        CGFloat value_left = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 500 : diagnostics ? 584 : left;
+        CGFloat value_width = index == ROW_DEVICE || index == ROW_PROMPTS || index==ROW_EDIT_DEVICE ? 376 : diagnostics ? 120 : VALUE_WIDTH;
         if (index != ROW_MEASURE && index != ROW_BLACK_BOX && index != ROW_RESET) {
             text(@"<", value_left + 9, y + 13, 13, focus ? TEXT : DIM, 0);
             text(@">", value_left + value_width - 24, y + 13, 13, focus ? TEXT : DIM, 0);
@@ -1999,7 +2014,7 @@ static NSAlert *pack_alert;
             fitted_text([NSString stringWithFormat:T(@"RAW %+.0f / %+.0f%%"), rawx * 100, -rawy * 100], 720, cy + 38, 9, 150, HEADING, 0);
             fitted_text([NSString stringWithFormat:T(@"OUT %+.0f / %+.0f%%"), outx * 100, -outy * 100], 720, cy + 54, 9, 150, TEXT, 0);
         }
-        text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 394, 9, DIM, 0);
+        text([NSString stringWithFormat:@"LT %d%%  RT %d%%", monitor.mapped[4] * 100 / 255, monitor.mapped[5] * 100 / 255], 720, 400, 9, DIM, 0);
     }
     /* The game's prompts, as its own pages show them: select, confirm and back
      * in a column under the description, one row step apart and one step

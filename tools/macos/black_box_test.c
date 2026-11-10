@@ -69,6 +69,10 @@ int main(int argc, char **argv)
     uint8_t pressed[8] = {200, 0, 0, 0, 0, 0, 0, 0};
     int16_t axes[4] = {-12000, 4000, 0, 0};
     black_BoxRecord(0x0001, pressed, axes);
+    /* A held state is kept visible: the next unchanged poll is past the
+     * heartbeat and still lands in the file. */
+    usleep(300000);
+    black_BoxRecord(0x0001, pressed, axes);
 
     /* The session stream is written from the first poll. */
     DIR *dir = opendir(directory);
@@ -81,15 +85,17 @@ int main(int argc, char **argv)
         }
     closedir(dir);
     if (!session[0]) return 1;
-    if (count_lines(session, 1) < 4 || count_lines(session, 0) < 2) return 2;
+    if (count_lines(session, 1) < 4 || count_lines(session, 0) != 3) return 2;
     if (!contains(session, "render_scale=3")) return 3;
+    /* The header must name the columns in the order the samples carry them. */
+    if (!contains(session, "buttons a b x y black white lt rt")) return 14;
 
     if (!black_BoxSave()) return 4;
     const char *saved = black_BoxPath();
     if (!saved[0] || strncmp(saved, directory, strlen(directory))) return 5;
     if (count_lines(saved, 1) < 4) return 6;
-    /* Two polls, two samples: the second state differs, so no heartbeat hold. */
-    if (count_lines(saved, 0) != 2) return 7;
+    /* Two states and one heartbeat hold. */
+    if (count_lines(saved, 0) != 3) return 7;
 
     setenv("BLACK_INPUT_REPLAY", saved, 1);
     uint16_t buttons = 0xFFFF;
@@ -107,7 +113,7 @@ int main(int argc, char **argv)
     snprintf(pruned, sizeof pruned, "%s/pruned.csv", directory);
     FILE *cut = fopen(pruned, "w");
     if (!cut) return 12;
-    fprintf(cut, "# t_ms buttons lt rt a b x y black white lx ly rx ry\n"
+    fprintf(cut, "# t_ms buttons a b x y black white lt rt lx ly rx ry\n"
                  "40000 0x0002 0 0 0 0 0 0 0 0 123 0 0 0\n"
                  "40100 0x0000 0 0 0 0 0 0 0 0 0 0 0 0\n");
     fclose(cut);
