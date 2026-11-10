@@ -14,6 +14,34 @@ endforeach()
 if(NOT nv2a_memory_source)
     message(FATAL_ERROR "NV2A memory source was not found")
 endif()
+# The acknowledgement thread ends each poll with Sleep(0), which on POSIX is
+# sched_yield: a 5 s in-mission sample put 586 of its 918 samples in
+# cthread_yield, a core held for the whole run. A short sleep keeps the guest's
+# GET within 200 us of its PUT without the spin. The anchor is the thread's own
+# trailing yield; the busy-bit thread above it keeps its 20 us cadence.
+file(READ "${nv2a_memory_source}" nv2a_memory_polled)
+set(nv2a_ack_anchor "        Sleep(0);  /* yield; the waiter is spinning on another core */")
+string(REPLACE "${nv2a_ack_anchor}" "" nv2a_ack_stripped "${nv2a_memory_polled}")
+string(LENGTH "${nv2a_memory_polled}" nv2a_ack_before)
+string(LENGTH "${nv2a_ack_stripped}" nv2a_ack_after)
+string(LENGTH "${nv2a_ack_anchor}" nv2a_ack_anchor_length)
+math(EXPR nv2a_ack_count "(${nv2a_ack_before} - ${nv2a_ack_after}) / ${nv2a_ack_anchor_length}")
+if(NOT nv2a_ack_count EQUAL 1)
+    message(FATAL_ERROR "Pinned NV2A ack-thread yield anchor changed (${nv2a_ack_count}, expected 1)")
+endif()
+string(REPLACE "${nv2a_ack_anchor}"
+"#if defined(_WIN32)
+${nv2a_ack_anchor}
+#else
+        {
+            struct timespec ack_sleep = { 0, 200000 };   /* 200 us */
+            nanosleep(&ack_sleep, NULL);
+        }
+#endif"
+    nv2a_memory_polled "${nv2a_memory_polled}")
+set(nv2a_memory_patched "${CMAKE_BINARY_DIR}/runtime-overlay/xbox_memory_layout_ack.c")
+file(WRITE "${nv2a_memory_patched}" "${nv2a_memory_polled}")
+set(nv2a_memory_source "${nv2a_memory_patched}")
 list(FILTER memory_sources EXCLUDE REGEX "(^|/)xbox_memory_layout[.]c$")
 set_property(TARGET xbox_kernel PROPERTY SOURCES ${memory_sources}
     "${CMAKE_SOURCE_DIR}/ports/macos/overrides/nv2a_memory.c")
