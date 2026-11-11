@@ -1,5 +1,6 @@
 /* Normal production XPP entry -> real input policy -> synthetic SDL sink. */
 #include <SDL.h>
+#include "test_temp.h"
 #include "input/xinput_xbox.h"
 #include "port_menu.h"
 #include "flash_memory.h"
@@ -62,7 +63,7 @@ static void invoke(uint32_t handle, uint32_t feedback)
 int main(void)
 {
     char directory[] = "/tmp/black-game-rumble-XXXXXX", path[512];
-    if (!mkdtemp(directory)) return 1;
+    if (!black_test_temp_dir(directory)) return 1;
     snprintf(path, sizeof path, "%s/settings.ini", directory);
     setenv("BLACK_SETTINGS_FILE", path, 1);
     black_SettingsSetVibration(1); black_SettingsSetRumbleIntensity(100);

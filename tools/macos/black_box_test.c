@@ -3,6 +3,7 @@
  * replays through black_BoxReplay at the recorded times. */
 #undef NDEBUG
 #include "black_box.h"
+#include "test_temp.h"
 #include <assert.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -51,7 +52,7 @@ int main(int argc, char **argv)
 {
     if (argc == 2) return replay_probe(argv[1]);
     char directory[] = "/tmp/black-box-test.XXXXXX";
-    if (!mkdtemp(directory)) return 10;
+    if (!black_test_temp_dir(directory)) return 10;
     char settings[1200], path[1200], session[1200] = "";
     snprintf(settings, sizeof settings, "%s/black-settings.ini", directory);
     FILE *ini = fopen(settings, "w");

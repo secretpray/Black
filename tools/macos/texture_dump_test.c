@@ -1,5 +1,6 @@
 /* Exercise the production worker with synthetic pixels only. */
 #include "../../ports/macos/overrides/texture_dump.h"
+#include "test_temp.h"
 #include "../../ports/macos/overrides/texture_pack.h"
 #include <dirent.h>
 #include <stdio.h>
@@ -10,7 +11,7 @@
 int main(void)
 {
     char root[]="/tmp/black-texture-dump.XXXXXX", path[1024];
-    if(!mkdtemp(root) || setenv("BLACK_TEXTURE_DUMP_DIR",root,1)) return 1;
+    if(!black_test_temp_dir(root) || setenv("BLACK_TEXTURE_DUMP_DIR",root,1)) return 1;
     unsigned char pixels[64], palette[1024]={0}, dxt[32]={0};
     for(int i=0;i<64;i++)pixels[i]=(unsigned char)i;
     for(int i=0;i<256;i++){palette[i*4]=(unsigned char)i;palette[i*4+1]=(unsigned char)(2*i);palette[i*4+2]=(unsigned char)(255-i);palette[i*4+3]=255;}

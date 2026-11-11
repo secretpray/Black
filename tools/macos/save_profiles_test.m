@@ -1,5 +1,6 @@
 #undef NDEBUG
 #import <Foundation/Foundation.h>
+#include "test_temp.h"
 #include "../../ports/macos/overrides/save_profiles.h"
 #include <assert.h>
 #include <stdio.h>
@@ -59,7 +60,7 @@ int main(void)
         assert(!black_profile_copy(b, 0, c, 1) && !black_profile_copy(b, 3, c, 0));
 
         /* The edit itself: the game's image must match, then file and image both change. */
-        char dir[] = "/tmp/black-saves-XXXXXX"; assert(mkdtemp(dir));
+        char dir[] = "/tmp/black-saves-XXXXXX"; assert(black_test_temp_dir(dir));
         setenv("XDG_DATA_HOME", dir, 1);
         NSString *folder = [@(dir) stringByAppendingPathComponent:@"xboxrecomp/UserData/" BLACK_SAVE_TITLE "/03A47B43D696"];
         assert([NSFileManager.defaultManager createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:NULL]);

@@ -1,5 +1,6 @@
 /* Actual SDL hint API, production setting/rumble wrappers; no device I/O. */
 #include <SDL.h>
+#include "test_temp.h"
 #include "input/xinput_xbox.h"
 #include "port_menu.h"
 #include <pthread.h>
@@ -26,7 +27,7 @@ static int black_test_rumble(SDL_GameController *pad, Uint16 left, Uint16 right,
 int main(void)
 {
     char directory[] = "/tmp/black-input-backend-XXXXXX", path[512];
-    if (!mkdtemp(directory)) return 1;
+    if (!black_test_temp_dir(directory)) return 1;
     snprintf(path, sizeof path, "%s/settings.ini", directory);
     setenv("BLACK_SETTINGS_FILE", path, 1);
     if (!black_SettingsSetDualSenseHid(0)) return 2;

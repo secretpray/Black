@@ -1,6 +1,7 @@
 /* Production mapping, persisted preferences, ownership names and capture.
  * All storage and inputs are isolated; no physical pad is qualified here. */
 #include "../../ports/macos/overrides/input_profile.h"
+#include "test_temp.h"
 #include "../../ports/macos/overrides/pad_mapping.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/port_menu.h"
@@ -29,7 +30,7 @@ int main(int argc,char **argv)
         assert(black_SettingsRenderScale()==3);
         return 0;
     }
-    char folder[]="/tmp/black-profile-XXXXXX", path[512]; assert(mkdtemp(folder));
+    char folder[]="/tmp/black-profile-XXXXXX", path[512]; assert(black_test_temp_dir(folder));
     snprintf(path,sizeof path,"%s/settings.ini",folder); setenv("BLACK_SETTINGS_FILE",path,1);
     unsetenv("BLACK_INPUT_DEVICE");
     assert(black_SettingsInputDevice()==BLACK_INPUT_AUTO);

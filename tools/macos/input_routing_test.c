@@ -1,6 +1,7 @@
 /* Execute the production GetState/menu routing against deterministic SDL
  * reports. No SDL subsystem/device is opened by this test. */
 #include <SDL.h>
+#include "test_temp.h"
 #include "input/xinput_xbox.h"
 #include "port_menu.h"
 #include "controller_monitor.h"
@@ -53,7 +54,7 @@ static XBOX_GAMEPAD poll(void)
 {XBOX_INPUT_STATE result;assert(black_InputGetState(0,&result)==ERROR_SUCCESS);return result.Gamepad;}
 int main(void)
 {
-    char folder[]="/tmp/black-routing-XXXXXX",path[512];assert(mkdtemp(folder));
+    char folder[]="/tmp/black-routing-XXXXXX",path[512];assert(black_test_temp_dir(folder));
     snprintf(path,sizeof path,"%s/settings.ini",folder);setenv("BLACK_SETTINGS_FILE",path,1);unsetenv("BLACK_INPUT_DEVICE");
     g_pads[0]=(SDL_GameController *)(uintptr_t)1;g_controller_connected[0]=1;
     poll();assert(!black_InputKeyboardActive());assert(black_InputPromptFamily()==BLACK_PROMPTS_PLAYSTATION);

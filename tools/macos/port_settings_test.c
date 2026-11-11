@@ -1,4 +1,5 @@
 #include "../../ports/macos/overrides/port_menu.h"
+#include "test_temp.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
 #include "../../ports/macos/overrides/game_mods.h"
 #include "../../ports/macos/overrides/game_checkpoint.h"
@@ -83,7 +84,7 @@ int main(int argc, char **argv)
     }
     unsetenv("BLACK_SKIP_INTROS");
     char directory[] = "/tmp/black-settings-XXXXXX", path[512], invalid[512];
-    if (!mkdtemp(directory)) return 1;
+    if (!black_test_temp_dir(directory)) return 1;
     snprintf(path, sizeof path, "%s/settings.ini", directory);
     snprintf(invalid, sizeof invalid, "%s/missing/settings.ini", directory);
     setenv("BLACK_SETTINGS_FILE", path, 1);

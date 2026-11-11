@@ -4,6 +4,7 @@
  * them apart. The title menu's resume item and the restart request's armed
  * check reach a synthetic guest image; the files stay in a private folder. */
 #include <stddef.h>
+#include "test_temp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,7 +89,7 @@ int main(void)
     set_slot(profile, 2, name, 0);
     profile[BLACK_PROFILE_RECORDS] = 1;
     profile[BLACK_PROFILE_SLOT + BLACK_PROFILE_RECORDS] = 2;
-    if (!mkdtemp(root)) return 1;
+    if (!black_test_temp_dir(root)) return 1;
     setenv("XDG_DATA_HOME", root, 1);
     black_cp_root_ready();
     if (black_CheckpointForSlot(profile, 0, &info)) return 2; /* nothing yet */

@@ -1,4 +1,5 @@
 #include "../../ports/macos/overrides/hud_prompts.h"
+#include "test_temp.h"
 #include "../../ports/macos/overrides/input_profile.h"
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
@@ -36,7 +37,7 @@ static uint32_t call_(void *o,uint32_t target,uint32_t a,uint32_t c,uint32_t d,c
 int main(void)
 {
     setenv("BLACK_PROMPT_TEXT_SYMBOLS","1",1);
-    char folder[]="/tmp/black-hud-XXXXXX",path[512];assert(mkdtemp(folder));
+    char folder[]="/tmp/black-hud-XXXXXX",path[512];assert(black_test_temp_dir(folder));
     snprintf(path,sizeof path,"%s/settings.ini",folder);setenv("BLACK_SETTINGS_FILE",path,1);
     BlackFlashApi api={NULL,read_,write_,call_,alloc_,NULL,0};BlackHudPrompts h={0};uint32_t hud=0x10000;
     w(0x2D12E4,0x2000);w(0x200C,hud);w(hud+0x22A4,42);w(hud+0x2110,0xFFFFFFFF);

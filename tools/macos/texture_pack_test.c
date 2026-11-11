@@ -2,6 +2,7 @@
  * decoding, finding pack files by name under any folder layout, and checking
  * and linking a pack folder. */
 #include "../../ports/macos/overrides/texture_pack.h"
+#include "test_temp.h"
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
@@ -232,7 +233,7 @@ int main(void)
 
     /* A pack in PCSX2's layout, names in other case, macOS ._ files and a link. */
     char root[] = "/tmp/black-texture-pack.XXXXXX", path[1024];
-    if (!mkdtemp(root)) return 16;
+    if (!black_test_temp_dir(root)) return 16;
     snprintf(path, sizeof path, "%s/pack", root); mkdir(path, 0755);
     snprintf(path, sizeof path, "%s/pack/SLUS-21376", root); mkdir(path, 0755);
     snprintf(path, sizeof path, "%s/pack/SLUS-21376/replacements", root); mkdir(path, 0755);

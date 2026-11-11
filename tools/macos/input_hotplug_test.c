@@ -1,5 +1,6 @@
 /* Production discovery against deterministic SDL identities, not hardware. */
 #include <SDL.h>
+#include "test_temp.h"
 #include "input/xinput_xbox.h"
 #include "input_profile.h"
 #include "controller_monitor.h"
@@ -89,7 +90,7 @@ static Sint16 test_axis(SDL_GameController *p, SDL_GameControllerAxis a) { (void
 int main(void)
 {
     unsetenv("RECOMP_BACKGROUND");
-    char folder[]="/tmp/black-hotplug-XXXXXX",settings[512];assert(mkdtemp(folder));
+    char folder[]="/tmp/black-hotplug-XXXXXX",settings[512];assert(black_test_temp_dir(folder));
     snprintf(settings,sizeof settings,"%s/settings.ini",folder);setenv("BLACK_SETTINGS_FILE",settings,1);
     black_SettingsSetVibration(1);black_SettingsSetRumbleIntensity(100);black_InputSetKeyboardActive(0);
     input_poll_host(); assert(init_calls == 1 && !g_pads[0]);

@@ -1,4 +1,5 @@
 #include "../../ports/macos/overrides/game_prompts.h"
+#include "test_temp.h"
 #include "../../ports/macos/overrides/input_profile.h"
 #include "../../ports/macos/overrides/port_menu.h"
 #include "../../ports/macos/overrides/keyboard_mouse.h"
@@ -26,7 +27,7 @@ static void children(uint32_t parent,uint32_t child,uint32_t data)
 int main(void)
 {
     setenv("BLACK_PROMPT_TEXT_SYMBOLS","1",1);
-    char folder[]="/tmp/black-prompts-XXXXXX",path[512];assert(mkdtemp(folder));
+    char folder[]="/tmp/black-prompts-XXXXXX",path[512];assert(black_test_temp_dir(folder));
     snprintf(path,sizeof path,"%s/settings.ini",folder);setenv("BLACK_SETTINGS_FILE",path,1);
     BlackGamePrompts p={.api={NULL,read_,write_,call_,alloc_,NULL,0}};
     strcpy((char *)mem+0x20000,"confirm");strcpy((char *)mem+0x21000,"PRESS ² :");

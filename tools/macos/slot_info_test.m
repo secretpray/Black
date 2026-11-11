@@ -3,6 +3,7 @@
  * hash; a record that does not match is not shown. Runs in a temporary data
  * folder of its own and removes it. */
 #import <Cocoa/Cocoa.h>
+#include "test_temp.h"
 #include "../../ports/macos/overrides/slot_info.h"
 #include "../../ports/macos/overrides/black_profile.h"
 #include "../../ports/macos/overrides/mission_stats.h"
@@ -148,7 +149,7 @@ int main(void)
 {
     @autoreleasepool {
         char root[] = "/tmp/black-slot-info-XXXXXX";
-        if (!mkdtemp(root)) { perror("mkdtemp"); return 1; }
+        if (!black_test_temp_dir(root)) { perror("mkdtemp"); return 1; }
         setenv("XDG_DATA_HOME", root, 1);
         int result = run();
         [NSFileManager.defaultManager removeItemAtPath:@(root) error:NULL];
