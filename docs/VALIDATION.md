@@ -1,9 +1,9 @@
 # Release validation and current limits
 
-Release: **BLACK 0.8.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.9.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Changes after 0.8.0 (not released)
+## HD Reticle, Performance Overlay, Black Box and the sniper in 0.9.0
 
 **Performance Overlay.** Off, FPS or Frame Times, live; the INI key stays
 `fps_counter` (0-2). Game intervals come from the guest world timer
@@ -72,7 +72,12 @@ Back + Y, and the M16A2 and M249 mods together with it.
 
 **Tests.** Each test's directory under `/tmp` is removed at exit
 (`tools/macos/test_temp.h`), also after a failing return; a full CTest run
-leaves none. 127 CTest checks and 49 Python tests passed.
+leaves none. 127 CTest checks and 49 Python tests passed on the release build
+(real DSP). The final DMG was checked read-only in English and Russian with
+isolated data and system-only PATH: both opened the settings and quit normally
+(exit 0, version 0.9.0 seen, private font view made and removed), and source
+game files and user preferences kept their hashes. The source archive matched
+the local sources and pinned upstreams, without game or private files.
 
 ## Slot records and mission statistics in 0.8.0
 

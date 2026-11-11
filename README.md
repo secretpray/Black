@@ -10,7 +10,11 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.8.0 is an experimental macOS release.** Each save slot shows its last
+> **0.9.0 is an experimental macOS release.** **HD Reticle** rebuilds the
+> game's own HUD texture at four times its size for a sharper aiming dot, the
+> **Performance Overlay** can show frame times, **Save Black Box** keeps the last
+> minute of controller input for a report, and a Mods row puts a sniper rifle in
+> the first mission. From 0.8.0: each save slot shows its last
 > mission, the time spent in missions and a picture of the game, and each mission
 > its best time, fewest deaths and best accuracy. From 0.7.1: the settings'
 > prompts stand in a column as on the game's own pages. From 0.7.0: the game's own checkpoint is kept
@@ -60,11 +64,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.8.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.8.0)**
+**[BLACK 0.9.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.9.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.8.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.9.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 

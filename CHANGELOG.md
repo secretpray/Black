@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-11-11
 
 - **Performance Overlay.** The FPS Counter row becomes Performance Overlay with
   three values: off, the game's frame rate with the presentation rate beside
