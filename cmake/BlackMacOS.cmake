@@ -531,6 +531,7 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_language.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_audio.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_hud.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/reticle_trace.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_test_unit.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_checkpoint_hooks.c"
         "${BLACK_MAC_GAME}/src/recomp_manual.c"

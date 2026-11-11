@@ -2,9 +2,9 @@
  * hud_reticle.h). Format 0x0B is 8-bit indices in the NV2A's swizzle, coloured
  * through a BGRA palette; the top level is decoded the way texture_dump.c does
  * for its PNG, then upscaled with alpha weighting, so edges gain no dark or
- * bright fringes. Cells with an opaque core (rings, crosses, chevrons, dashes,
- * spread scales, soldier markers) get their coverage re-drawn with a one-pixel
- * edge; the soft glow cells stay on the plain alpha upscale. The dot itself
+ * bright fringes. Hard edges (rings, crosses, chevrons, dashes, spread scales,
+ * soldier outlines) get their coverage re-drawn with a one-pixel edge; soft
+ * ramps and glows stay on the plain alpha upscale, with no step between. The dot itself
  * (a white disc at about 144, 176) is wiped and drawn anew with a one-pixel
  * anti-aliased edge, its centre and radius measured on the decoded atlas
  * rather than assumed. Mips are box-filtered with alpha weighting: the game
@@ -24,9 +24,15 @@
  * a silhouette radius of about 7.2 source pixels. */
 #define DOT_RADIUS_MIN 6.0f
 #define DOT_RADIUS_MAX 8.0f
-/* A cell whose opaque core reaches this alpha is redrawn with a one-pixel
- * edge; the glow cells peak at about 96 and keep the plain upscale. */
-#define CRISP_MIN_ALPHA 200
+/* An edge is redrawn at one output pixel when its core reaches CRISP_MIN_ALPHA
+ * (fully from there, not at all below CRISP_CORE_FROM) and the alpha around it
+ * drops by CRISP_STEP_FULL within one texel (not at all below CRISP_STEP_FROM).
+ * The glow cells peak at about 96, and a glow's bright centre falls off over
+ * several texels, so both keep the plain upscale. */
+#define CRISP_MIN_ALPHA 200.0f
+#define CRISP_CORE_FROM 150.0f
+#define CRISP_STEP_FROM 100.0f
+#define CRISP_STEP_FULL 180.0f
 #define CRISP_SLOPE 3.0f
 
 static float clampf(float v, float low, float high) { return v < low ? low : v > high ? high : v; }
@@ -65,32 +71,39 @@ static uint8_t *decode(const uint8_t *data, const uint8_t *palette, unsigned w, 
     return rgba;
 }
 
-/* The alpha of the strongest texel around each source pixel: tells a cell with
- * an opaque core from a glow without a separate component pass. */
-static uint8_t *alpha_max3(const uint8_t *rgba, unsigned w, unsigned h)
+/* How hard each source pixel's edge is, 0 to 1, from the alpha around it: an
+ * opaque core next to a transparent texel (rings, crosses, chevrons, spread
+ * scales, soldier outlines) is 1; a gradual ramp, such as a glow whose bright
+ * centre fades over several texels, stays near 0 and keeps its own falloff. */
+static float *edge_weights(const uint8_t *rgba, unsigned w, unsigned h)
 {
-    uint8_t *max3 = malloc((size_t)w * h);
-    if (!max3) return NULL;
+    float *weight = malloc((size_t)w * h * sizeof *weight);
+    if (!weight) return NULL;
     for (unsigned y = 0; y < h; ++y)
         for (unsigned x = 0; x < w; ++x) {
-            unsigned m = 0;
+            unsigned high = 0, low = 255;
             for (int dy = -1; dy <= 1; ++dy)
                 for (int dx = -1; dx <= 1; ++dx) {
                     int sx = (int)x + dx, sy = (int)y + dy;
-                    if (sx < 0 || sy < 0 || sx >= (int)w || sy >= (int)h) continue;
-                    unsigned a = rgba[((size_t)sy * w + sx) * 4 + 3];
-                    if (a > m) m = a;
+                    unsigned a = sx < 0 || sy < 0 || sx >= (int)w || sy >= (int)h ? 0 :
+                        rgba[((size_t)sy * w + sx) * 4 + 3];
+                    if (a > high) high = a;
+                    if (a < low) low = a;
                 }
-            max3[(size_t)y * w + x] = (uint8_t)m;
+            float core = clampf(((float)high - CRISP_CORE_FROM) / (CRISP_MIN_ALPHA - CRISP_CORE_FROM), 0.0f, 1.0f);
+            float step = clampf(((float)(high - low) - CRISP_STEP_FROM) / (CRISP_STEP_FULL - CRISP_STEP_FROM), 0.0f, 1.0f);
+            weight[(size_t)y * w + x] = core * step;
         }
-    return max3;
+    return weight;
 }
 
 /* Bilinear at K times the size, each texel weighted by its alpha, so a texel
- * that is mostly transparent does not darken its neighbours. An opaque cell's
- * coverage is redrawn around its half level, which turns the one-source-pixel
- * rim into one output pixel; a glow's gradual alpha is left as it is. */
-static void upscale(const uint8_t *src, unsigned sw, unsigned sh, const uint8_t *max3,
+ * that is mostly transparent does not darken its neighbours. Where the edge
+ * is hard its coverage is pulled toward a steep curve around the half level,
+ * which turns the one-source-pixel rim into one output pixel. The pull is
+ * interpolated like the alpha, so a hard edge and a soft ramp meet without a
+ * step, and a glow is left as it is. */
+static void upscale(const uint8_t *src, unsigned sw, unsigned sh, const float *hard,
                     uint8_t *dst, unsigned dw, unsigned dh)
 {
     for (unsigned y = 0; y < dh; ++y) {
@@ -103,7 +116,7 @@ static void upscale(const uint8_t *src, unsigned sw, unsigned sh, const uint8_t 
             float tx = fx - x0;
             int ix[4] = {x0, x0 + 1, x0, x0 + 1}, iy[4] = {y0, y0, y0 + 1, y0 + 1};
             float weight[4] = {(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty};
-            float alpha = 0, r = 0, g = 0, b = 0;
+            float alpha = 0, r = 0, g = 0, b = 0, pull = 0;
             for (int i = 0; i < 4; ++i) {
                 int sx = ix[i] < 0 ? 0 : ix[i] >= (int)sw ? (int)sw - 1 : ix[i];
                 int sy = iy[i] < 0 ? 0 : iy[i] >= (int)sh ? (int)sh - 1 : iy[i];
@@ -113,17 +126,15 @@ static void upscale(const uint8_t *src, unsigned sw, unsigned sh, const uint8_t 
                 r += p[0] * a;
                 g += p[1] * a;
                 b += p[2] * a;
+                if (hard) pull += hard[(size_t)sy * sw + sx] * weight[i];
             }
+            uint8_t *q = dst + ((size_t)y * dw + x) * 4;
             if (alpha < 0.5f) {
-                uint8_t *q = dst + ((size_t)y * dw + x) * 4;
                 q[0] = q[1] = q[2] = q[3] = 0;
                 continue;
             }
-            unsigned sx = x / K, sy = y / K;
-            float coverage = alpha;
-            if (max3 && max3[(size_t)sy * sw + sx] >= CRISP_MIN_ALPHA)
-                coverage = clampf((alpha - 127.5f) * CRISP_SLOPE + 127.5f, 0.0f, 255.0f);
-            uint8_t *q = dst + ((size_t)y * dw + x) * 4;
+            float steep = clampf((alpha - 127.5f) * CRISP_SLOPE + 127.5f, 0.0f, 255.0f);
+            float coverage = alpha + (steep - alpha) * pull;
             if (coverage < 0.5f) {
                 q[0] = q[1] = q[2] = q[3] = 0;
             } else {
@@ -204,7 +215,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
         if (data[i] * 4u + 4u > palette_length) return 0;
     uint8_t *src = decode(data, palette, width, height);
     if (!src) return 0;
-    uint8_t *max3 = alpha_max3(src, width, height);
+    float *hard = edge_weights(src, width, height);
 
     /* The aiming dot: what is left of the white disc near the atlas centre. */
     double mass = 0, sum_x = 0, sum_y = 0;
@@ -228,7 +239,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
     if (count < 100 || count > 260 || fabsf(cx - DOT_X) > 2.0f || fabsf(cy - DOT_Y) > 2.0f ||
         radius < DOT_RADIUS_MIN || radius > DOT_RADIUS_MAX ||
         centre[3] < 200 || centre[0] < 200 || centre[1] < 200 || centre[2] < 200) {
-        free(max3);
+        free(hard);
         free(src);
         return 0;
     }
@@ -239,7 +250,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
     unsigned levels = 1;
     for (unsigned side = dw > dh ? dw : dh; side > 1; side >>= 1) levels++;
     if (levels > BLACK_HUD_RETICLE_LEVELS) {
-        free(max3);
+        free(hard);
         free(src);
         return 0;
     }
@@ -251,7 +262,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
     }
     uint8_t *storage = malloc(total);
     if (!storage) {
-        free(max3);
+        free(hard);
         free(src);
         return 0;
     }
@@ -263,7 +274,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
         lw = lw > 1 ? lw / 2 : 1;
         lh = lh > 1 ? lh / 2 : 1;
     }
-    upscale(src, width, height, max3, image->level[0], dw, dh);
+    upscale(src, width, height, hard, image->level[0], dw, dh);
     draw_dot(image->level[0], dw, dh, cx, cy, radius);
     for (unsigned level = 1, lw = dw, lh = dh; level < levels; ++level) {
         unsigned nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
@@ -278,7 +289,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
     image->dot_y = cy;
     image->dot_radius = radius;
     image->storage = storage;
-    free(max3);
+    free(hard);
     free(src);
     return 1;
 }

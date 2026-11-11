@@ -34,17 +34,26 @@ both.
 
 **HD Reticle.** Off by default (`hd_reticle`). The guest HUD atlas, 512x256 8-bit
 paletted (key `ad6f441d17b7de95`), is rebuilt at 2048x1024 with 12 alpha-aware
-mip levels: alpha-weighted upscale, cells with an opaque core (alpha >= 200 in
-3x3) redrawn with an edge of about one output pixel, and the aiming dot,
+mip levels: alpha-weighted upscale, hard edges (an opaque core next to a
+transparent texel) pulled to about one output pixel by a weight interpolated
+like the alpha, so glows and soft ramps keep their falloff without a step, and
+the aiming dot,
 measured on the decoded atlas (centre 143.99,176.04, radius 7.13), drawn anew.
 The replacement is checked before the HD pack, so the pack's copy of this atlas
-is not loaded. The colour stays the game's: `sub_00139BF0` picks a tint from
+is not loaded. It is built and uploaded once and shared by every binding the
+game makes of the atlas, as a pack file is; an atlas that does not match is
+refused once, not on every texture the game makes. The colour stays the game's: `sub_00139BF0` picks a tint from
 `0x2ADC20/30/40` or the HUD settings and the batcher packs it into the vertex
 diffuse over the white atlas. A UV trace in mission 2 found the same two cells
 (the dot and a dim glow) for the MP5, M249, RPG and rifle, aimed or not.
 Checked: `macos_hud_reticle`; mission-2 A/B Original against HD at render
 scales 2 and 4, and once with the HD pack on: the dot stays the same size and
-position, 30.0 fps and a 35 ms slowest frame in every run. The developer saw
+position, 30.0 fps and a 35 ms slowest frame in every run. After the shared
+texture, bounded mission-2 runs with weapon changes and aiming at scale 2 with
+SMAA and the pack, the same with Original, and scale 4 with FXAA: the atlas was
+built once, 30.0 fps throughout, and the slower 40-48 ms frames came at the
+weapon changes with Original as with HD. The damage marks at the frame's edges
+were drawn from the HD atlas as well. The developer saw
 the white, green, red and black states on the HD dot and switched Original/HD
 live. Not checked in motion: the rings, cross and spread scales that share the
 atlas (checked offline and in the unit test); Steam Deck.

@@ -18,10 +18,6 @@
 #include "hud_reticle.h"
 #include "port_menu.h"
 
-/* Declared before its definition below, to put the game's texture back. */
-static void upload_gl_texture(GLenum gl_target, const TextureShape s,
-                              const uint8_t *texture_data, const uint8_t *palette_data);
-
 #define BLACK_TP_GL_BC1 0x83F1  /* COMPRESSED_RGBA_S3TC_DXT1_EXT */
 #define BLACK_TP_GL_BC2 0x83F2  /* COMPRESSED_RGBA_S3TC_DXT3_EXT */
 #define BLACK_TP_GL_BC3 0x83F3  /* COMPRESSED_RGBA_S3TC_DXT5_EXT */
@@ -53,13 +49,15 @@ static struct {
     struct timespec summary_at;
 } black_tp;
 
-/* The aiming dot's HUD atlas at 4x (hud_reticle.h): built once for the palette
- * in use and uploaded into each binding that asks for it. */
+/* The aiming dot's HUD atlas at 4x (hud_reticle.h): one GL texture per atlas
+ * and palette, built and uploaded once and then shared by every binding the
+ * game makes of it, as a pack file is. A few are kept so that a binding still
+ * holding one never loses it; an atlas the rebuild refused is not tried again. */
+enum { BLACK_TP_RETICLE_TEXTURES = 4 };
 static struct {
-    bool ready;
-    uint64_t key, palette;
-    unsigned uploads;
-    BlackHudReticleImage image;
+    struct { GLuint texture; unsigned refs; uint64_t key, palette; } held[BLACK_TP_RETICLE_TEXTURES];
+    uint64_t refused_key, refused_palette;
+    bool refused;
 } black_tp_reticle;
 
 /* Opt-in, metadata-only audit. A new path per run avoids overwriting evidence;
@@ -152,6 +150,11 @@ static void black_tp_remove(unsigned index)
  * which stays with the pack instead of being deleted. */
 static bool black_tp_forget(TextureBinding *binding)
 {
+    for (unsigned i = 0; i < BLACK_TP_RETICLE_TEXTURES; ++i)
+        if (black_tp_reticle.held[i].texture && binding->gl_texture == black_tp_reticle.held[i].texture) {
+            black_tp_reticle.held[i].refs--;
+            return true;
+        }
     for (unsigned i = 0; i < black_tp.count; ++i) {
         BlackTpSlot *slot = &black_tp.slots[i];
         if (slot->binding != binding) continue;
@@ -324,48 +327,81 @@ static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, con
                                     size_t top, const uint8_t *palette, size_t palette_length)
 {
     if (!palette || s.color_format != 0x0B || s.width != BLACK_HUD_RETICLE_W ||
-        s.height != BLACK_HUD_RETICLE_H)
+        s.height != BLACK_HUD_RETICLE_H || binding->gl_target != GL_TEXTURE_2D)
         return 0;
     uint64_t key = black_TexturePackKey(data, top);
     if (!black_HudReticleWanted(key)) return 0;
     uint64_t palette_key = black_TexturePackKey(palette, palette_length);
-    if (!black_tp_reticle.ready || black_tp_reticle.key != key || black_tp_reticle.palette != palette_key) {
+    if (black_tp_reticle.refused && black_tp_reticle.refused_key == key &&
+        black_tp_reticle.refused_palette == palette_key)
+        return 0;
+    int found = -1, spare = -1;
+    for (int i = 0; i < BLACK_TP_RETICLE_TEXTURES; ++i) {
+        if (black_tp_reticle.held[i].texture && black_tp_reticle.held[i].key == key &&
+            black_tp_reticle.held[i].palette == palette_key)
+            found = i;
+        else if (spare < 0 && !black_tp_reticle.held[i].refs)
+            spare = i;
+    }
+    if (found < 0) {
+        /* Every kept texture is still in use by a binding: the game's stays. */
+        if (spare < 0) return 0;
         BlackHudReticleImage image;
-        if (!black_HudReticleBuild(s.width, s.height, s.color_format, data, top, palette, palette_length, &image))
+        if (!black_HudReticleBuild(s.width, s.height, s.color_format, data, top, palette, palette_length, &image)) {
+            black_tp_reticle.refused = true;
+            black_tp_reticle.refused_key = key;
+            black_tp_reticle.refused_palette = palette_key;
+            fprintf(stderr, "[RETICLE] atlas %016llx does not match the expected aiming dot; the game's texture stays\n",
+                    (unsigned long long)key);
             return 0;
-        black_HudReticleFree(&black_tp_reticle.image);
-        black_tp_reticle.image = image;
-        black_tp_reticle.key = key;
-        black_tp_reticle.palette = palette_key;
-        black_tp_reticle.ready = true;
+        }
+        /* An error left by an earlier draw must not look like this upload's. */
+        while (glGetError() != GL_NO_ERROR) {}
+        GLint alignment = 4, row_length = 0;
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        GLuint texture = 0;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        for (unsigned level = 0; level < image.levels; ++level)
+            glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA8, (GLsizei)MAX(1, image.width >> level),
+                         (GLsizei)MAX(1, image.height >> level), 0, GL_RGBA, GL_UNSIGNED_BYTE, image.level[level]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, image.levels - 1);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR) {
+            glDeleteTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, binding->gl_texture);
+            fprintf(stderr, "[RETICLE] GL error 0x%04x uploading %ux%u; the game's texture stays\n",
+                    error, image.width, image.height);
+            black_HudReticleFree(&image);
+            return 0;
+        }
         fprintf(stderr, "[RETICLE] atlas %ux%u -> %ux%u, %u levels, dot %.2f,%.2f r %.2f\n",
                 BLACK_HUD_RETICLE_W, BLACK_HUD_RETICLE_H, image.width, image.height, image.levels,
                 image.dot_x, image.dot_y, image.dot_radius);
+        black_HudReticleFree(&image);
+        if (black_tp_reticle.held[spare].texture) glDeleteTextures(1, &black_tp_reticle.held[spare].texture);
+        black_tp_reticle.held[spare].texture = texture;
+        black_tp_reticle.held[spare].refs = 0;
+        black_tp_reticle.held[spare].key = key;
+        black_tp_reticle.held[spare].palette = palette_key;
+        found = spare;
     }
-    const BlackHudReticleImage *image = &black_tp_reticle.image;
-    /* An error left by an earlier draw must not look like this upload's. */
-    while (glGetError() != GL_NO_ERROR) {}
-    GLint alignment = 4;
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    /* The shared texture takes the binding's place, bound on the active unit. */
+    glDeleteTextures(1, &binding->gl_texture);
+    binding->gl_texture = black_tp_reticle.held[found].texture;
     glBindTexture(GL_TEXTURE_2D, binding->gl_texture);
-    for (unsigned level = 0; level < image->levels; ++level)
-        glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA8, (GLsizei)MAX(1, image->width >> level),
-                     (GLsizei)MAX(1, image->height >> level), 0, GL_RGBA, GL_UNSIGNED_BYTE, image->level[level]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, image->levels - 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
-        /* The in-place upload replaced the game's texture: put it back. */
-        upload_gl_texture(binding->gl_target, s, data, palette);
-        glTexParameteri(binding->gl_target, GL_TEXTURE_BASE_LEVEL, s.min_mipmap_level);
-        glTexParameteri(binding->gl_target, GL_TEXTURE_MAX_LEVEL, s.levels - 1);
-        fprintf(stderr, "[RETICLE] GL error 0x%04x uploading %ux%u; the game's texture stays\n",
-                error, image->width, image->height);
-        return 0;
-    }
+    /* Make apply_texture_parameters set filters and wrapping on it again. */
+    binding->min_filter = binding->mag_filter = 0xFFFFFFFF;
+    binding->lod_bias = 0xFFFFFFFF;
+    binding->addru = binding->addrv = binding->addrp = 0xFFFFFFFF;
+    binding->border_color_set = false;
+    black_tp_reticle.held[found].refs++;
     return 1;
 }
 
@@ -444,6 +480,13 @@ static void black_tp_flush(NV2AState *d)
     lru_flush(&r->texture_cache);
     for (unsigned i = 0; i < black_tp.file_count; ++i)
         if (black_tp.files[i].texture && !black_tp.files[i].refs) black_tp_drop(&black_tp.files[i]);
+    /* With HD Reticle off nothing asks for the 4x atlas: free what no binding holds. */
+    if (!black_tp.reticle)
+        for (unsigned i = 0; i < BLACK_TP_RETICLE_TEXTURES; ++i)
+            if (black_tp_reticle.held[i].texture && !black_tp_reticle.held[i].refs) {
+                glDeleteTextures(1, &black_tp_reticle.held[i].texture);
+                black_tp_reticle.held[i].texture = 0;
+            }
 }
 
 /* Start of pgraph_gl_bind_textures, before any unit is bound. */

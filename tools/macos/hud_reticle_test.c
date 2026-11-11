@@ -21,6 +21,19 @@ static const uint8_t palette[PALETTE_BYTES] = {
     [4 * 4 + 0] = 255, [4 * 4 + 1] = 255, [4 * 4 + 2] = 255, [4 * 4 + 3] = 96,
 };
 
+/* The same entries and a glow whose centre is opaque: 9 at the middle, then
+ * 8, 7, 6, 5 a texel further out each. */
+static uint8_t glow_palette[PALETTE_BYTES];
+static void make_glow_palette(void)
+{
+    static const uint8_t alpha[5] = {80, 120, 160, 200, 240};
+    memcpy(glow_palette, palette, sizeof glow_palette);
+    for (int i = 0; i < 5; ++i) {
+        glow_palette[(5 + i) * 4 + 0] = glow_palette[(5 + i) * 4 + 1] = glow_palette[(5 + i) * 4 + 2] = 255;
+        glow_palette[(5 + i) * 4 + 3] = alpha[i];
+    }
+}
+
 /* Writes 8-bit indices into the NV2A's swizzle, the way texture_dump.c reads. */
 static void encode(const uint8_t *linear, uint8_t *data)
 {
@@ -67,6 +80,7 @@ static unsigned alpha_at(const BlackHudReticleImage *image, unsigned x, unsigned
 int main(void)
 {
     static uint8_t linear[W * H], data[W * H];
+    make_glow_palette();
     const float disc[3] = {144.0f, 176.0f, 7.0f};
     make_atlas(linear, disc);
     encode(linear, data);
@@ -90,10 +104,16 @@ int main(void)
     assert(alpha_at(&image, 100 * 4, 60 * 4) == 64);
     assert(alpha_at(&image, 301 * 4 + 2, 101 * 4 + 2) == 255);
     /* The opaque mark's rim is re-drawn within about one output pixel and
-     * keeps the mark's colour; the soft glow keeps its gradual ramp. */
-    assert(alpha_at(&image, 1196, 101 * 4 + 2) == 0);
+     * keeps the mark's colour; the soft glow keeps its gradual ramp. Outside
+     * the rim the background eases down to it, with no step between pixels. */
+    assert(alpha_at(&image, 1192, 101 * 4 + 2) == 64);
     assert(alpha_at(&image, 1198, 101 * 4 + 2) <= 16);
+    assert(alpha_at(&image, 1199, 101 * 4 + 2) > 128 && alpha_at(&image, 1199, 101 * 4 + 2) < 200);
     assert(alpha_at(&image, 1200, 101 * 4 + 2) == 255);
+    for (unsigned x = 1192; x < 1197; ++x) {
+        unsigned a = alpha_at(&image, x, 101 * 4 + 2), b = alpha_at(&image, x + 1, 101 * 4 + 2);
+        assert(b <= a && a - b <= 16);
+    }
     /* The colour stays the plain alpha-weighted blend (144/88/17 of the mark
      * and the 64-alpha background), not scaled by the curved coverage. */
     unsigned rim = ((size_t)(101 * 4 + 2) * image.width + 1199) * 4;
@@ -105,6 +125,30 @@ int main(void)
     assert(image.level[1][mip + 3] > 40 && image.level[1][mip + 3] < 128);
     mip = ((size_t)(406 / 2) * (image.width / 2) + 600) * 4;
     assert(image.level[1][mip + 3] == 255);
+    /* A glow with a bright centre that fades over several texels keeps its
+     * ramp: no hard plateau where its core crosses the opaque level. */
+    make_atlas(linear, disc);
+    {
+        static const uint8_t ramp[5] = {9, 8, 7, 6, 5};
+        for (unsigned y = 40; y < 60; ++y)
+            for (unsigned x = 40; x < 60; ++x) {
+                unsigned d = (unsigned)(abs((int)x - 50) > abs((int)y - 50) ? abs((int)x - 50) : abs((int)y - 50));
+                if (d < 5) linear[y * W + x] = ramp[d];
+            }
+    }
+    encode(linear, data);
+    BlackHudReticleImage glow;
+    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, glow_palette, sizeof glow_palette, &glow));
+    /* From the glow's outer texel to its centre: rising by a texel's step
+     * spread over four pixels, never a jump. */
+    for (unsigned x = 47 * 4; x < 50 * 4; ++x) {
+        unsigned a = alpha_at(&glow, x, 50 * 4 + 2), b = alpha_at(&glow, x + 1, 50 * 4 + 2);
+        assert(b >= a && b - a <= 12);
+    }
+    black_HudReticleFree(&glow);
+    make_atlas(linear, disc);
+    encode(linear, data);
+
     /* A full alpha-weighted chain. */
     assert(image.level[11][3] > 0 && image.level[11][3] <= 255);
 
@@ -122,6 +166,6 @@ int main(void)
     data[0] = 250;
     assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, 128, &image));
 
-    puts("HD reticle atlas: 4x upscale, crisp opaque rims, soft glows, redrawn dot, mips and refusals: PASS");
+    puts("HD reticle atlas: 4x upscale, crisp hard rims, soft glows and ramps without a step, redrawn dot, mips and refusals: PASS");
     return 0;
 }
