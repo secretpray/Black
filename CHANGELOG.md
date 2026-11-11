@@ -1,13 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-11
 
 - **Reticle Shape.** A Mods row changes the aiming mark: the game's own dot
   (default), a ring, a ring with ticks, a cross or chevrons, all from the
   game's own HUD texture, or **Auto**: a ring for the shotguns and launchers, a
   cross for the other weapons, and the game's dot for the sniper rifle. The
   game still colours the mark (green on an ally, red on an enemy); the sniper
-  scope, the medkit cross and the damage marks are unchanged. Live.
+  scope, the medkit cross and the damage marks are unchanged. Off by default.
 
 ## 0.9.0 — 2026-11-11
 

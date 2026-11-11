@@ -10,7 +10,10 @@
 > Original Xbox BLACK disc. Please do not request game files or attach them to issues.
 
 > [!NOTE]
-> **0.9.0 is an experimental macOS release.** **HD Reticle** rebuilds the
+> **0.10.0 is an experimental macOS release.** A Mods row, **Reticle Shape**,
+> draws the aiming mark as a ring, a ring with ticks, a cross or chevrons from
+> the game's own HUD texture, or picks one by weapon (**Auto**). From 0.9.0:
+> **HD Reticle** rebuilds the
 > game's own HUD texture at four times its size for a sharper aiming dot, the
 > **Performance Overlay** can show frame times, **Save Black Box** keeps the last
 > minute of controller input for a report, and a Mods row puts a sniper rifle in
@@ -64,11 +67,11 @@ MetalFX. The game content in them belongs to its owners.</sub>
 
 ## Download
 
-**[BLACK 0.9.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.9.0)**
+**[BLACK 0.10.0 — macOS / Apple Silicon](https://github.com/secretpray/Black/releases/tag/v0.10.0)**
 
 | Download | Purpose |
 | --- | --- |
-| `BLACK-0.9.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
+| `BLACK-0.10.0-macos-arm64.dmg` | App for Apple Silicon and **macOS 27 or later** |
 | `SHA256SUMS` | Optional download integrity check |
 | `optional-library-sources.tar.xz` | Runtime/library sources and build recipes; not needed to play |
 

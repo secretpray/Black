@@ -1,9 +1,9 @@
 # Release validation and current limits
 
-Release: **BLACK 0.9.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.10.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Reticle Shape (not released)
+## Reticle Shape in 0.10.0
 
 Off by default (`mod_reticle_shape=0`, the game's dot). With every weapon
 checked the game aims through two 32x32 cells of its 512x256 HUD atlas drawn at
@@ -32,6 +32,14 @@ RPG the ring again after switching back. 128 CTest checks passed. Not checked:
 a shotgun or the grenade launcher in play (their names come from the game's
 weapon banks), the ally, enemy and object colours on the new shapes, and the
 live switch from the menu.
+
+**Release 0.10.0.** Built with the real DSP; 128 CTest checks (with the GPU
+context) and 49 Python tests passed on the release build. The final DMG was
+checked read-only in English and Russian with isolated data and system-only
+PATH: both opened the settings and quit normally (exit 0, version 0.10.0 seen,
+private font view made and removed), and source game files and user
+preferences kept their hashes. The source archive matched the local sources
+and pinned upstreams, without game or private files.
 
 ## HD Reticle, Performance Overlay, Black Box and the sniper in 0.9.0
 
