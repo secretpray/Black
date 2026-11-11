@@ -64,7 +64,7 @@ target_link_libraries(xbox_input PUBLIC black-port-ui)
 target_link_libraries(xbox_video PUBLIC black-port-ui black-smaa)
 # HD texture replacement: map, pack index, DDS/PNG and loader threads; the
 # renderer side is texture_pack_gl.inc in the texture.c overlay.
-add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_pack.c" "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_dump.c")
+add_library(black-texture-pack STATIC "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_pack.c" "${CMAKE_SOURCE_DIR}/ports/macos/overrides/texture_dump.c" "${CMAKE_SOURCE_DIR}/ports/macos/overrides/hud_reticle.c")
 target_compile_options(black-texture-pack PRIVATE -Wall -Wextra)
 target_link_libraries(black-texture-pack PUBLIC black-port-ui
     "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
@@ -449,6 +449,9 @@ add_test(NAME macos_texture_pack COMMAND black-texture-pack-test)
 add_executable(black-texture-dump-test tools/macos/texture_dump_test.c)
 target_link_libraries(black-texture-dump-test PRIVATE black-texture-pack)
 add_test(NAME macos_texture_dump COMMAND black-texture-dump-test)
+add_executable(black-hud-reticle-test tools/macos/hud_reticle_test.c)
+target_link_libraries(black-hud-reticle-test PRIVATE black-texture-pack)
+add_test(NAME macos_hud_reticle COMMAND black-hud-reticle-test)
 # The upstream test links platform alone, but ReadFile now calls the dirty
 # tracker. Link the real implementation, rather than replacing it with a stub.
 add_executable(black-guest-layout

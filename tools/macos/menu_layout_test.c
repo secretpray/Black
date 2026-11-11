@@ -11,6 +11,14 @@ static void expect_row(int page, int index, int row)
 
 int main(void)
 {
+    /* General: the HD reticle sits with the texture settings, then the two
+     * whole-page rows. */
+    assert(black_menu_count(PAGE_PORT) == 15);
+    expect_row(PAGE_PORT, 11, ROW_TEXTURE_SIZE);
+    expect_row(PAGE_PORT, 12, ROW_HD_RETICLE);
+    expect_row(PAGE_PORT, 13, ROW_DEFAULTS);
+    expect_row(PAGE_PORT, 14, ROW_RESET_ALL);
+
     /* The Saves page: the profile's slots, the one checkpoint switch, backups. */
     assert(BLACK_PROFILE_SLOTS == 3);
     assert(black_menu_count(PAGE_SAVES) == 5);

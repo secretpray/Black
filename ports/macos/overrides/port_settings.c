@@ -37,6 +37,9 @@ static atomic_int performance_overlay;
 static atomic_int texture_replacement;
 /* Largest side of a replacement: 1024, 2048 or 4096; larger files lose top levels. */
 static atomic_int texture_max_size = 2048;
+/* The aiming dot's HUD atlas at 4x from the game's own texels (hud_reticle.h);
+ * Original by default, live. */
+static atomic_int hd_reticle;
 /* game_language: 0 English, 1 French, 2 German, 3 Spanish, 4 Italian, 5 Russian (next launch).
  * menu_language: 0 follows the game, then English, French, German, Spanish,
  * Italian, Russian. */
@@ -192,6 +195,10 @@ static void load_settings(void)
             if (sscanf(line, " texture_max_size = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 if (*value && !*end && (n == 1024 || n == 2048 || n == 4096)) atomic_store(&texture_max_size, (int)n);
+            }
+            if (sscanf(line, " hd_reticle = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                if (*value && !*end && n >= 0 && n <= 1) atomic_store(&hd_reticle, (int)n);
             }
             if (sscanf(line, " upscaler = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
@@ -366,9 +373,9 @@ static int write_settings(void)
                     BLACK_BRIGHTNESS_MIN, BLACK_BRIGHTNESS_MAX, BLACK_GAMMA_MIN, BLACK_GAMMA_MAX,
                     atomic_load(&display_brightness), atomic_load(&display_gamma)) > 0;
                 written &= fprintf(file, "# The title's own checkpoint beside the saves; 1 on, 0 off\nsave_checkpoints=%d\n", atomic_load(&save_checkpoints)) > 0;
-                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
+                written &= fprintf(file, "fps_counter=%d\ngame_language=%d\nmenu_language=%d\ntexture_replacement=%d\ntexture_max_size=%d\nhd_reticle=%d\n# Mods page: 1 on, 0 off; Rapid Fire 0-3, Game Speed 0-4 (0 the game's own)\n",
                     atomic_load(&performance_overlay), atomic_load(&game_language), atomic_load(&menu_language),
-                    atomic_load(&texture_replacement), atomic_load(&texture_max_size)) > 0;
+                    atomic_load(&texture_replacement), atomic_load(&texture_max_size), atomic_load(&hd_reticle)) > 0;
                 for (int i = 0; i < BLACK_MOD_COUNT; ++i)
                     written &= fprintf(file, "%s=%d\n", black_mod_info[i].key, atomic_load(&mods[i])) > 0;
                 if (atomic_load(&window_frame[2]) > 0)
@@ -430,6 +437,9 @@ int black_SettingsTextureMaxSize(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&texture_max_size); }
 int black_SettingsSetTextureMaxSize(int size)
 { return size == 1024 || size == 2048 || size == 4096 ? save_setting(&texture_max_size, size) : 0; }
+int black_SettingsHdReticle(void)
+{ pthread_once(&initialized, load_settings); return atomic_load(&hd_reticle); }
+int black_SettingsSetHdReticle(int enabled) { return save_setting(&hd_reticle, !!enabled); }
 int black_SettingsGameLanguage(void)
 { pthread_once(&initialized, load_settings); return atomic_load(&game_language); }
 int black_SettingsSetGameLanguage(int language)

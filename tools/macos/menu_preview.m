@@ -174,6 +174,15 @@ int main(int argc, char **argv)
         snapshot(window, [output stringByAppendingPathComponent:@"recomp-textures-ru.png"]);
         key(window, 123, @"\uF702");
         if (black_SettingsTextureReplacement()) return 86;
+        /* General: HD Reticle, Original by default, turned on and back. */
+        key(window, 125, @"\uF701"); key(window, 125, @"\uF701");
+        if (black_SettingsHdReticle()) return 91;
+        key(window, 36, @"\r");
+        if (!black_SettingsHdReticle()) return 92;
+        snapshot(window, [output stringByAppendingPathComponent:@"recomp-hd-reticle-ru.png"]);
+        key(window, 123, @"\uF702");
+        if (black_SettingsHdReticle()) return 93;
+        key(window, 126, @"\uF700"); key(window, 126, @"\uF700");
         key(window, 126, @"\uF700"); /* Menu Language */
         key(window, 123, @"\uF702"); key(window, 123, @"\uF702");
         if (black_SettingsMenuLanguage() != 4 || black_SettingsRenderScale() != 2) return 83;

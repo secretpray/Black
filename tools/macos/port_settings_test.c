@@ -32,6 +32,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "fps")) return black_SettingsPerformanceOverlay() != BLACK_PERF_FRAMES || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "textures")) return !black_SettingsTextureReplacement() || black_SettingsRenderScale() != 3;
         if (!strcmp(argv[1], "texture-size")) return black_SettingsTextureMaxSize() != 1024;
+        if (!strcmp(argv[1], "reticle")) return !black_SettingsHdReticle();
+        if (!strcmp(argv[1], "reticle-defaults")) return black_SettingsHdReticle();
         if (!strcmp(argv[1], "display")) return black_SettingsDisplayBrightness() != -7 || black_SettingsDisplayGamma() != 125;
         if (!strcmp(argv[1], "display-defaults")) return black_SettingsDisplayBrightness() != 0 || black_SettingsDisplayGamma() != 100;
         if (!strcmp(argv[1], "window")) { int f[4];
@@ -150,6 +152,12 @@ int main(int argc, char **argv)
     if (!child(argv[0], "texture-size", path) || black_SettingsSetTextureMaxSize(3000) ||
         !black_SettingsSetTextureMaxSize(1024) || child(argv[0], "texture-size", path) ||
         !black_SettingsSetTextureMaxSize(2048)) return 36;
+    /* HD reticle: Original until chosen, then saved like the others. */
+    if (child(argv[0], "reticle-defaults", path)) return 43;
+    if (!black_SettingsSetHdReticle(1)) return 44;
+    if (child(argv[0], "reticle", path)) return 45;
+    if (!black_SettingsSetHdReticle(0)) return 46;
+    if (child(argv[0], "reticle-defaults", path)) return 47;
     /* Display brightness/gamma: neutral until chosen, live range only. */
     if (child(argv[0], "display-defaults", path) || black_SettingsSetDisplayBrightness(21) ||
         black_SettingsSetDisplayBrightness(-21) || black_SettingsSetDisplayGamma(59) || black_SettingsSetDisplayGamma(161) ||
@@ -173,11 +181,11 @@ int main(int argc, char **argv)
     FILE *file = fopen(path, "w");
     if (!file) return 8;
     fputs("skip_intro_movies=broken\nrender_scale=7\nfield_of_view=45oops\nrender_scale=3 extra\n"
-          "anti_aliasing=5\nanisotropic_filtering=6\nsave_checkpoints=maybe\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\nmod_god_mode=2\nmod_bfg=on\nwindow_frame=1,2,50,50\nwindow_full_screen=3\ndisplay_brightness=30\ndisplay_gamma=1.2\n", file); fclose(file);
+          "anti_aliasing=5\nanisotropic_filtering=6\nsave_checkpoints=maybe\ncontroller_sensitivity=0\ncontroller_vertical_sensitivity=201\nrumble_intensity=-1\ninvert_controller_x=3\ncontroller_hold_aim=-1\naim_assist=2\nmouse_sensitivity=0\nmouse_vertical_sensitivity=201\nwalk_speed=101\nkey_move_forward_1=-2\nkey_fire_1=109\nmod_god_mode=2\nmod_bfg=on\nwindow_frame=1,2,50,50\nwindow_full_screen=3\ndisplay_brightness=30\ndisplay_gamma=1.2\nhd_reticle=2\n", file); fclose(file);
     if (child(argv[0], "0", path)) return 9;
     if (child(argv[0], "defaults", path) || child(argv[0], "input-defaults", path) || child(argv[0],"keyboard-defaults",path) ||
         child(argv[0], "mods-defaults", path) || child(argv[0], "window-defaults", path) ||
-        child(argv[0], "display-defaults", path)) return 16;
+        child(argv[0], "display-defaults", path) || child(argv[0], "reticle-defaults", path)) return 16;
     black_MenuCommand(BLACK_MENU_CHANGE);
     black_MenuCommand(BLACK_MENU_ON);
     if (black_MenuTakeCommands() != (BLACK_MENU_CHANGE | BLACK_MENU_ON) || black_MenuTakeCommands()) return 10;

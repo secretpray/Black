@@ -171,7 +171,7 @@ static int group_of(int row)
     if (row <= ROW_GAMMA) return 0;
     if (row <= ROW_AF) return 1;
     if (row <= ROW_MENU_LANG) return 2;
-    if (row == ROW_TEXTURES || row == ROW_TEXTURE_SIZE) return 14;
+    if (row == ROW_TEXTURES || row == ROW_TEXTURE_SIZE || row == ROW_HD_RETICLE) return 14;
     if (row <= ROW_INVERT_X) return 3;
     if (row <= ROW_AIM_ASSIST) return 4;
     if (row <= ROW_TRIGGER_DZ) return 5;
@@ -194,6 +194,7 @@ static int reset_row(int row, int apply)
     R(row == ROW_AA, black_SettingsSetAntiAliasing(2)) R(row == ROW_AF, black_SettingsSetAniso(0))
     R(row == ROW_MENU_LANG, black_SettingsSetMenuLanguage(0)) R(row == ROW_TEXTURES, black_SettingsSetTextureReplacement(0))
     R(row == ROW_TEXTURE_SIZE, black_SettingsSetTextureMaxSize(2048))
+    R(row == ROW_HD_RETICLE, black_SettingsSetHdReticle(0))
     R(row == ROW_ANY_FILM, black_SettingsSetSkipAnyFilm(1)) R(row == ROW_INTROS, black_SettingsSetSkipIntros(0))
     R(row == ROW_MISSIONS, black_SettingsSetSkipMissionIntros(0))
     R(row == ROW_CHECKPOINTS, black_SettingsSetSaveCheckpoints(1))
@@ -253,7 +254,7 @@ static CGFloat row_y(int page,int row,int selected)
 { return ROWS_TOP + (black_menu_index(page,row) - visible_start(page,selected)) * ROW_STEP; }
 static NSArray *row_labels(void)
 {
-    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"Performance Overlay", @"Display Brightness", @"Display Gamma", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size",
+    NSMutableArray *labels = [NSMutableArray arrayWithArray:@[@"Render Scale", @"Upscaling", @"Field of View", @"Performance Overlay", @"Display Brightness", @"Display Gamma", @"Anti-Aliasing", @"Anisotropic Filtering", @"Game Language", @"Menu Language", @"Texture Replacement", @"HD Texture Size", @"HD Reticle",
         @"Horizontal Sensitivity", @"Vertical Sensitivity",
         @"Aim Horizontal Sensitivity", @"Aim Vertical Sensitivity", @"Invert X Axis", @"Hold to Aim", @"Aim Assist",
         @"Left Stick Deadzone", @"Right Stick Deadzone", @"Trigger Deadzone", @"Vibration",
@@ -773,6 +774,7 @@ static NSTimeInterval transition, last_draw;
             @"Language of this settings panel. Auto follows the game language. Live.",
             @"HD textures from your own BLACK HD Reimagined pack, found through portingpete's map. Live.",
             @"Largest side of an HD texture: 1024, 2048 or 4096. Larger files use a smaller level. Live.",
+            @"The aiming dot from the game's own HUD texture, rebuilt sharper at 4x. Live.",
             @"Horizontal look speed after the game's stick curve. Live.", @"Vertical look speed. Live.",
             @"Horizontal look speed while aiming or scoped. Live.", @"Vertical look speed while aiming or scoped. Live.",
             @"Invert the controller's horizontal look axis. Live. Invert Y is in the game's own options.",
@@ -877,6 +879,7 @@ static NSTimeInterval transition, last_draw;
     [rows[ROW_GAMMA] setAccessibilityValue:gamma_name()];
     [rows[ROW_TEXTURES] setAccessibilityValue:black_SettingsTextureReplacement() ? @"On" : @"Off"];
     [rows[ROW_TEXTURE_SIZE] setAccessibilityValue:[NSString stringWithFormat:@"%d", black_SettingsTextureMaxSize()]];
+    [rows[ROW_HD_RETICLE] setAccessibilityValue:black_SettingsHdReticle() ? @"HD" : @"Original"];
     [rows[ROW_FOV] setAccessibilityValue:[NSString stringWithFormat:@"%d degrees, next launch", black_SettingsFov()]];
     [rows[ROW_AA] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", aa_name(black_SettingsAntiAliasing())]];
     [rows[ROW_AF] setAccessibilityValue:[NSString stringWithFormat:@"%@, next launch", af_name(black_SettingsAniso())]];
@@ -934,6 +937,7 @@ static NSTimeInterval transition, last_draw;
         black_SettingsSetAntiAliasing(2);black_SettingsSetAniso(0);black_SettingsSetPerformanceOverlay(BLACK_PERF_OFF);
         black_SettingsSetDisplayBrightness(BLACK_BRIGHTNESS_NEUTRAL);black_SettingsSetDisplayGamma(BLACK_GAMMA_NEUTRAL);
         black_SettingsSetTextureReplacement(0);black_SettingsSetTextureMaxSize(2048);
+        black_SettingsSetHdReticle(0);
     }
     changed=CACurrentMediaTime();[self refreshValues];[self setNeedsDisplay:YES];
 }
@@ -1324,6 +1328,10 @@ static NSTimeInterval transition, last_draw;
         next = MAX(0, MIN(2, next));
         if (next == index) return;
         black_SettingsSetTextureMaxSize(sizes[next]);
+    } else if (selected == ROW_HD_RETICLE) {
+        int current = black_SettingsHdReticle(), value = cycle ? !current : direction > 0;
+        if (value == current) return;
+        black_SettingsSetHdReticle(value);
     } else if (selected == ROW_AA) {
         int current = black_SettingsAntiAliasing(), value = current + direction;
         if (cycle && value > 2) value = 0;
@@ -1751,6 +1759,7 @@ static NSAlert *pack_alert;
             index == ROW_BRIGHTNESS ? brightness_name() : index == ROW_GAMMA ? gamma_name() :
             index == ROW_TEXTURES ? (black_SettingsTextureReplacement() ? @"ON" : @"OFF") :
             index == ROW_TEXTURE_SIZE ? [NSString stringWithFormat:@"%d", black_SettingsTextureMaxSize()] :
+            index == ROW_HD_RETICLE ? (black_SettingsHdReticle() ? @"HD" : @"ORIGINAL") :
             index == ROW_GAME_LANG ? game_language_names[black_SettingsGameLanguage()] :
             index == ROW_MENU_LANG ? menu_language_names[black_SettingsMenuLanguage()] :
             index == ROW_AA ? aa_name(black_SettingsAntiAliasing()) :
@@ -1935,6 +1944,9 @@ static NSAlert *pack_alert;
     } else if (selected == ROW_TEXTURE_SIZE) {
         help = @"LARGEST SIDE OF AN HD TEXTURE. LARGER FILES USE A SMALLER LEVEL.";
         detail = @"LIVE. 1024 USES ABOUT A QUARTER OF THE MEMORY OF 2048; MOST OF THE PACK IS 2048.";
+    } else if (selected == ROW_HD_RETICLE) {
+        help = @"THE AIMING DOT FROM THE GAME'S OWN HUD TEXTURE, REBUILT SHARPER AT 4X ITS SIZE.";
+        detail = @"LIVE. THE DOT AND THE HUD'S SMALL MARKS GAIN DETAIL; THE GAME STILL COLOURS THE DOT.";
     } else if (selected == ROW_BRIGHTNESS) {
         help = @"BLACK LEVEL OVER THE GAME'S OWN BRIGHTNESS. WHITE STAYS WHITE.";
         detail = @"LIVE. 0 KEEPS THE GAME'S PICTURE. ABOVE 0 LIFTS SHADOWS, BELOW DEEPENS THEM.";

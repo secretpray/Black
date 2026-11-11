@@ -482,6 +482,9 @@ def play_locked(args, settings_path, data, name, binary, state):
         env["BLACK_TEXTURE_DIR"] = str(Path(args.texture_dir).expanduser().resolve())
     if args.open_settings:
         env["BLACK_OPEN_SETTINGS"] = args.open_settings
+    # Research trace of the HUD quads at the aiming point (game_hud.c).
+    if os.environ.get("BLACK_RETICLE_TRACE"):
+        env["BLACK_RETICLE_TRACE"] = os.environ["BLACK_RETICLE_TRACE"]
     if args.test_unit is not None:
         env["RECOMP_BLACK_TEST_UNIT"] = str(args.test_unit)
     if args.checkpoint_test:

@@ -49,6 +49,9 @@ int black_SettingsSetTextureReplacement(int enabled);
 /* Largest replacement side: 1024, 2048 (default) or 4096; live. */
 int black_SettingsTextureMaxSize(void);
 int black_SettingsSetTextureMaxSize(int size);
+/* The aiming dot's HUD atlas at 4x (hud_reticle.h): Original by default, live. */
+int black_SettingsHdReticle(void);
+int black_SettingsSetHdReticle(int enabled);
 const char *black_SettingsPath(void);
 int black_SettingsSaveFailed(void);
 /* Game window state, saved by the window itself (window_state.m). */
