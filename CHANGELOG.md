@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **Performance Overlay.** The FPS Counter row becomes Performance Overlay with
+  three values: off, the game's frame rate with the presentation rate beside
+  it, or frame times as well (the window's mean, median, 95th percentile and
+  worst frame). The game's rate comes from its own world timer, one interval
+  per finished frame. The INI key stays `fps_counter`, so a saved 0 or 1 keeps
+  its meaning.
+- **Black Box.** BLACK keeps the last minute of the controller state the game
+  actually saw. Controls → Advanced Gamepad → Controller Diagnostics → Save
+  Black Box writes it beside the settings as `black-box-<stamp>.csv`, headed by
+  a copy of the settings, so a problem can be described with the input that
+  led to it. `black.py run --black-box` records a whole run and
+  `--replay-input` plays a saved file back to the game.
+- **HD Reticle.** General → HD Reticle (Original by default, live) rebuilds the
+  game's own HUD atlas at four times its size: a sharper aiming dot and crisper
+  small HUD marks, drawn from the game's texels, with no picture shipped. The
+  game still colours the dot (white, green on an ally, red on an enemy, black
+  on a destructible object). It works with or without the HD texture pack.
+- **Sniper in the First Mission.** A Mods row (off by default) puts the sniper
+  rifle in your second slot when the first mission starts, with five
+  magazines; the mission's own first weapon stays. Continuing from a
+  checkpoint keeps the checkpoint's weapons.
+- **Lower CPU use.** The graphics acknowledgement thread sleeps 200 µs instead
+  of yielding in a loop: in a mission the app's CPU fell from about 116 % to
+  30-56 % at the same 30 fps.
+- **Settings menu.** A long path at the top of a sub-page folds its first steps
+  instead of running under the device status; on Controller Diagnostics the
+  values no longer overlap the stick monitor.
+
 ## 0.8.0 — 2026-11-10
 
 - **A slot's record in Saves.** After each profile save BLACK keeps, beside the

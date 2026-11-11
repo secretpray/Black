@@ -3,6 +3,68 @@
 Release: **BLACK 0.8.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
+## Changes after 0.8.0 (not released)
+
+**Performance Overlay.** Off, FPS or Frame Times, live; the INI key stays
+`fps_counter` (0-2). Game intervals come from the guest world timer
+(`sub_000BE3F0`), presentation intervals from the presenter, over a window of
+240; intervals above 1 s count as a break, and the window restarts when the
+settings panel opens or closes. Checked: `macos_frame_stats` (mean,
+percentiles, repeated frames, breaks), `macos_port_settings`,
+`black-menu-preview`. On the title screen the overlay read 60 fps; that is the
+menu, not a 60 fps claim for missions.
+
+**Black Box.** A ring of 8192 polls (about a minute at the guest's 30 Hz) of
+the pad state the guest saw, after owner, keyboard and window logic; columns in
+the guest's order (A, B, X, Y, Black, White, LT, RT), an unchanged hold
+rewritten every 250 ms. Save Black Box writes the CSV beside the settings with
+a copy of the INI and the launch options; `--black-box` streams a whole run,
+`--replay-input` feeds a CSV back through `xbox_InputGetState`. Checked:
+`macos_black_box`; a bounded mission-2 run from the checkpoint recorded the
+scripted START, Up and A presses, and replaying that CSV with no script reached
+the same restored checkpoint (exit 0). It is an input tape, not a save state.
+
+**NV2A acknowledgement thread.** The runtime's ack thread ended each poll with
+`Sleep(0)`, on macOS `sched_yield`; a 5 s sample put 586 of 918 samples there.
+`cmake/BlackNv2aInterrupt.cmake` now replaces that one anchor (configure fails
+unless it matches exactly once) with a 200 µs `nanosleep`; the busy-bit
+thread keeps its 20 µs cadence. Same mission-2 run: CPU 115.8-117.8 % before,
+30.1-55.8 % after, the game at 30.0 fps with a slowest frame of 35-39 ms in
+both.
+
+**HD Reticle.** Off by default (`hd_reticle`). The guest HUD atlas, 512x256 8-bit
+paletted (key `ad6f441d17b7de95`), is rebuilt at 2048x1024 with 12 alpha-aware
+mip levels: alpha-weighted upscale, cells with an opaque core (alpha >= 200 in
+3x3) redrawn with an edge of about one output pixel, and the aiming dot,
+measured on the decoded atlas (centre 143.99,176.04, radius 7.13), drawn anew.
+The replacement is checked before the HD pack, so the pack's copy of this atlas
+is not loaded. The colour stays the game's: `sub_00139BF0` picks a tint from
+`0x2ADC20/30/40` or the HUD settings and the batcher packs it into the vertex
+diffuse over the white atlas. A UV trace in mission 2 found the same two cells
+(the dot and a dim glow) for the MP5, M249, RPG and rifle, aimed or not.
+Checked: `macos_hud_reticle`; mission-2 A/B Original against HD at render
+scales 2 and 4, and once with the HD pack on: the dot stays the same size and
+position, 30.0 fps and a 35 ms slowest frame in every run. The developer saw
+the white, green, red and black states on the HD dot and switched Original/HD
+live. Not checked in motion: the rings, cross and spread scales that share the
+atlas (checked offline and in the unit test); Steam Deck.
+
+**Sniper in the First Mission.** Off by default (`mod_sniper`). A hook at
+`0x1DECF9` (state 2 of `sub_001DEC70`, exactly one match) writes `BG1_SNR`,
+its clip and five magazines into the second slot of the start-loadout record
+that `sub_001B7800` has just filled; the game streams, creates and equips the
+weapon. It writes nothing while a checkpoint is live (`0x2F3BF8`), when the
+game keeps the checkpoint's loadout, or before the Mods page confirms the
+revision. Checked: `macos_game_weapons`; a fresh mission-1 start logged the
+grant and opened `bg1_snr.db`; a mission-2 Continue Mission with the developer
+weapon variable logged "a live checkpoint keeps its loadout" and opened only
+the checkpoint's weapon banks. Not checked: the pause menu's Restart, F9 /
+Back + Y, and the M16A2 and M249 mods together with it.
+
+**Tests.** Each test's directory under `/tmp` is removed at exit
+(`tools/macos/test_temp.h`), also after a failing return; a full CTest run
+leaves none. 127 CTest checks and 49 Python tests passed.
+
 ## Slot records and mission statistics in 0.8.0
 
 **Slot records.** Every successful profile save (`0x1FE713`, the hook the
