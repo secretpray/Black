@@ -13,7 +13,8 @@
  * before BLACK_MOD_UNLOCK_MISSIONS, which starts the Unlocks group. */
 enum { BLACK_MOD_GOD_MODE, BLACK_MOD_MEDKITS, BLACK_MOD_GRENADES, BLACK_MOD_FULL_AMMO, BLACK_MOD_AMMO,
        BLACK_MOD_RAPID_FIRE, BLACK_MOD_NO_RECOIL, BLACK_MOD_ONE_HIT_KILL, BLACK_MOD_GAME_SPEED, BLACK_MOD_SILENCER,
-       BLACK_MOD_UNLOCK_MISSIONS, BLACK_MOD_BLACK_OPS, BLACK_MOD_M16A2, BLACK_MOD_BFG, BLACK_MOD_COUNT };
+       BLACK_MOD_UNLOCK_MISSIONS, BLACK_MOD_BLACK_OPS, BLACK_MOD_M16A2, BLACK_MOD_BFG, BLACK_MOD_SNIPER,
+       BLACK_MOD_COUNT };
 
 /* levels: the highest saved value; 1 is an on/off switch. */
 typedef struct { const char *key, *label; int levels; } BlackModInfo;
@@ -25,6 +26,7 @@ static const BlackModInfo black_mod_info[BLACK_MOD_COUNT] = {
     {"mod_game_speed", "Game Speed", 4}, {"mod_always_silenced", "Always Silenced", 1},
     {"mod_unlock_missions", "Unlock All Missions", 1}, {"mod_unlock_black_ops", "Unlock Black Ops Difficulty", 1},
     {"mod_m16a2", "M16A2 at Mission Start", 1}, {"mod_bfg", "M249 in the First Mission", 1},
+    {"mod_sniper", "Sniper in the First Mission", 1},
 };
 
 /* Game Speed: saved 0 is the game's own speed, so Defaults and old settings

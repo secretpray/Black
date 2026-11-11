@@ -410,6 +410,8 @@ add_executable(black-film-policy tools/macos/film_policy_test.c)
 add_test(NAME macos_film_policy COMMAND black-film-policy)
 add_executable(black-game-mods tools/macos/game_mods_test.c)
 add_test(NAME macos_game_mods COMMAND black-game-mods)
+add_executable(black-game-weapons tools/macos/game_weapons_test.c)
+add_test(NAME macos_game_weapons COMMAND black-game-weapons)
 add_executable(black-audio-fade tools/macos/audio_fade_test.c)
 add_test(NAME macos_audio_fade COMMAND black-audio-fade)
 file(READ "${CMAKE_SOURCE_DIR}/ports/macos/overrides/apu_xaudio2.c" audio_menu_source)
@@ -525,6 +527,7 @@ if(BLACK_BUILD_GAME)
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_flash.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_movies.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_mods.c"
+        "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_weapons.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_language.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_audio.c"
         "${CMAKE_SOURCE_DIR}/ports/macos/overrides/game_hud.c"
