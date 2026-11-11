@@ -3,6 +3,36 @@
 Release: **BLACK 0.9.0**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
+## Reticle Shape (not released)
+
+Off by default (`mod_reticle_shape=0`, the game's dot). With every weapon
+checked the game aims through two 32x32 cells of its 512x256 HUD atlas drawn at
+the HUD's centre: the dot (128..160 x 160..192) and a dim glow (160..192 x
+160..192). The same atlas holds a ring (0..64 x 0..64), a ring with ticks
+(0..64 x 64..128), a cross (160..192 x 32..64, also the HUD's medkit) and four
+chevrons (192..256 x 0..64). In the quad batcher (`sub_000D6C00`) a quad with
+the dot's uv within 48 HUD pixels of the centre takes the chosen cell, grown
+2x (ring, chevrons) or 2.5x (ring with ticks, cross) around the same centre;
+the glow quad collapses to a point. The guest's tables are put back after the
+call, and the atlas is not changed, so the medkit cross and the damage marks
+stay. The colour is still the game's vertex colour. Auto reads the weapon in
+the player's hands (world player `0x2D45D4`, actor `+0x30`, weapon `+0x29C`,
+its type in the weapon manager's table at `0x2D12D0`) and decodes its name:
+SHG, RM*, GRL and RPG get the ring, SN* keeps the game's dot, anything else the
+cross; a weapon it cannot read keeps the dot.
+
+Checked: `macos_reticle_shape` (cells, growth around the centre, corner order,
+the glow, sprites away from the centre or with other uv untouched, Auto by
+name); `black-menu-preview` passes; bounded first-mission runs with each
+shape (HD and Original atlas) showed the ring, the ring with ticks, the cross
+and the chevrons at the centre in the game's neutral tint; with Auto the
+pistol showed the cross and the sniper rifle the game's own mark, and from
+the mission-2 checkpoint the RPG showed the ring, the AK the cross and the
+RPG the ring again after switching back. 128 CTest checks passed. Not checked:
+a shotgun or the grenade launcher in play (their names come from the game's
+weapon banks), the ally, enemy and object colours on the new shapes, and the
+live switch from the menu.
+
 ## HD Reticle, Performance Overlay, Black Box and the sniper in 0.9.0
 
 **Performance Overlay.** Off, FPS or Frame Times, live; the INI key stays

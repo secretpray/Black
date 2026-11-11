@@ -180,6 +180,7 @@ except **Skip Films with a Button**:
 | Player | One-Hit Kill | Any hit of your bullets kills a soldier |
 | Player | Game Speed | 50%, 75%, 150% or 200% of the game's pace in play; menus and films keep theirs |
 | Player | Always Silenced | Fits a silencer everywhere the old +9 trainer did (experimental) |
+| Player | Reticle Shape | The aiming mark: the game's dot, a ring, a ring with ticks, a cross or chevrons from its own HUD texture, or Auto: a ring for shotguns and launchers, a cross for the other weapons, the dot for the sniper rifle; the game still colours it |
 | Unlocks | Unlock All Missions / Unlock Black Ops Difficulty | Opens every mission and the Black Ops difficulty |
 | Unlocks | M16A2 at Mission Start | The Black Ops reward rifle as your starting weapon |
 | Unlocks | M249 in the First Mission | The developers' code, the same as a `XXXX-XXXX-XXXX-XXXX` profile name: an M249 with 600 rounds instead of the first mission's rifle; the gun has no texture there |

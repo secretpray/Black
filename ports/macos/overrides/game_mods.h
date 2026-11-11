@@ -13,7 +13,7 @@
  * before BLACK_MOD_UNLOCK_MISSIONS, which starts the Unlocks group. */
 enum { BLACK_MOD_GOD_MODE, BLACK_MOD_MEDKITS, BLACK_MOD_GRENADES, BLACK_MOD_FULL_AMMO, BLACK_MOD_AMMO,
        BLACK_MOD_RAPID_FIRE, BLACK_MOD_NO_RECOIL, BLACK_MOD_ONE_HIT_KILL, BLACK_MOD_GAME_SPEED, BLACK_MOD_SILENCER,
-       BLACK_MOD_UNLOCK_MISSIONS, BLACK_MOD_BLACK_OPS, BLACK_MOD_M16A2, BLACK_MOD_BFG, BLACK_MOD_SNIPER,
+       BLACK_MOD_RETICLE, BLACK_MOD_UNLOCK_MISSIONS, BLACK_MOD_BLACK_OPS, BLACK_MOD_M16A2, BLACK_MOD_BFG, BLACK_MOD_SNIPER,
        BLACK_MOD_COUNT };
 
 /* levels: the highest saved value; 1 is an on/off switch. */
@@ -24,6 +24,7 @@ static const BlackModInfo black_mod_info[BLACK_MOD_COUNT] = {
     {"mod_infinite_ammo", "Silver Weapons", 1}, {"mod_rapid_fire", "Rapid Fire", 3},
     {"mod_no_recoil", "No Recoil", 1}, {"mod_one_hit_kill", "One-Hit Kill", 1},
     {"mod_game_speed", "Game Speed", 4}, {"mod_always_silenced", "Always Silenced", 1},
+    {"mod_reticle_shape", "Reticle Shape", 5},
     {"mod_unlock_missions", "Unlock All Missions", 1}, {"mod_unlock_black_ops", "Unlock Black Ops Difficulty", 1},
     {"mod_m16a2", "M16A2 at Mission Start", 1}, {"mod_bfg", "M249 in the First Mission", 1},
     {"mod_sniper", "Sniper in the First Mission", 1},
@@ -55,9 +56,12 @@ static inline const char *black_mod_value_name(int mod, int value)
 {
     static const char *const speed[5] = {"100%", "50%", "75%", "150%", "200%"};
     static const char *const rapid[4] = {"OFF", "2X", "3X", "4X"};
+    /* reticle_shape.h's order: the game's dot first, the default; Auto last. */
+    static const char *const reticle[6] = {"DOT", "RING", "RING AND TICKS", "CROSS", "CHEVRONS", "AUTO"};
     if (value < 0 || value > black_mod_levels(mod)) value = 0;
     if (mod == BLACK_MOD_GAME_SPEED) return speed[value];
     if (mod == BLACK_MOD_RAPID_FIRE) return rapid[value];
+    if (mod == BLACK_MOD_RETICLE) return reticle[value];
     return value ? "ON" : "OFF";
 }
 

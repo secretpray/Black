@@ -9,6 +9,10 @@
 #include "display_aspect.h"
 #include "hud_layout.h"
 #include "reticle_trace.h"
+#include "reticle_shape.h"
+#include "game_mods.h"
+#include "port_menu.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -174,10 +178,96 @@ static int current_film(void)
  * a menu's film stays stretched, no wider than 16:9; a film is shown 4:3
  * (BLACK_FMV_FILL=1 fills the width instead, top and bottom cut); the EA intro
  * is always 4:3, filling cuts its text. */
+static void draw_quads(uint32_t quads);
+
+/* The Mods page's Reticle Shape (reticle_shape.h): the aiming dot's quad takes
+ * the chosen shape's cell for this call and the glow's collapses; both are put
+ * back afterwards, as the game reuses its tables. Batches of the HUD's size
+ * only; a film or a long text batch is left alone. */
+enum { RESHAPE_MAX_QUADS = 64 };
+
+/* Guest memory the runtime maps: the title's RAM and its 0x80000000 window. */
+static int guest_mapped(uint32_t a, uint32_t size)
+{
+    return (a < 0x04000000u && size <= 0x04000000u - a) ||
+           (a >= 0x80000000u && a < 0x84000000u && size <= 0x84000000u - a);
+}
+
+/* Auto's shape for the weapon in the player's hands (USA layout, the same
+ * reads the Mods page's ammunition makes): the world player at 0x2D45D4, its
+ * actor at +0x30 holding the weapon at +0x29C, whose first byte is its type in
+ * the weapon manager's table (0x2D12D0: table, entries at +4, count at +1,
+ * 0x20 each with the name key first). Anything not there keeps the dot. */
+static int auto_shape(void)
+{
+    static char last[13];
+    uint32_t player = MEM32(0x2D45D4), weapon, manager, table, entries, entry;
+    unsigned type, count;
+    if (!player || !guest_mapped(player + 0x30 + 0x29C, 4)) return BLACK_RETICLE_DOT;
+    weapon = MEM32(player + 0x30 + 0x29C);
+    manager = MEM32(0x2D12D0);
+    if (!weapon || !manager || !guest_mapped(weapon, 1) || !guest_mapped(manager, 4)) return BLACK_RETICLE_DOT;
+    table = MEM32(manager);
+    if (!table || !guest_mapped(table, 8)) return BLACK_RETICLE_DOT;
+    type = MEM8(weapon);
+    count = MEM8(table + 1);
+    entries = MEM32(table + 4);
+    if (type >= count || count > 64 || !entries || !guest_mapped(entries, count * 0x20u)) return BLACK_RETICLE_DOT;
+    entry = entries + type * 0x20u;
+    char name[13];
+    black_reticle_weapon_name((unsigned long long)MEM32(entry) | (unsigned long long)MEM32(entry + 4) << 32, name);
+    int shape = black_reticle_auto(name);
+    if (strcmp(name, last)) {
+        static const char *const names[BLACK_RETICLE_SHAPES] = {"dot", "ring", "ring and ticks", "cross", "chevrons"};
+        memcpy(last, name, sizeof last);
+        fprintf(stderr, "[RETICLE] Auto: %s -> %s\n", name, names[shape]);
+    }
+    return shape;
+}
+
 void sub_000D6C00(void)
 {
     uint32_t quads = MEM32(g_esp + 8);
     black_ReticleTraceQuads(quads);
+    int shape = black_SettingsMod(BLACK_MOD_RETICLE);
+    uint32_t uv_points = MEM32(g_esp + 0xC);
+    if (shape == BLACK_RETICLE_AUTO && uv_points && quads && quads <= RESHAPE_MAX_QUADS) shape = auto_shape();
+    if (shape <= BLACK_RETICLE_DOT || !uv_points || !quads || quads > RESHAPE_MAX_QUADS) {
+        draw_quads(quads);
+        return;
+    }
+    static float saved_xy[RESHAPE_MAX_QUADS][4], saved_uv[RESHAPE_MAX_QUADS][4];
+    static uint32_t changed[RESHAPE_MAX_QUADS];
+    unsigned count = 0;
+    for (uint32_t q = 0; q < quads; ++q) {
+        float xy[4], uv[4];
+        for (int i = 0; i < 4; ++i) {
+            xy[i] = MEMF(g_eax + q * 16 + i * 4);
+            uv[i] = MEMF(uv_points + q * 16 + i * 4);
+        }
+        float before_xy[4], before_uv[4];
+        memcpy(before_xy, xy, sizeof xy);
+        memcpy(before_uv, uv, sizeof uv);
+        if (!black_reticle_reshape(xy, uv, shape)) continue;
+        memcpy(saved_xy[count], before_xy, sizeof before_xy);
+        memcpy(saved_uv[count], before_uv, sizeof before_uv);
+        changed[count++] = q;
+        for (int i = 0; i < 4; ++i) {
+            MEMF(g_eax + q * 16 + i * 4) = xy[i];
+            MEMF(uv_points + q * 16 + i * 4) = uv[i];
+        }
+    }
+    uint32_t points = g_eax;
+    draw_quads(quads);
+    for (unsigned c = 0; c < count; ++c)
+        for (int i = 0; i < 4; ++i) {
+            MEMF(points + changed[c] * 16 + i * 4) = saved_xy[c][i];
+            MEMF(uv_points + changed[c] * 16 + i * 4) = saved_uv[c][i];
+        }
+}
+
+static void draw_quads(uint32_t quads)
+{
     if (!enabled()) { black_OriginalQuads(); return; }
     if (g_film == FILM_NONE && g_inset > 0.0f) {
         SavedUv uv;
