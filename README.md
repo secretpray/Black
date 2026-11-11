@@ -121,7 +121,11 @@ PS2 and Xbox 360 files are not supported.
   It is a nested menu: **General**, **Controls**, **Mods** and **Saves** open
   their pages, Back climbs one level, and the selected item is described under
   the list. Y / Triangle or Backspace resets a setting.
-- An optional **FPS counter** showing the game's own frame rate.
+- An optional **Performance Overlay**: the game's own frame rate and the
+  display's, or frame times as well (median, 95th percentile and worst frame).
+- **HD Reticle**: the game's own HUD texture rebuilt at four times its size, for
+  a sharper aiming dot and crisper small HUD marks. The game still colours the
+  dot; no picture is shipped. Off by default, live.
 - Optional **HD texture replacement** from your own copy of the PCSX2 "BLACK HD
   Reimagined" pack, through portingpete's map: turn on **General →
   Textures** and choose the pack's folder when asked. BLACK checks it and links
@@ -142,6 +146,13 @@ PS2 and Xbox 360 files are not supported.
 - Native fullscreen and Game Mode opt-in. Activation was observed on the test Mac;
   macOS controls it. FPS and controller latency improvements were not measured.
 - Separate installation, settings, saves and per-session logs.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/performance-overlay.jpg" alt="The first mission by sunlit windows, a pistol in hand; in the corner FPS 30.0, DISPLAY 60.0, FRAME 33.3 MS, P50 33.3, P95 35.2, MAX 35.7"><br><sub>Performance Overlay with frame times, in the first mission.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-hd-reticle.jpg" alt="General page with HD Reticle selected and set to HD, under Texture Replacement and HD Texture Size; the description says the aiming dot is rebuilt sharper at 4x from the game's own HUD texture"><br><sub>HD Reticle on the General page.</sub></td>
+  </tr>
+</table>
 
 ## Mods
 
@@ -168,6 +179,7 @@ except **Skip Films with a Button**:
 | Unlocks | Unlock All Missions / Unlock Black Ops Difficulty | Opens every mission and the Black Ops difficulty |
 | Unlocks | M16A2 at Mission Start | The Black Ops reward rifle as your starting weapon |
 | Unlocks | M249 in the First Mission | The developers' code, the same as a `XXXX-XXXX-XXXX-XXXX` profile name: an M249 with 600 rounds instead of the first mission's rifle; the gun has no texture there |
+| Unlocks | Sniper in the First Mission | The sniper rifle in your second slot when the first mission starts, with five magazines; the mission's own first weapon stays, and a checkpoint keeps the weapons it saved |
 
 Rapid Fire, One-Hit Kill, No Recoil, Game Speed and the stronger God Mode
 come from [TGP482/BLACK-XBERecomp#141](https://github.com/TGP482/BLACK-XBERecomp/pull/141)
@@ -214,7 +226,7 @@ after you answer YES there.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="General page: render scale, MetalFX, field of view, FPS counter, display brightness and gamma, SMAA; the description and the Select, Confirm, Default and Back prompts below"><br><sub>Recomp Settings: scale, upscaling, FOV, FPS counter.</sub></td>
+    <td width="50%"><img src="docs/screenshots/settings-recomp.jpg" alt="General page: render scale 2X, MetalFX, field of view 70, Performance Overlay set to Frame Times and selected, display brightness and gamma, SMAA; the description and the Select, Confirm, Default and Back prompts below"><br><sub>Recomp Settings: scale, upscaling, FOV, Performance Overlay.</sub></td>
     <td width="50%"><img src="docs/screenshots/settings-controller.jpg" alt="Gamepad and Vibration subpage: independent X/Y response, aiming and vibration"><br><sub>Gamepad response on its own page.</sub></td>
   </tr>
 </table>
@@ -363,7 +375,11 @@ features do not describe this Mac build. [Upstream README](docs/UPSTREAM_README.
 
 Include the version, Mac model, macOS version, settings and reproduction steps
 when reporting a problem. Distinguish a normal exit from a time limit.
-Do not attach game data, private saves or unredacted personal information.
+For a controls problem, **Controls → Gamepad and Vibration → Advanced Gamepad →
+Controller Diagnostics → Save Black Box** writes the last minute of input the
+game saw, with a copy of your settings, as `black-box-<date>.csv` beside the
+settings file; attach it. Do not attach game data, private saves or unredacted
+personal information.
 
 ## Acknowledgements
 
