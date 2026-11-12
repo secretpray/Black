@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.2 — 2026-11-12
 
 - **Reticle Shape: one cross, made for aiming.** The cross is now four short
   bars around a small open centre, so the target under it stays visible, with

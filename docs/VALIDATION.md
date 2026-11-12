@@ -1,9 +1,9 @@
 # Release validation and current limits
 
-Release: **BLACK 0.10.1**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.10.2**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Reticle Shape (0.10.0; the cross redrawn after 0.10.1)
+## Reticle Shape (0.10.0; the cross redrawn in 0.10.2)
 
 Off by default (`mod_reticle_shape=0`, the game's dot). The values are
 0.10.0's again: dot, ring, ring with ticks, cross, chevrons, Auto (5). 0.10.1
@@ -104,6 +104,14 @@ mark read on a dark wall, bright smoke and over a soldier, whose outline
 stayed visible in the centre. With the Original atlas the vertical bars are a
 little dimmer than the horizontal ones (peak 151 against 200 of 255), as the
 HUD has fewer pixels across than down. Not checked: Steam Deck.
+
+**Release 0.10.2.** Built with the real DSP; 128 CTest checks (with the GPU
+context) and 49 Python tests passed on the release build. The final DMG was
+checked read-only in English and Russian with isolated data and system-only
+PATH: both opened the settings and quit normally (exit 0, version 0.10.2 seen,
+private font view made and removed), and source game files and user
+preferences kept their hashes. The source archive matched the local sources
+and pinned upstreams, without game or private files.
 
 **Release 0.10.1.** Built with the real DSP; 128 CTest checks (with the GPU
 context) and 49 Python tests passed on the release build. The final DMG was
