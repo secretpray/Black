@@ -24,7 +24,7 @@ static const BlackModInfo black_mod_info[BLACK_MOD_COUNT] = {
     {"mod_infinite_ammo", "Silver Weapons", 1}, {"mod_rapid_fire", "Rapid Fire", 3},
     {"mod_no_recoil", "No Recoil", 1}, {"mod_one_hit_kill", "One-Hit Kill", 1},
     {"mod_game_speed", "Game Speed", 4}, {"mod_always_silenced", "Always Silenced", 1},
-    {"mod_reticle_shape", "Reticle Shape", 5},
+    {"mod_reticle", "Reticle Shape", 7},
     {"mod_unlock_missions", "Unlock All Missions", 1}, {"mod_unlock_black_ops", "Unlock Black Ops Difficulty", 1},
     {"mod_m16a2", "M16A2 at Mission Start", 1}, {"mod_bfg", "M249 in the First Mission", 1},
     {"mod_sniper", "Sniper in the First Mission", 1},
@@ -52,12 +52,24 @@ static inline int black_mod_step(int mod, int value, int direction, int cycle)
 }
 
 /* What the menu shows for a saved value. */
+/* 0.10.0 saved Reticle Shape as mod_reticle_shape with five shapes and Auto
+ * at 5; later shapes moved Auto to the end. Its value in today's order, or -1
+ * for a value 0.10.0 never wrote. */
+static inline int black_mod_reticle_legacy(long value)
+{
+    if (value >= 0 && value <= 4) return (int)value;
+    return value == 5 ? black_mod_levels(BLACK_MOD_RETICLE) : -1;
+}
+
 static inline const char *black_mod_value_name(int mod, int value)
 {
     static const char *const speed[5] = {"100%", "50%", "75%", "150%", "200%"};
     static const char *const rapid[4] = {"OFF", "2X", "3X", "4X"};
-    /* reticle_shape.h's order: the game's dot first, the default; Auto last. */
-    static const char *const reticle[6] = {"DOT", "RING", "RING AND TICKS", "CROSS", "CHEVRONS", "AUTO"};
+    /* reticle_shape.h's order: the game's dot first, the default; Auto last.
+     * Saved as mod_reticle; 0.10.0's mod_reticle_shape (Auto at 5) is read
+     * through black_mod_reticle_legacy. */
+    static const char *const reticle[8] = {"DOT", "RING", "RING AND TICKS", "CROSS", "CHEVRONS",
+                                           "CHEVRON UP", "CROSSHAIR", "AUTO"};
     if (value < 0 || value > black_mod_levels(mod)) value = 0;
     if (mod == BLACK_MOD_GAME_SPEED) return speed[value];
     if (mod == BLACK_MOD_RAPID_FIRE) return rapid[value];

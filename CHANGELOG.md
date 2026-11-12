@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- **Reticle Shape: a thin cross, an upward chevron and an open crosshair.**
+  The cross is now a small, thin four-armed mark and two new values follow
+  it: **Chevron Up**, a single upward tick like a sniper scope's centre
+  element, and **Crosshair**, four short bars around an open centre in the
+  proportions of the default hip-fire crosshair of Call of Duty: Modern
+  Warfare (about 3.6% of the screen's height across, two-pixel bars at 1080p,
+  with a faint dark rim so it reads on bright walls). The cross and the
+  chevron are drawn in the dot's own quad, so they stay the dot's size: the
+  cross about 1.7 dots across. None of the three exists in the game's HUD
+  texture, so they are painted into three empty 64x64 blocks of that atlas
+  when its texture is built — at 4x with HD Reticle, at 2x without it — and
+  the aiming quad simply samples the new cell. One quad and one draw call per
+  frame, as before; the glow quad still collapses, the game's tint still
+  colours the mark, and the medkit cross and every other HUD cell are
+  untouched. The rebuild refuses an atlas whose blocks are not empty, keeping
+  the game's own texture.
+- **Reticle Shape keeps Auto across the update.** The new shapes moved Auto to
+  the end of the row, so the setting is now saved as `mod_reticle`; a 0.10.0
+  `mod_reticle_shape` is still read, with its Auto kept as Auto.
+
 ## 0.10.0 — 2026-11-11
 
 - **Reticle Shape.** A Mods row changes the aiming mark: the game's own dot

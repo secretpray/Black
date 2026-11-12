@@ -1,9 +1,10 @@
 /* The HD reticle's atlas rebuild (hud_reticle.h) on a made-up 512x256
  * paletted atlas: the size, the dot's measured place and edge, the crisp
- * rim of an opaque cell, the untouched glow, the mips, and the refusals. No
- * game data is used or needed. */
+ * rim of an opaque cell, the untouched glow, the painted cross, chevron and
+ * crosshair cells, the mips, and the refusals. No game data is used or needed. */
 #undef NDEBUG
 #include "../../ports/macos/overrides/hud_reticle.h"
+#include "../../ports/macos/overrides/reticle_shape.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -57,6 +58,15 @@ static void encode(const uint8_t *linear, uint8_t *data)
 static void make_atlas(uint8_t *linear, const float *disc)
 {
     memset(linear, 3, W * H);
+    /* The two blocks the painted reticle cells go into are empty, as the
+     * game's atlas leaves them. */
+    for (int shape = 0; shape < BLACK_RETICLE_SHAPES; ++shape) {
+        if (!black_reticle_painted(shape)) continue;
+        const BlackReticleShape *cell = &black_reticle_shapes[shape];
+        for (unsigned y = (unsigned)cell->y0; y < (unsigned)cell->y1; ++y)
+            for (unsigned x = (unsigned)cell->x0; x < (unsigned)cell->x1; ++x)
+                linear[y * W + x] = 0;
+    }
     if (disc) {
         for (unsigned y = 0; y < H; ++y)
             for (unsigned x = 0; x < W; ++x) {
@@ -89,7 +99,8 @@ int main(void)
     assert(!black_HudReticleWanted(BLACK_HUD_RETICLE_KEY ^ 1));
 
     BlackHudReticleImage image;
-    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette, &image));
+    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
+                                 BLACK_HUD_RETICLE_SCALE, &image));
     assert(image.width == W * BLACK_HUD_RETICLE_SCALE && image.height == H * BLACK_HUD_RETICLE_SCALE);
     assert(image.levels == 12 && image.level[11] && image.level_size[11] == 4);
     assert(fabsf(image.dot_x - 144.0f) < 0.5f && fabsf(image.dot_y - 176.0f) < 0.5f);
@@ -120,6 +131,50 @@ int main(void)
     assert(image.level[0][rim] == 144 && image.level[0][rim + 1] == 88 && image.level[0][rim + 2] == 17);
     assert(alpha_at(&image, 404 * 4 + 2, 104 * 4 + 2) == 96);
     assert(alpha_at(&image, 399 * 4 + 2, 104 * 4 + 2) == 68);
+    /* The painted cross: opaque along both bars, transparent off them and in
+     * the block's corners, white so the game's tint colours it. */
+    assert(alpha_at(&image, 352 * 4 + 2, 32 * 4 + 2) == 255);
+    assert(alpha_at(&image, 340 * 4 + 2, 32 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 20 * 4 + 2) == 255);
+    assert(alpha_at(&image, 328 * 4 + 2, 32 * 4 + 2) == 0);
+    assert(alpha_at(&image, 352 * 4 + 2, 8 * 4 + 2) == 0);
+    assert(alpha_at(&image, 322 * 4 + 2, 2 * 4 + 2) == 0);
+    assert(alpha_at(&image, 360 * 4 + 2, 40 * 4 + 2) == 0);
+    unsigned cross = ((size_t)(32 * 4 + 2) * image.width + 352 * 4 + 2) * 4;
+    assert(image.level[0][cross] == 255 && image.level[0][cross + 1] == 255 && image.level[0][cross + 2] == 255);
+    /* The painted chevron: an apex at the cell's centre and two legs down and
+     * out; nothing between the legs or above the apex. */
+    assert(alpha_at(&image, 352 * 4 + 2, 160 * 4 + 2) == 255);
+    assert(alpha_at(&image, 340 * 4 + 2, 172 * 4 + 2) == 255);
+    assert(alpha_at(&image, 364 * 4 + 2, 172 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 184 * 4 + 2) == 0);
+    assert(alpha_at(&image, 352 * 4 + 2, 140 * 4 + 2) == 0);
+    /* The open crosshair: four white bars 12..26 texels from the centre, an
+     * empty centre, and a translucent black rim beside each bar. */
+    assert(alpha_at(&image, 352 * 4 + 2, 224 * 4 + 2) == 0);
+    assert(alpha_at(&image, 360 * 4 + 2, 224 * 4 + 2) == 0);
+    assert(alpha_at(&image, 370 * 4 + 2, 224 * 4 + 2) == 255);
+    assert(alpha_at(&image, 334 * 4 + 2, 224 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 206 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 242 * 4 + 2) == 255);
+    assert(alpha_at(&image, 382 * 4 + 2, 224 * 4 + 2) == 0);
+    assert(alpha_at(&image, 340 * 4 + 2, 212 * 4 + 2) == 0);
+    unsigned bar = ((size_t)(224 * 4 + 2) * image.width + 370 * 4 + 2) * 4;
+    assert(image.level[0][bar] == 255 && image.level[0][bar + 1] == 255 && image.level[0][bar + 2] == 255);
+    unsigned edge = ((size_t)903 * image.width + 370 * 4 + 2) * 4;
+    assert(image.level[0][edge + 3] == 140 && image.level[0][edge] == 0 && image.level[0][edge + 2] == 0);
+    /* The same picture at the plain scale, for Original with a painted shape. */
+    BlackHudReticleImage plain;
+    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
+                                 BLACK_HUD_RETICLE_PLAIN_SCALE, &plain));
+    assert(plain.width == W * BLACK_HUD_RETICLE_PLAIN_SCALE);
+    assert(alpha_at(&plain, 352 * 2 + 1, 32 * 2 + 1) == 255);
+    assert(alpha_at(&plain, 352 * 2 + 1, 160 * 2 + 1) == 255);
+    assert(alpha_at(&plain, 322 * 2 + 1, 2 * 2 + 1) == 0);
+    assert(alpha_at(&plain, 370 * 2 + 1, 224 * 2 + 1) == 255);
+    assert(alpha_at(&plain, 352 * 2 + 1, 224 * 2 + 1) == 0);
+    black_HudReticleFree(&plain);
+    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette, 3, &plain));
     /* The 2x mip keeps the rim: half coverage at the edge, full inside. */
     size_t mip = ((size_t)(406 / 2) * (image.width / 2) + 599) * 4;
     assert(image.level[1][mip + 3] > 40 && image.level[1][mip + 3] < 128);
@@ -138,7 +193,8 @@ int main(void)
     }
     encode(linear, data);
     BlackHudReticleImage glow;
-    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, glow_palette, sizeof glow_palette, &glow));
+    assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, glow_palette, sizeof glow_palette,
+                                 BLACK_HUD_RETICLE_SCALE, &glow));
     /* From the glow's outer texel to its centre: rising by a texel's step
      * spread over four pixels, never a jump. */
     for (unsigned x = 47 * 4; x < 50 * 4; ++x) {
@@ -155,17 +211,27 @@ int main(void)
     black_HudReticleFree(&image);
     assert(!image.storage && !image.level[0] && !image.levels);
 
-    /* Not the atlas: no disc, another size or format, or an index off the palette. */
+    /* Not the atlas: no disc, another size or format, an index off the
+     * palette, or a painted block the game did not leave empty. */
     make_atlas(linear, NULL);
     encode(linear, data);
-    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette, &image));
+    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
+                                  BLACK_HUD_RETICLE_SCALE, &image));
     make_atlas(linear, disc);
     encode(linear, data);
-    assert(!black_HudReticleBuild(W / 2, H / 2, 0x0B, data, sizeof data, palette, sizeof palette, &image));
-    assert(!black_HudReticleBuild(W, H, 0x0C, data, sizeof data, palette, sizeof palette, &image));
+    assert(!black_HudReticleBuild(W / 2, H / 2, 0x0B, data, sizeof data, palette, sizeof palette,
+                                  BLACK_HUD_RETICLE_SCALE, &image));
+    assert(!black_HudReticleBuild(W, H, 0x0C, data, sizeof data, palette, sizeof palette,
+                                  BLACK_HUD_RETICLE_SCALE, &image));
     data[0] = 250;
-    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, 128, &image));
+    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, 128,
+                                  BLACK_HUD_RETICLE_SCALE, &image));
+    data[0] = 3;
+    linear[32 * W + 352] = 2;
+    encode(linear, data);
+    assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
+                                  BLACK_HUD_RETICLE_SCALE, &image));
 
-    puts("HD reticle atlas: 4x upscale, crisp hard rims, soft glows and ramps without a step, redrawn dot, mips and refusals: PASS");
+    puts("HD reticle atlas: 4x and 2x upscale, crisp hard rims, soft glows and ramps without a step, redrawn dot, painted cross, chevron and crosshair, mips and refusals: PASS");
     return 0;
 }

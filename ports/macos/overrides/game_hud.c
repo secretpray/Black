@@ -181,9 +181,11 @@ static int current_film(void)
 static void draw_quads(uint32_t quads);
 
 /* The Mods page's Reticle Shape (reticle_shape.h): the aiming dot's quad takes
- * the chosen shape's cell for this call and the glow's collapses; both are put
- * back afterwards, as the game reuses its tables. Batches of the HUD's size
- * only; a film or a long text batch is left alone. */
+ * the chosen shape's atlas cell for this call and the glow's collapses; two of
+ * the cells are painted into the atlas when its texture is built
+ * (hud_reticle.c). Everything is put back afterwards, as the game reuses its
+ * tables. Batches of the HUD's size only; a film or a long text batch is left
+ * alone. */
 enum { RESHAPE_MAX_QUADS = 64 };
 
 /* Guest memory the runtime maps: the title's RAM and its 0x80000000 window. */
@@ -218,7 +220,8 @@ static int auto_shape(void)
     black_reticle_weapon_name((unsigned long long)MEM32(entry) | (unsigned long long)MEM32(entry + 4) << 32, name);
     int shape = black_reticle_auto(name);
     if (strcmp(name, last)) {
-        static const char *const names[BLACK_RETICLE_SHAPES] = {"dot", "ring", "ring and ticks", "cross", "chevrons"};
+        static const char *const names[BLACK_RETICLE_SHAPES] = {"dot", "ring", "ring and ticks", "cross",
+                                                                "chevrons", "chevron up", "crosshair"};
         memcpy(last, name, sizeof last);
         fprintf(stderr, "[RETICLE] Auto: %s -> %s\n", name, names[shape]);
     }
@@ -257,11 +260,10 @@ void sub_000D6C00(void)
             MEMF(uv_points + q * 16 + i * 4) = uv[i];
         }
     }
-    uint32_t points = g_eax;
     draw_quads(quads);
     for (unsigned c = 0; c < count; ++c)
         for (int i = 0; i < 4; ++i) {
-            MEMF(points + changed[c] * 16 + i * 4) = saved_xy[c][i];
+            MEMF(g_eax + changed[c] * 16 + i * 4) = saved_xy[c][i];
             MEMF(uv_points + changed[c] * 16 + i * 4) = saved_uv[c][i];
         }
 }

@@ -16,6 +16,8 @@
 #include "texture_dump.h"
 #include "input_atlas.h"
 #include "hud_reticle.h"
+#include "reticle_shape.h"
+#include "game_mods.h"
 #include "port_menu.h"
 
 #define BLACK_TP_GL_BC1 0x83F1  /* COMPRESSED_RGBA_S3TC_DXT1_EXT */
@@ -55,7 +57,7 @@ static struct {
  * holding one never loses it; an atlas the rebuild refused is not tried again. */
 enum { BLACK_TP_RETICLE_TEXTURES = 4 };
 static struct {
-    struct { GLuint texture; unsigned refs; uint64_t key, palette; } held[BLACK_TP_RETICLE_TEXTURES];
+    struct { GLuint texture; unsigned refs, scale; uint64_t key, palette; } held[BLACK_TP_RETICLE_TEXTURES];
     uint64_t refused_key, refused_palette;
     bool refused;
 } black_tp_reticle;
@@ -320,9 +322,10 @@ static void black_tp_complete(unsigned index)
     }
 }
 
-/* The game's HUD atlas with its aiming dot at 4x, in place of the binding's
- * texture (hud_reticle.h); 0 leaves the game's own. On by its setting alone, so
- * it works without a texture pack, and no pack file is looked up for this key. */
+/* The game's HUD atlas rebuilt (hud_reticle.h): at 4x with the HD setting, at
+ * 2x with a Reticle Shape that needs the painted cells, in place of the
+ * binding's texture; 0 leaves the game's own. On by its setting alone, so it
+ * works without a texture pack, and no pack file is looked up for this key. */
 static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, const uint8_t *data,
                                     size_t top, const uint8_t *palette, size_t palette_length)
 {
@@ -335,10 +338,11 @@ static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, con
     if (black_tp_reticle.refused && black_tp_reticle.refused_key == key &&
         black_tp_reticle.refused_palette == palette_key)
         return 0;
+    unsigned scale = black_SettingsHdReticle() ? BLACK_HUD_RETICLE_SCALE : BLACK_HUD_RETICLE_PLAIN_SCALE;
     int found = -1, spare = -1;
     for (int i = 0; i < BLACK_TP_RETICLE_TEXTURES; ++i) {
         if (black_tp_reticle.held[i].texture && black_tp_reticle.held[i].key == key &&
-            black_tp_reticle.held[i].palette == palette_key)
+            black_tp_reticle.held[i].palette == palette_key && black_tp_reticle.held[i].scale == scale)
             found = i;
         else if (spare < 0 && !black_tp_reticle.held[i].refs)
             spare = i;
@@ -347,7 +351,8 @@ static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, con
         /* Every kept texture is still in use by a binding: the game's stays. */
         if (spare < 0) return 0;
         BlackHudReticleImage image;
-        if (!black_HudReticleBuild(s.width, s.height, s.color_format, data, top, palette, palette_length, &image)) {
+        if (!black_HudReticleBuild(s.width, s.height, s.color_format, data, top, palette, palette_length,
+                                   scale, &image)) {
             black_tp_reticle.refused = true;
             black_tp_reticle.refused_key = key;
             black_tp_reticle.refused_palette = palette_key;
@@ -381,13 +386,14 @@ static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, con
             black_HudReticleFree(&image);
             return 0;
         }
-        fprintf(stderr, "[RETICLE] atlas %ux%u -> %ux%u, %u levels, dot %.2f,%.2f r %.2f\n",
+        fprintf(stderr, "[RETICLE] atlas %ux%u -> %ux%u, %u levels, dot %.2f,%.2f r %.2f, painted cross, chevron and crosshair\n",
                 BLACK_HUD_RETICLE_W, BLACK_HUD_RETICLE_H, image.width, image.height, image.levels,
                 image.dot_x, image.dot_y, image.dot_radius);
         black_HudReticleFree(&image);
         if (black_tp_reticle.held[spare].texture) glDeleteTextures(1, &black_tp_reticle.held[spare].texture);
         black_tp_reticle.held[spare].texture = texture;
         black_tp_reticle.held[spare].refs = 0;
+        black_tp_reticle.held[spare].scale = scale;
         black_tp_reticle.held[spare].key = key;
         black_tp_reticle.held[spare].palette = palette_key;
         found = spare;
@@ -425,8 +431,11 @@ static void black_tp_created(TextureBinding *binding, TextureShape s, const uint
     black_TextureDump(s.color_format, s.width, s.height, data, length, palette, palette_length);
     size_t top = black_TexturePackTopBytes(s.color_format, s.width, s.height);
     if (!top || top > length) return;
-    /* Its own setting, before the pack: no pack file is looked up for the atlas. */
-    if (black_SettingsHdReticle() && black_tp_reticle_created(binding, s, data, top, palette, palette_length))
+    /* Its own setting, before the pack: no pack file is looked up for the
+     * atlas. Without HD the rebuild still runs for a Reticle Shape other than
+     * the dot, whose painted cells only exist in the rebuilt atlas. */
+    if ((black_SettingsHdReticle() || black_SettingsMod(BLACK_MOD_RETICLE) != BLACK_RETICLE_DOT) &&
+        black_tp_reticle_created(binding, s, data, top, palette, palette_length))
         return;
     if (!black_tp.generation) return;
     black_tp.eligible++;
@@ -480,7 +489,8 @@ static void black_tp_flush(NV2AState *d)
     lru_flush(&r->texture_cache);
     for (unsigned i = 0; i < black_tp.file_count; ++i)
         if (black_tp.files[i].texture && !black_tp.files[i].refs) black_tp_drop(&black_tp.files[i]);
-    /* With HD Reticle off nothing asks for the 4x atlas: free what no binding holds. */
+    /* With neither HD nor a painted shape nothing asks for the rebuilt atlas:
+     * free what no binding holds. */
     if (!black_tp.reticle)
         for (unsigned i = 0; i < BLACK_TP_RETICLE_TEXTURES; ++i)
             if (black_tp_reticle.held[i].texture && !black_tp_reticle.held[i].refs) {
@@ -493,7 +503,10 @@ static void black_tp_flush(NV2AState *d)
 static void black_tp_poll(NV2AState *d)
 {
     unsigned generation = black_TexturePackGeneration();
-    unsigned reticle = black_SettingsHdReticle() ? 1u : 0u;
+    /* Bit 0: the HD setting. Bit 1: a Reticle Shape that needs the painted
+     * cells, which asks for the rebuilt atlas even without HD. */
+    unsigned reticle = (black_SettingsHdReticle() ? 1u : 0u) |
+                       (black_SettingsMod(BLACK_MOD_RETICLE) != BLACK_RETICLE_DOT ? 2u : 0u);
     bool remake = false;
     if (generation != black_tp.generation) {
         if (generation && !black_tp.checked) {
@@ -514,7 +527,8 @@ static void black_tp_poll(NV2AState *d)
     }
     if (reticle != black_tp.reticle) {
         black_tp.reticle = reticle;
-        fprintf(stderr, "[RETICLE] %s, remaking textures\n", reticle ? "HD" : "Original");
+        fprintf(stderr, "[RETICLE] %s, remaking textures\n",
+                reticle & 1 ? "HD" : reticle & 2 ? "Original with the painted reticle cells" : "Original");
         remake = true;
     }
     if (remake) black_tp_flush(d);

@@ -35,6 +35,9 @@ int main(int argc, char **argv)
         if (!strcmp(argv[1], "texture-size")) return black_SettingsTextureMaxSize() != 1024;
         if (!strcmp(argv[1], "reticle")) return !black_SettingsHdReticle();
         if (!strcmp(argv[1], "reticle-defaults")) return black_SettingsHdReticle();
+        if (!strcmp(argv[1], "shape-auto")) return black_SettingsMod(BLACK_MOD_RETICLE) != black_mod_levels(BLACK_MOD_RETICLE);
+        if (!strcmp(argv[1], "shape-3")) return black_SettingsMod(BLACK_MOD_RETICLE) != 3;
+        if (!strcmp(argv[1], "shape-6")) return black_SettingsMod(BLACK_MOD_RETICLE) != 6;
         if (!strcmp(argv[1], "display")) return black_SettingsDisplayBrightness() != -7 || black_SettingsDisplayGamma() != 125;
         if (!strcmp(argv[1], "display-defaults")) return black_SettingsDisplayBrightness() != 0 || black_SettingsDisplayGamma() != 100;
         if (!strcmp(argv[1], "window")) { int f[4];
@@ -187,6 +190,18 @@ int main(int argc, char **argv)
     if (child(argv[0], "defaults", path) || child(argv[0], "input-defaults", path) || child(argv[0],"keyboard-defaults",path) ||
         child(argv[0], "mods-defaults", path) || child(argv[0], "window-defaults", path) ||
         child(argv[0], "display-defaults", path) || child(argv[0], "reticle-defaults", path)) return 16;
+    /* 0.10.0 saved Reticle Shape as mod_reticle_shape with Auto at 5: it
+     * stays Auto under today's numbering; the new key wins over the old. */
+    const char *legacy[][2] = {{"mod_reticle_shape=5\n", "shape-auto"}, {"mod_reticle_shape=3\n", "shape-3"},
+                               {"mod_reticle_shape=9\n", "mods-defaults"},
+                               {"mod_reticle=6\nmod_reticle_shape=5\n", "shape-6"},
+                               {"mod_reticle_shape=5\nmod_reticle=6\n", "shape-6"}};
+    for (int i = 0; i < 5; ++i) {
+        file = fopen(path, "w");
+        if (!file) return 48;
+        fputs(legacy[i][0], file); fclose(file);
+        if (child(argv[0], legacy[i][1], path)) return 49;
+    }
     black_MenuCommand(BLACK_MENU_CHANGE);
     black_MenuCommand(BLACK_MENU_ON);
     if (black_MenuTakeCommands() != (BLACK_MENU_CHANGE | BLACK_MENU_ON) || black_MenuTakeCommands()) return 10;

@@ -73,6 +73,7 @@ static void load_settings(void)
     FILE *file = settings_path ? fopen(settings_path, "r") : NULL;
     if (file) {
         char line[512];
+        int reticle_saved = 0;
         while (fgets(line, sizeof line, file)) {
             char value[16], extra;
             if (sscanf(line, " skip_intro_movies = %15s %c", value, &extra) == 1) {
@@ -154,7 +155,14 @@ static void load_settings(void)
                     if (!strcmp(value, "true")) atomic_store(&mods[i], 1);
                     else if (!strcmp(value, "false")) atomic_store(&mods[i], 0);
                     else if (*value && !*end && n >= 0 && n <= black_mod_info[i].levels) atomic_store(&mods[i], (int)n);
+                    if (i == BLACK_MOD_RETICLE) reticle_saved = 1;
                 }
+            }
+            /* 0.10.0's key and numbering, until the new key is saved. */
+            if (!reticle_saved && sscanf(line, " mod_reticle_shape = %15s %c", value, &extra) == 1) {
+                long n = strtol(value, &end, 10);
+                int shape = *value && !*end ? black_mod_reticle_legacy(n) : -1;
+                if (shape >= 0) atomic_store(&mods[BLACK_MOD_RETICLE], shape);
             }
             if (sscanf(line, " render_scale = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
