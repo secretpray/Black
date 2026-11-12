@@ -40,20 +40,13 @@ int main(void)
     assert(black_reticle_shapes[BLACK_RETICLE_RING].x1 == 64 && black_reticle_shapes[BLACK_RETICLE_RING].y1 == 64);
     assert(black_reticle_shapes[BLACK_RETICLE_TICKS].y0 == 64);
     assert(black_reticle_shapes[BLACK_RETICLE_CHEVRONS].x0 == 192);
-    /* The painted cells: two empty 64x64 blocks, away from every icon. */
-    assert(black_reticle_painted(BLACK_RETICLE_CROSS) && black_reticle_painted(BLACK_RETICLE_CHEVRON_UP) &&
-           black_reticle_painted(BLACK_RETICLE_CROSSHAIR));
-    assert(!black_reticle_painted(BLACK_RETICLE_RING) && !black_reticle_painted(BLACK_RETICLE_DOT));
+    /* The painted cell: the cross alone, in an empty 64x64 block away from
+     * every icon, drawn in the dot's own quad, so at the dot's size. */
+    assert(black_reticle_painted(BLACK_RETICLE_CROSS));
+    assert(!black_reticle_painted(BLACK_RETICLE_RING) && !black_reticle_painted(BLACK_RETICLE_DOT) &&
+           !black_reticle_painted(BLACK_RETICLE_CHEVRONS));
     assert(black_reticle_shapes[BLACK_RETICLE_CROSS].x0 == 320 && black_reticle_shapes[BLACK_RETICLE_CROSS].y0 == 0);
-    assert(black_reticle_shapes[BLACK_RETICLE_CHEVRON_UP].x0 == 320 &&
-           black_reticle_shapes[BLACK_RETICLE_CHEVRON_UP].y0 == 128);
-    assert(black_reticle_shapes[BLACK_RETICLE_CROSSHAIR].x0 == 320 &&
-           black_reticle_shapes[BLACK_RETICLE_CROSSHAIR].y0 == 192);
-    /* The thin cross and the chevron stay in the dot's own quad, the dot's
-     * size; the crosshair is drawn at 2x around its open centre. */
-    assert(black_reticle_shapes[BLACK_RETICLE_CROSS].grow == 1.0f &&
-           black_reticle_shapes[BLACK_RETICLE_CHEVRON_UP].grow == 1.0f);
-    assert(black_reticle_shapes[BLACK_RETICLE_CROSSHAIR].grow == 2.0f);
+    assert(black_reticle_shapes[BLACK_RETICLE_CROSS].grow == 1.0f);
     for (int shape = BLACK_RETICLE_RING; shape < BLACK_RETICLE_SHAPES; ++shape) {
         const BlackReticleShape *s = &black_reticle_shapes[shape];
         assert(s->x1 - s->x0 == 64 && s->y1 - s->y0 == 64);
@@ -65,7 +58,7 @@ int main(void)
     assert(flip_xy[0] > flip_xy[2] && flip_xy[1] > flip_xy[3] && flip_uv[0] > flip_uv[2] && flip_uv[1] > flip_uv[3]);
     assert(near(flip_uv[0], 64.0f / 512.0f) && near(flip_uv[2], 0.0f));
     float corner_xy[4] = {324.0f, 245.35f, 316.0f, 234.65f}, corner_uv[4] = {0.3125f, 0.75f, 0.25f, 0.625f};
-    assert(black_reticle_reshape(corner_xy, corner_uv, BLACK_RETICLE_CHEVRON_UP));
+    assert(black_reticle_reshape(corner_xy, corner_uv, BLACK_RETICLE_CROSS));
     assert(corner_xy[0] > corner_xy[2] && corner_xy[1] > corner_xy[3]);
     assert(corner_uv[0] > corner_uv[2] && corner_uv[1] > corner_uv[3]);
     assert(near(corner_uv[0], 384.0f / 512.0f) && near(corner_uv[2], 320.0f / 512.0f));
@@ -95,22 +88,25 @@ int main(void)
     float big_xy[4] = {0.0f, 0.0f, 640.0f, 480.0f};
     memcpy(uv, dot_uv, sizeof uv);
     assert(!black_reticle_reshape(big_xy, uv, BLACK_RETICLE_RING));
-    assert(!black_reticle_reshape(big_xy, uv, BLACK_RETICLE_CHEVRON_UP));
+    assert(!black_reticle_reshape(big_xy, uv, BLACK_RETICLE_CROSS));
     /* A uv off the dot by a texel is another sprite. */
     float off_uv[4] = {0.25f + 1.0f / 512.0f, 0.625f, 0.3125f, 0.75f};
     assert(!black_reticle_reshape(xy, off_uv, BLACK_RETICLE_RING));
 
-    /* The Mods row: eight values, the dot by default, the shapes, then Auto. */
+    /* The Mods row: six values, 0.10.0's order: the dot by default, the
+     * shapes, then Auto. */
     assert(black_mod_levels(BLACK_MOD_RETICLE) == BLACK_RETICLE_AUTO);
     assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, 0), "DOT"));
     assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, BLACK_RETICLE_CHEVRONS), "CHEVRONS"));
-    assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, BLACK_RETICLE_CHEVRON_UP), "CHEVRON UP"));
+    assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, BLACK_RETICLE_CROSS), "CROSS"));
+    assert(BLACK_RETICLE_CROSS == 3 && BLACK_RETICLE_AUTO == 5);
     assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, BLACK_RETICLE_AUTO), "AUTO"));
     assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, 9), "DOT"));
-    assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_CHEVRONS, 0, 1) == BLACK_RETICLE_CHEVRON_UP);
-    assert(!strcmp(black_mod_value_name(BLACK_MOD_RETICLE, BLACK_RETICLE_CROSSHAIR), "CROSSHAIR"));
-    assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_CHEVRON_UP, 0, 1) == BLACK_RETICLE_CROSSHAIR);
-    assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_CROSSHAIR, 0, 1) == BLACK_RETICLE_AUTO);
+    assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_CHEVRONS, 0, 1) == BLACK_RETICLE_AUTO);
+    /* 0.10.1's numbering: its chevron became the dot, its crosshair the cross. */
+    assert(black_mod_reticle_legacy(3) == BLACK_RETICLE_CROSS && black_mod_reticle_legacy(5) == BLACK_RETICLE_DOT);
+    assert(black_mod_reticle_legacy(6) == BLACK_RETICLE_CROSS && black_mod_reticle_legacy(7) == BLACK_RETICLE_AUTO);
+    assert(black_mod_reticle_legacy(8) == -1 && black_mod_reticle_legacy(-1) == -1);
     assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_AUTO, 0, 1) == BLACK_RETICLE_DOT);
     assert(black_mod_step(BLACK_MOD_RETICLE, BLACK_RETICLE_DOT, 1, 0) == BLACK_RETICLE_RING);
     /* Auto itself is not a shape the quad rewrite draws. */

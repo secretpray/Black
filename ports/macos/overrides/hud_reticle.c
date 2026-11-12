@@ -8,10 +8,10 @@
  * plain alpha upscale, with no step between. The dot itself (a white disc at
  * about 144, 176) is wiped and drawn anew with a one-pixel anti-aliased edge,
  * its centre and radius measured on the decoded atlas rather than assumed.
- * Three empty 64x64 blocks gain the Reticle Shape mod's cells (reticle_shape.h):
- * a thin cross, an upward chevron and an open crosshair, drawn white with the
- * same one-pixel edge, so the game's tint colours them like the dot. Mips are box-filtered
- * with alpha weighting: the game draws the atlas smaller than this. */
+ * An empty 64x64 block gains the Reticle Shape mod's cross (reticle_shape.h),
+ * drawn white with the same one-pixel edge over a dark rim, so the game's
+ * tint colours it like the dot. Mips are box-filtered with alpha weighting:
+ * the game draws the atlas smaller than this. */
 #include "hud_reticle.h"
 #include "reticle_shape.h"
 #include <math.h>
@@ -173,15 +173,6 @@ static void draw_dot(uint8_t *dst, unsigned dw, unsigned dh, float cx, float cy,
         }
 }
 
-/* Distance from a point to a segment, in the same units. */
-static float seg_distance(float px, float py, float ax, float ay, float bx, float by)
-{
-    float dx = bx - ax, dy = by - ay;
-    float t = clampf(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0.0f, 1.0f);
-    float qx = ax + t * dx - px, qy = ay + t * dy - py;
-    return sqrtf(qx * qx + qy * qy);
-}
-
 /* Distance from a point to an axis-aligned segment's square-ended span (its
  * segment with no round caps), in the same units: 0 on the line, the
  * distance past an end along the line otherwise. */
@@ -194,56 +185,37 @@ static float box_distance(float px, float py, const float e[4])
     return fmaxf(dx, dy);
 }
 
-/* The painted Reticle Shape cells (reticle_shape.h), in each cell's own 64x64
- * texels: up to four strokes, their half-thickness, and an optional dark
- * outline around them. The cross and the chevron are drawn in the dot's quad
- * (one texel about 0.035% of the screen's height): the cross's arms reach 23
- * texels from the centre, the chevron's legs run 18 texels down and out from
- * an apex at the centre, both 5.5 texels thick, about two pixels at 1080p.
- * The crosshair is drawn at twice that (a texel about 0.07%): four bars from
- * 12 to 26 texels out, 2.8 thick (each segment is inset by the half-thickness,
- * as a straight stroke's square end reaches that far past it), with a translucent black rim of 1.2 texels
- * that the game's tint leaves black, so the white mark reads on bright
- * walls too. */
-typedef struct {
-    int shape, strokes;
-    float seg[4][4], half, rim, rim_alpha;
-} PaintedGlyph;
-static const PaintedGlyph painted_glyphs[] = {
-    {BLACK_RETICLE_CROSS, 2, {{11.75f, 32, 52.25f, 32}, {32, 11.75f, 32, 52.25f}}, 2.75f, 0.0f, 0.0f},
-    {BLACK_RETICLE_CHEVRON_UP, 2, {{32, 32, 14, 50}, {32, 32, 50, 50}}, 2.75f, 0.0f, 0.0f},
-    {BLACK_RETICLE_CROSSHAIR, 4,
-     {{18.6f, 32, 7.4f, 32}, {45.4f, 32, 56.6f, 32}, {32, 18.6f, 32, 7.4f}, {32, 45.4f, 32, 56.6f}},
-     1.4f, 1.2f, 0.55f},
+/* The painted cross (reticle_shape.h), in its cell's own 64x64 texels, drawn
+ * in the dot's quad: one texel is about 0.035% of the screen's height. Four
+ * white bars run from 8.5 to 24.5 texels out (an open centre about 0.6% of the
+ * height across, the bars about 0.55% long, 1.7% across in all), 5.5 texels
+ * (about 0.19%, two pixels at 1080p) thick; each segment is inset by the
+ * half-thickness, as a bar's square end reaches that far past it. A black rim
+ * of 2.5 texels (about one pixel at 1080p) at 60% surrounds them: the game's
+ * tint leaves it black, so the white mark reads on bright walls and sky. */
+enum { CROSS_BARS = 4 };
+static const float cross_bars[CROSS_BARS][4] = {
+    {20.75f, 32, 10.25f, 32}, {43.25f, 32, 53.75f, 32}, {32, 20.75f, 32, 10.25f}, {32, 43.25f, 32, 53.75f},
 };
+#define CROSS_HALF 2.75f
+#define CROSS_RIM 2.5f
+#define CROSS_RIM_ALPHA 0.6f
 
-/* One painted cell: white strokes with a one destination pixel anti-aliased
- * edge, like the dot, over an optional black rim; the block is empty, so
- * nothing of the game's is overwritten. Bars end square: a stroke's
- * distance is measured to its box, not its segment, so the crosshair's bars
- * keep crisp ends. */
-static void draw_glyph(uint8_t *dst, unsigned dw, unsigned dh, unsigned k, int shape)
+/* The cross's cell: white bars with a one destination pixel anti-aliased
+ * edge, like the dot, over the black rim; the block is empty, so nothing of
+ * the game's is overwritten. */
+static void draw_cross(uint8_t *dst, unsigned dw, unsigned dh, unsigned k)
 {
-    const PaintedGlyph *g = NULL;
-    for (size_t i = 0; i < sizeof painted_glyphs / sizeof painted_glyphs[0]; ++i)
-        if (painted_glyphs[i].shape == shape) g = &painted_glyphs[i];
-    if (!g) return;
-    const BlackReticleShape *cell = &black_reticle_shapes[shape];
+    const BlackReticleShape *cell = &black_reticle_shapes[BLACK_RETICLE_CROSS];
     unsigned x0 = (unsigned)(cell->x0 * k), x1 = (unsigned)(cell->x1 * k);
     unsigned y0 = (unsigned)(cell->y0 * k), y1 = (unsigned)(cell->y1 * k);
     for (unsigned y = y0; y < y1 && y < dh; ++y)
         for (unsigned x = x0; x < x1 && x < dw; ++x) {
             float sx = (x + 0.5f) / k - cell->x0, sy = (y + 0.5f) / k - cell->y0;
             float d = 1e9f;
-            for (int i = 0; i < g->strokes; ++i) {
-                const float *e = g->seg[i];
-                float sd = (e[0] == e[2] || e[1] == e[3]) ? box_distance(sx, sy, e) :
-                                                            seg_distance(sx, sy, e[0], e[1], e[2], e[3]);
-                d = fminf(d, sd);
-            }
-            float core = clampf(g->half * k + 0.5f - d * k, 0.0f, 1.0f);
-            float rim = g->rim > 0.0f ?
-                g->rim_alpha * clampf((g->half + g->rim) * k + 0.5f - d * k, 0.0f, 1.0f) : 0.0f;
+            for (int i = 0; i < CROSS_BARS; ++i) d = fminf(d, box_distance(sx, sy, cross_bars[i]));
+            float core = clampf(CROSS_HALF * k + 0.5f - d * k, 0.0f, 1.0f);
+            float rim = CROSS_RIM_ALPHA * clampf((CROSS_HALF + CROSS_RIM) * k + 0.5f - d * k, 0.0f, 1.0f);
             float a = core + rim * (1.0f - core);
             if (a <= 0.0f) continue;
             uint8_t *q = dst + ((size_t)y * dw + x) * 4;
@@ -379,7 +351,7 @@ int black_HudReticleBuild(unsigned width, unsigned height, int color_format,
     upscale(src, width, height, hard, image->level[0], dw, dh, scale);
     draw_dot(image->level[0], dw, dh, cx, cy, radius, scale);
     for (int shape = 0; shape < BLACK_RETICLE_SHAPES; ++shape)
-        if (black_reticle_painted(shape)) draw_glyph(image->level[0], dw, dh, scale, shape);
+        if (black_reticle_painted(shape)) draw_cross(image->level[0], dw, dh, scale);
     for (unsigned level = 1, lw = dw, lh = dh; level < levels; ++level) {
         unsigned nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
         box_down(image->level[level - 1], lw, lh, image->level[level], nw, nh);

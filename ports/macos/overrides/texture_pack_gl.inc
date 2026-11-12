@@ -386,7 +386,7 @@ static int black_tp_reticle_created(TextureBinding *binding, TextureShape s, con
             black_HudReticleFree(&image);
             return 0;
         }
-        fprintf(stderr, "[RETICLE] atlas %ux%u -> %ux%u, %u levels, dot %.2f,%.2f r %.2f, painted cross, chevron and crosshair\n",
+        fprintf(stderr, "[RETICLE] atlas %ux%u -> %ux%u, %u levels, dot %.2f,%.2f r %.2f, painted cross\n",
                 BLACK_HUD_RETICLE_W, BLACK_HUD_RETICLE_H, image.width, image.height, image.levels,
                 image.dot_x, image.dot_y, image.dot_radius);
         black_HudReticleFree(&image);

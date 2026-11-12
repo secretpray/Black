@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Reticle Shape: one cross, made for aiming.** The cross is now four short
+  bars around a small open centre, so the target under it stays visible, with
+  a dark rim that keeps it readable on bright walls, smoke and sky; it is about
+  the dot's size (1.7% of the screen's height across). **Chevron Up** and
+  **Crosshair** are removed: the game shows no weapon spread on its mark and a
+  standing shot lands within about half a percent of the height of it, so a
+  crosshair gap the size of Call of Duty's promised a cone two to three times
+  the game's, and the small chevron's aim point read below its tip. The row's
+  values are 0.10.0's again, saved as `mod_reticle_shape`; a 0.10.1 setting is
+  still read: Chevron Up becomes the dot, Crosshair the cross, Auto stays Auto.
+
 ## 0.10.1 — 2026-11-12
 
 - **Reticle Shape: a thin cross, an upward chevron and an open crosshair.**

@@ -1,7 +1,7 @@
 /* The HD reticle's atlas rebuild (hud_reticle.h) on a made-up 512x256
  * paletted atlas: the size, the dot's measured place and edge, the crisp
- * rim of an opaque cell, the untouched glow, the painted cross, chevron and
- * crosshair cells, the mips, and the refusals. No game data is used or needed. */
+ * rim of an opaque cell, the untouched glow, the painted cross with its open
+ * centre and dark rim, the mips, and the refusals. No game data is used or needed. */
 #undef NDEBUG
 #include "../../ports/macos/overrides/hud_reticle.h"
 #include "../../ports/macos/overrides/reticle_shape.h"
@@ -58,8 +58,8 @@ static void encode(const uint8_t *linear, uint8_t *data)
 static void make_atlas(uint8_t *linear, const float *disc)
 {
     memset(linear, 3, W * H);
-    /* The two blocks the painted reticle cells go into are empty, as the
-     * game's atlas leaves them. */
+    /* The block the painted cross goes into is empty, as the game's atlas
+     * leaves it. */
     for (int shape = 0; shape < BLACK_RETICLE_SHAPES; ++shape) {
         if (!black_reticle_painted(shape)) continue;
         const BlackReticleShape *cell = &black_reticle_shapes[shape];
@@ -131,48 +131,32 @@ int main(void)
     assert(image.level[0][rim] == 144 && image.level[0][rim + 1] == 88 && image.level[0][rim + 2] == 17);
     assert(alpha_at(&image, 404 * 4 + 2, 104 * 4 + 2) == 96);
     assert(alpha_at(&image, 399 * 4 + 2, 104 * 4 + 2) == 68);
-    /* The painted cross: opaque along both bars, transparent off them and in
-     * the block's corners, white so the game's tint colours it. */
-    assert(alpha_at(&image, 352 * 4 + 2, 32 * 4 + 2) == 255);
-    assert(alpha_at(&image, 340 * 4 + 2, 32 * 4 + 2) == 255);
-    assert(alpha_at(&image, 352 * 4 + 2, 20 * 4 + 2) == 255);
-    assert(alpha_at(&image, 328 * 4 + 2, 32 * 4 + 2) == 0);
-    assert(alpha_at(&image, 352 * 4 + 2, 8 * 4 + 2) == 0);
+    /* The painted cross: an empty centre, four white bars 8.5..24.5 texels
+     * out, a translucent black rim past a bar's end, nothing off the bars. */
+    assert(alpha_at(&image, 352 * 4 + 2, 32 * 4 + 2) == 0);
+    assert(alpha_at(&image, 356 * 4 + 2, 32 * 4 + 2) == 0);
+    assert(alpha_at(&image, 368 * 4 + 2, 32 * 4 + 2) == 255);
+    assert(alpha_at(&image, 336 * 4 + 2, 32 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 16 * 4 + 2) == 255);
+    assert(alpha_at(&image, 352 * 4 + 2, 48 * 4 + 2) == 255);
+    assert(alpha_at(&image, 382 * 4 + 2, 32 * 4 + 2) == 0);
     assert(alpha_at(&image, 322 * 4 + 2, 2 * 4 + 2) == 0);
     assert(alpha_at(&image, 360 * 4 + 2, 40 * 4 + 2) == 0);
-    unsigned cross = ((size_t)(32 * 4 + 2) * image.width + 352 * 4 + 2) * 4;
-    assert(image.level[0][cross] == 255 && image.level[0][cross + 1] == 255 && image.level[0][cross + 2] == 255);
-    /* The painted chevron: an apex at the cell's centre and two legs down and
-     * out; nothing between the legs or above the apex. */
-    assert(alpha_at(&image, 352 * 4 + 2, 160 * 4 + 2) == 255);
-    assert(alpha_at(&image, 340 * 4 + 2, 172 * 4 + 2) == 255);
-    assert(alpha_at(&image, 364 * 4 + 2, 172 * 4 + 2) == 255);
-    assert(alpha_at(&image, 352 * 4 + 2, 184 * 4 + 2) == 0);
-    assert(alpha_at(&image, 352 * 4 + 2, 140 * 4 + 2) == 0);
-    /* The open crosshair: four white bars 12..26 texels from the centre, an
-     * empty centre, and a translucent black rim beside each bar. */
-    assert(alpha_at(&image, 352 * 4 + 2, 224 * 4 + 2) == 0);
-    assert(alpha_at(&image, 360 * 4 + 2, 224 * 4 + 2) == 0);
-    assert(alpha_at(&image, 370 * 4 + 2, 224 * 4 + 2) == 255);
-    assert(alpha_at(&image, 334 * 4 + 2, 224 * 4 + 2) == 255);
-    assert(alpha_at(&image, 352 * 4 + 2, 206 * 4 + 2) == 255);
-    assert(alpha_at(&image, 352 * 4 + 2, 242 * 4 + 2) == 255);
-    assert(alpha_at(&image, 382 * 4 + 2, 224 * 4 + 2) == 0);
-    assert(alpha_at(&image, 340 * 4 + 2, 212 * 4 + 2) == 0);
-    unsigned bar = ((size_t)(224 * 4 + 2) * image.width + 370 * 4 + 2) * 4;
+    unsigned bar = ((size_t)(32 * 4 + 2) * image.width + 368 * 4 + 2) * 4;
     assert(image.level[0][bar] == 255 && image.level[0][bar + 1] == 255 && image.level[0][bar + 2] == 255);
-    unsigned edge = ((size_t)903 * image.width + 370 * 4 + 2) * 4;
-    assert(image.level[0][edge + 3] == 140 && image.level[0][edge] == 0 && image.level[0][edge + 2] == 0);
-    /* The same picture at the plain scale, for Original with a painted shape. */
+    unsigned edge = ((size_t)(32 * 4 + 2) * image.width + 326 * 4 + 2) * 4;
+    assert(image.level[0][edge + 3] == 153 && image.level[0][edge] == 0 && image.level[0][edge + 2] == 0);
+    /* Nothing else is painted: blocks once used by other shapes keep the
+     * test atlas's background. */
+    assert(alpha_at(&image, 352 * 4 + 2, 160 * 4 + 2) == 64 && alpha_at(&image, 370 * 4 + 2, 224 * 4 + 2) == 64);
+    /* The same picture at the plain scale, for Original with the cross. */
     BlackHudReticleImage plain;
     assert(black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
                                  BLACK_HUD_RETICLE_PLAIN_SCALE, &plain));
     assert(plain.width == W * BLACK_HUD_RETICLE_PLAIN_SCALE);
-    assert(alpha_at(&plain, 352 * 2 + 1, 32 * 2 + 1) == 255);
-    assert(alpha_at(&plain, 352 * 2 + 1, 160 * 2 + 1) == 255);
+    assert(alpha_at(&plain, 368 * 2 + 1, 32 * 2 + 1) == 255);
+    assert(alpha_at(&plain, 352 * 2 + 1, 32 * 2 + 1) == 0);
     assert(alpha_at(&plain, 322 * 2 + 1, 2 * 2 + 1) == 0);
-    assert(alpha_at(&plain, 370 * 2 + 1, 224 * 2 + 1) == 255);
-    assert(alpha_at(&plain, 352 * 2 + 1, 224 * 2 + 1) == 0);
     black_HudReticleFree(&plain);
     assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette, 3, &plain));
     /* The 2x mip keeps the rim: half coverage at the edge, full inside. */
@@ -232,6 +216,6 @@ int main(void)
     assert(!black_HudReticleBuild(W, H, 0x0B, data, sizeof data, palette, sizeof palette,
                                   BLACK_HUD_RETICLE_SCALE, &image));
 
-    puts("HD reticle atlas: 4x and 2x upscale, crisp hard rims, soft glows and ramps without a step, redrawn dot, painted cross, chevron and crosshair, mips and refusals: PASS");
+    puts("HD reticle atlas: 4x and 2x upscale, crisp hard rims, soft glows and ramps without a step, redrawn dot, painted cross, mips and refusals: PASS");
     return 0;
 }

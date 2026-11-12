@@ -3,40 +3,50 @@
 Release: **BLACK 0.10.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Reticle Shape (0.10.0; thin cross, chevron up and crosshair in 0.10.1)
+## Reticle Shape (0.10.0; the cross redrawn after 0.10.1)
 
-Off by default (`mod_reticle=0`, the game's dot). The INI key was
-`mod_reticle_shape` in 0.10.0, whose Auto was 5; with the new shapes Auto is
-7, so the old key is still read, 0-4 as they were and 5 as Auto, until the new
-key is saved (`macos_port_settings` checks both, and that the new key wins).
-With every weapon
-checked the game aims through two 32x32 cells of its 512x256 HUD atlas drawn at
-the HUD's centre: the dot (128..160 x 160..192) and a dim glow (160..192 x
-160..192). The same atlas holds a ring (0..64 x 0..64), a ring with ticks
-(0..64 x 64..128) and four chevrons (192..256 x 0..64). The thin cross, the
-single upward chevron and the open crosshair are not in the game's atlas: they
-are painted into three empty 64x64 blocks (320..384 x 0..64, 320..384 x
-128..192 and 320..384 x 192..256) when the atlas
-texture is built (`hud_reticle.c`), at 4x with HD Reticle (2048x1024) and at 2x
-without it (1024x512), white with a one-pixel anti-aliased edge. The rebuild
-refuses if any of the blocks is not empty, so no other sprite is overwritten.
-The dot's quad is about 2.2% of the screen's height and its disc about 1%. The
-cross and the chevron are drawn in that quad (grow 1x): the cross's arms reach
-23 of 32 texels from the centre (about 1.6% of the height across, 1.7 dots),
-the chevron's legs run 18 texels down and out from an apex at the centre
-(1.25% wide), both strokes about 0.2% of the height (two pixels at 1080p). The
-crosshair, modelled on Call of Duty: Modern Warfare's default hip-fire
-crosshair, is drawn at 2x: four bars 12..26 texels from the centre (an open
-centre about 1.7% of the height wide, about 3.6% across in all), 2.8 texels
-thick, with a translucent black rim (alpha 0.55, 1.2 texels) that the tint
-leaves black. In the quad batcher (`sub_000D6C00`) a quad with the dot's uv
-within 48 HUD pixels of the centre takes the chosen cell, grown 2x (ring,
-chevrons, crosshair), 2.5x (ring with ticks) or 1x (cross, chevron up) around
-the same centre;
-the glow quad collapses to a point. One quad, one guest draw call. The guest's
-tables are put back after the call; the atlas's own cells keep their other
-uses, so the medkit cross and the damage marks stay. The colour is still the
-game's vertex colour. Auto reads the weapon in the player's hands (world player
+Off by default (`mod_reticle_shape=0`, the game's dot). The values are
+0.10.0's again: dot, ring, ring with ticks, cross, chevrons, Auto (5). 0.10.1
+saved `mod_reticle` with a thin cross at 3, an upward chevron at 5, an open
+crosshair at 6 and Auto at 7; that key is still read until today's is saved:
+the chevron becomes the dot, the crosshair the cross, Auto stays Auto
+(`macos_port_settings` checks the mapping and that today's key wins).
+
+With every weapon checked the game aims through two 32x32 cells of its 512x256
+HUD atlas drawn at the HUD's centre: the dot (128..160 x 160..192) and a dim
+glow (160..192 x 160..192). The same atlas holds a ring (0..64 x 0..64), a ring
+with ticks (0..64 x 64..128) and four chevrons (192..256 x 0..64). The cross is
+not in it: it is painted into an empty 64x64 block (320..384 x 0..64) when the
+atlas texture is built (`hud_reticle.c`), at 4x with HD Reticle (2048x1024)
+and at 2x without it (1024x512). The rebuild refuses if the block is not
+empty, so no other sprite is overwritten.
+
+Why one cross and no chevron or large crosshair: the reticle trace
+(`BLACK_RETICLE_TRACE`) over every logged run, a manual session included,
+saw the dot's quad only at the HUD's centre and only at 8x10.7 (8x8 in 4:3):
+the game never moves or grows its mark, so it shows no spread. A dump of the
+player's weapon and actor each frame on 12 November (stand, fire, walk,
+burst) found the trigger-held time (`weapon+0xE0`) and the shot wait
+(`+0xDC`), but no value that grows with firing and decays like a bloom. Ten
+single pistol shots standing at a wall landed within about 0.5% of the height
+of the dot sideways; their offset downward was the view kick, which the mark
+follows anyway. A crosshair whose open centre is the size of Call of Duty's
+(about 1.7% of the height) would show a cone two to three times the game's,
+and an upward chevron drawn 13 pixels wide reads its aim point below its
+blunted tip. Both were removed. The cross is drawn in the dot's own quad
+(about 2.2% of the height): four white bars from 8.5 to 24.5 of 32 texels out
+(an open centre about 0.6% of the height across, so the target under it stays
+visible; 1.7% across in all, about Valorant's default crosshair at 1080p),
+5.5 texels (about 0.19%, two pixels at 1080p) thick, in a black rim of 2.5
+texels at 60% that the game's tint leaves black.
+
+In the quad batcher (`sub_000D6C00`) a quad with the dot's uv within 48 HUD
+pixels of the centre takes the chosen cell, grown 2x (ring, chevrons), 2.5x
+(ring with ticks) or 1x (cross) around the same centre; the glow quad
+collapses to a point. One quad, one guest draw call. The guest's tables are
+put back after the call; the atlas's own cells keep their other uses, so the
+medkit cross and the damage marks stay. The colour is still the game's vertex
+colour. Auto reads the weapon in the player's hands (world player
 `0x2D45D4`, actor `+0x30`, weapon `+0x29C`, its type in the weapon manager's
 table at `0x2D12D0`) and decodes its name: SHG, RM*, GRL and RPG get the ring,
 SN* keeps the game's dot, anything else the cross; a weapon it cannot read
@@ -44,8 +54,8 @@ keeps the dot.
 
 Checked: `macos_reticle_shape` (cells, growth around the centre, corner order,
 the glow, sprites away from the centre or with other uv untouched, Auto by
-name) and `macos_hud_reticle` (the painted cross, chevron and crosshair, its
-open centre and dark rim, at 4x and 2x, the
+name) and `macos_hud_reticle` (the painted cross, its open centre and dark
+rim, at 4x and 2x, the
 empty-block and scale refusals, the redrawn dot, mips); `black-menu-preview`
 passes; 128 CTest checks passed. Bounded first-mission runs with each shape (HD
 and Original atlas) showed the ring, the ring with ticks and the chevrons at
@@ -82,8 +92,18 @@ across, the upward chevron 1.0% wide, the crosshair's bars 2.7% across; red
 on an enemy with the dark rim kept, white on bright and dark walls. Auto in
 the Original run logged `BG1_AK1 -> cross` and `BG1_SHG -> ring`. At render
 scale 2 the HUD has fewer pixels across than down on a 16:9 window, so the
-crosshair's vertical bars read slightly softer than its horizontal ones. Not
-checked: Steam Deck.
+crosshair's vertical bars read slightly softer than its horizontal ones.
+
+The redrawn cross, on 12 November, in two bounded first-mission runs at
+3840x2160, render scale 2, both exit 0: `run-fsmadmre` (HD, from a 0.10.1
+setting `mod_reticle=6`, the old crosshair, which drew the new cross) and
+`run-iig9p7c_` (Original, `mod_reticle_shape=3`). Both logged `... painted
+cross`. On the presented frames the open centre measured about 0.65% of the
+height and the white bars about 1.4% across (pixels above 170 of 255); the
+mark read on a dark wall, bright smoke and over a soldier, whose outline
+stayed visible in the centre. With the Original atlas the vertical bars are a
+little dimmer than the horizontal ones (peak 151 against 200 of 255), as the
+HUD has fewer pixels across than down. Not checked: Steam Deck.
 
 **Release 0.10.1.** Built with the real DSP; 128 CTest checks (with the GPU
 context) and 49 Python tests passed on the release build. The final DMG was

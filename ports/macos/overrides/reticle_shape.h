@@ -7,18 +7,16 @@
  * its uv moves to the shape's cell and the quad grows around the same centre;
  * the glow quad collapses to nothing, so the mark is drawn once, by the one
  * guest call the game already makes. Four cells are the game's own (dot, ring,
- * ring with ticks, four chevrons); the thin cross, the single upward chevron
- * and the open crosshair are painted into three empty 64x64 blocks of the
- * atlas when its texture is built (hud_reticle.c), so they are ordinary cells
- * here too. The
- * atlas's other cells keep their uses, and the game's tint (white, green on an
+ * ring with ticks, four chevrons); the cross is painted into an empty 64x64
+ * block of the atlas when its texture is built (hud_reticle.c), so it is an
+ * ordinary cell here too. The atlas's other cells keep their uses, and the game's tint (white, green on an
  * ally, red on an enemy, black on a destructible object) still colours the
  * mark through the vertex colour. Pure functions on four floats each. */
 #include <math.h>
 #include <string.h>
 
 enum { BLACK_RETICLE_DOT, BLACK_RETICLE_RING, BLACK_RETICLE_TICKS, BLACK_RETICLE_CROSS,
-       BLACK_RETICLE_CHEVRONS, BLACK_RETICLE_CHEVRON_UP, BLACK_RETICLE_CROSSHAIR, BLACK_RETICLE_SHAPES };
+       BLACK_RETICLE_CHEVRONS, BLACK_RETICLE_SHAPES };
 /* The Mods row's last value: the shape follows the weapon in hand
  * (black_reticle_auto). */
 enum { BLACK_RETICLE_AUTO = BLACK_RETICLE_SHAPES };
@@ -28,27 +26,25 @@ enum { BLACK_RETICLE_AUTO = BLACK_RETICLE_SHAPES };
  * height, and its disc about 1%. The ring and the chevrons fill their 64-texel
  * cells and keep the dot's texel density at 2x; the ring with ticks fills
  * about two thirds of its cell, so it is drawn at 2.5x to read at a similar
- * size in play. The thin cross and the upward chevron are drawn in the dot's
- * own quad, so they stay the dot's size: the cross about 1.6% of the height
- * across (1.7 dots), the chevron 1.25% wide, both with strokes of about 0.2%
- * (two pixels at 1080p). The open crosshair is drawn at 2x: four short bars
- * around an open centre, about 3.6% of the height across, like the default
- * hip-fire crosshair of a modern military shooter (hud_reticle.c). */
+ * size in play. The cross is drawn in the dot's own quad, so it stays the
+ * dot's size: four bars around a small open centre, about 1.7% of the height
+ * across, with a dark rim (hud_reticle.c). The game shows no spread on its
+ * mark (the dot's quad never moves or grows) and a standing shot lands within
+ * about half a percent of the height of it, so the open centre is sized to
+ * leave the target visible, not to claim a cone the game does not have. */
 typedef struct { float x0, y0, x1, y1, grow; } BlackReticleShape;
 static const BlackReticleShape black_reticle_shapes[BLACK_RETICLE_SHAPES] = {
     {128, 160, 160, 192, 1.0f}, /* the game's own dot */
     {0, 0, 64, 64, 2.0f},       /* ring */
     {0, 64, 64, 128, 2.5f},     /* ring with four ticks */
-    {320, 0, 384, 64, 1.0f},    /* thin cross, painted into an empty block */
+    {320, 0, 384, 64, 1.0f},    /* cross with an open centre, painted into an empty block */
     {192, 0, 256, 64, 2.0f},    /* four chevrons */
-    {320, 128, 384, 192, 1.0f}, /* upward chevron, painted into an empty block */
-    {320, 192, 384, 256, 2.0f}, /* open crosshair, painted into an empty block */
 };
 
 /* The cells the atlas rebuild paints rather than finds in the game's texels. */
 static inline int black_reticle_painted(int shape)
 {
-    return shape == BLACK_RETICLE_CROSS || shape == BLACK_RETICLE_CHEVRON_UP || shape == BLACK_RETICLE_CROSSHAIR;
+    return shape == BLACK_RETICLE_CROSS;
 }
 
 #define BLACK_RETICLE_ATLAS_W 512.0f

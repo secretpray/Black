@@ -2,10 +2,9 @@
 #define BLACK_HUD_RETICLE_INCLUDED
 /* The HUD atlas holding BLACK's aiming dot, rebuilt from the game's own
  * texels: an alpha-weighted upscale, an opaque cell's rim re-drawn at one
- * output pixel, the dot drawn anew, alpha-aware mips. Three empty 64x64 blocks
- * gain the Reticle Shape mod's painted cells (reticle_shape.h): a thin cross,
- * an upward chevron and an open crosshair, white so the game's tint still
- * colours them. No picture ships with the port; the guest's 512x256 paletted
+ * output pixel, the dot drawn anew, alpha-aware mips. An empty 64x64 block
+ * gains the Reticle Shape mod's painted cross (reticle_shape.h), white with a
+ * dark rim, so the game's tint still colours it. No picture ships with the port; the guest's 512x256 paletted
  * atlas is the only input. */
 #include <stddef.h>
 #include <stdint.h>

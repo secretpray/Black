@@ -181,8 +181,8 @@ static int current_film(void)
 static void draw_quads(uint32_t quads);
 
 /* The Mods page's Reticle Shape (reticle_shape.h): the aiming dot's quad takes
- * the chosen shape's atlas cell for this call and the glow's collapses; two of
- * the cells are painted into the atlas when its texture is built
+ * the chosen shape's atlas cell for this call and the glow's collapses; the
+ * cross's cell is painted into the atlas when its texture is built
  * (hud_reticle.c). Everything is put back afterwards, as the game reuses its
  * tables. Batches of the HUD's size only; a film or a long text batch is left
  * alone. */
@@ -221,7 +221,7 @@ static int auto_shape(void)
     int shape = black_reticle_auto(name);
     if (strcmp(name, last)) {
         static const char *const names[BLACK_RETICLE_SHAPES] = {"dot", "ring", "ring and ticks", "cross",
-                                                                "chevrons", "chevron up", "crosshair"};
+                                                                "chevrons"};
         memcpy(last, name, sizeof last);
         fprintf(stderr, "[RETICLE] Auto: %s -> %s\n", name, names[shape]);
     }

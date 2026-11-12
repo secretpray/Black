@@ -158,8 +158,8 @@ static void load_settings(void)
                     if (i == BLACK_MOD_RETICLE) reticle_saved = 1;
                 }
             }
-            /* 0.10.0's key and numbering, until the new key is saved. */
-            if (!reticle_saved && sscanf(line, " mod_reticle_shape = %15s %c", value, &extra) == 1) {
+            /* 0.10.1's key and numbering, until today's key is saved. */
+            if (!reticle_saved && sscanf(line, " mod_reticle = %15s %c", value, &extra) == 1) {
                 long n = strtol(value, &end, 10);
                 int shape = *value && !*end ? black_mod_reticle_legacy(n) : -1;
                 if (shape >= 0) atomic_store(&mods[BLACK_MOD_RETICLE], shape);
