@@ -1,9 +1,9 @@
 # Release validation and current limits
 
-Release: **BLACK 0.10.0**, Apple Silicon. Test machine: Apple M1 Pro,
+Release: **BLACK 0.10.1**, Apple Silicon. Test machine: Apple M1 Pro,
 macOS 27.0.1. This is an experimental release, not a complete-game qualification.
 
-## Reticle Shape (0.10.0, plus the unreleased thin cross, chevron up and crosshair)
+## Reticle Shape (0.10.0; thin cross, chevron up and crosshair in 0.10.1)
 
 Off by default (`mod_reticle=0`, the game's dot). The INI key was
 `mod_reticle_shape` in 0.10.0, whose Auto was 5; with the new shapes Auto is
@@ -84,6 +84,14 @@ the Original run logged `BG1_AK1 -> cross` and `BG1_SHG -> ring`. At render
 scale 2 the HUD has fewer pixels across than down on a 16:9 window, so the
 crosshair's vertical bars read slightly softer than its horizontal ones. Not
 checked: Steam Deck.
+
+**Release 0.10.1.** Built with the real DSP; 128 CTest checks (with the GPU
+context) and 49 Python tests passed on the release build. The final DMG was
+checked read-only in English and Russian with isolated data and system-only
+PATH: both opened the settings and quit normally (exit 0, version 0.10.1 seen,
+private font view made and removed), and source game files and user
+preferences kept their hashes. The source archive matched the local sources
+and pinned upstreams, without game or private files.
 
 **Release 0.10.0.** Built with the real DSP; 128 CTest checks (with the GPU
 context) and 49 Python tests passed on the release build. The final DMG was

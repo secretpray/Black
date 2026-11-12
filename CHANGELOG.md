@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.1 — 2026-11-12
 
 - **Reticle Shape: a thin cross, an upward chevron and an open crosshair.**
   The cross is now a small, thin four-armed mark and two new values follow
